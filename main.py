@@ -3,6 +3,7 @@ import time
 
 import flet as ft
 
+from app.i18n import LANGUAGES, translator
 from app.state import COLORS, ICONS, MediaStore, State, compress_image, extract_tags, uid
 from app.theme import palette_for
 from app.widgets import (
@@ -22,6 +23,8 @@ class NotesApp:
         self.page = page
         self.state = State()
         self.media = MediaStore()
+        self.lang = self.state.lang
+        self.tr = translator(self.lang)
         self.p = palette_for(self.state.theme)
         self.current_chat_id = None
         self.editing_entry_id = None
@@ -135,7 +138,7 @@ class NotesApp:
     def build_list_topbar(self, value=''):
         self.search_field = ft.TextField(
             value=value,
-            hint_text='Поиск по чатам и записям',
+            hint_text=self.tr('search_hint'),
             prefix_icon=ft.Icons.SEARCH,
             filled=True,
             fill_color=self.p.bg_chat,
@@ -152,7 +155,7 @@ class NotesApp:
                 ft.Row(
                     controls=[
                         ft.Container(width=34),
-                        ft.Text('Заметки', size=19, weight=ft.FontWeight.W_700, color=self.p.text, expand=True, text_align=ft.TextAlign.CENTER),
+                        ft.Text(self.tr('app_title'), size=19, weight=ft.FontWeight.W_700, color=self.p.text, expand=True, text_align=ft.TextAlign.CENTER),
                         ft.IconButton(icon=ft.Icons.SETTINGS, icon_color=self.p.text_soft, on_click=lambda e: self.show_screen('settings')),
                     ],
                 ),
@@ -175,7 +178,7 @@ class NotesApp:
                     spacing=0,
                     controls=[
                         ft.Text(chat['name'] if chat else '', size=16, weight=ft.FontWeight.W_600, color=self.p.text, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
-                        ft.Text('заметки самому себе', size=12, color=self.p.text_faint),
+                        ft.Text(self.tr('chat_subtitle'), size=12, color=self.p.text_faint),
                     ],
                 ),
                 ft.IconButton(icon=ft.Icons.EDIT, icon_color=self.p.text_faint, on_click=lambda e: self.open_chat_modal(self.current_chat_id)),
@@ -188,22 +191,24 @@ class NotesApp:
             spacing=10,
             controls=[
                 ft.IconButton(icon=ft.Icons.ARROW_BACK, icon_color=self.p.accent, on_click=lambda e: self.show_screen('list')),
-                ft.Text('Настройки', size=16, weight=ft.FontWeight.W_600, color=self.p.text),
+                ft.Text(self.tr('settings'), size=16, weight=ft.FontWeight.W_600, color=self.p.text),
             ],
         )
 
     def build_settings_body(self):
+        p = self.p
         return ft.Column(
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
             controls=[
                 ft.Container(
                     padding=ft.Padding.only(left=16, right=16, top=18, bottom=4),
                     content=ft.Column(
                         spacing=8,
                         controls=[
-                            ft.Text('ОФОРМЛЕНИЕ', size=12, weight=ft.FontWeight.W_600, color=self.p.text_faint),
+                            ft.Text(self.tr('section_appearance'), size=12, weight=ft.FontWeight.W_600, color=p.text_faint),
                             ft.Container(
-                                bgcolor=self.p.bg_chat,
+                                bgcolor=p.bg_chat,
                                 border_radius=12,
                                 content=ft.Column(
                                     spacing=0,
@@ -213,7 +218,7 @@ class NotesApp:
                                             content=ft.Row(
                                                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                                 controls=[
-                                                    ft.Text('Тема', size=14.5, color=self.p.text),
+                                                    ft.Text(self.tr('theme'), size=14.5, color=p.text),
                                                     self.build_theme_toggle(),
                                                 ],
                                             ),
@@ -221,16 +226,59 @@ class NotesApp:
                                     ],
                                 ),
                             ),
-                            ft.Text(
-                                'Иконку, цвет и название каждого чата можно менять — откройте чат и нажмите ✎ рядом с его названием.',
-                                size=12,
-                                color=self.p.text_faint,
+                            ft.Text(self.tr('chat_hint'), size=12, color=p.text_faint),
+                        ],
+                    ),
+                ),
+                ft.Container(
+                    padding=ft.Padding.only(left=16, right=16, top=18, bottom=4),
+                    content=ft.Column(
+                        spacing=8,
+                        controls=[
+                            ft.Text(self.tr('section_language'), size=12, weight=ft.FontWeight.W_600, color=p.text_faint),
+                            ft.Container(
+                                bgcolor=p.bg_chat,
+                                border_radius=12,
+                                content=ft.Column(
+                                    spacing=0,
+                                    controls=[
+                                        ft.Container(
+                                            padding=ft.Padding.symmetric(horizontal=14, vertical=13),
+                                            content=self.build_language_selector(),
+                                        ),
+                                    ],
+                                ),
                             ),
                         ],
                     ),
                 ),
             ],
         )
+
+    def build_language_selector(self):
+        p = self.p
+        chips = []
+        for code, label in LANGUAGES:
+            active = self.state.lang == code
+
+            async def tap(e, c=code):
+                await self.set_lang(c)
+
+            chips.append(ft.GestureDetector(
+                on_tap=tap,
+                content=ft.Container(
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=7),
+                    border_radius=8,
+                    bgcolor=p.accent if active else ft.Colors.TRANSPARENT,
+                    content=ft.Text(
+                        label,
+                        size=13,
+                        weight=ft.FontWeight.W_600,
+                        color=ft.Colors.WHITE if active else p.text_soft,
+                    ),
+                ),
+            ))
+        return ft.Row(wrap=True, spacing=6, run_spacing=6, controls=chips)
 
     def build_theme_toggle(self):
         def opt(label, theme):
@@ -258,12 +306,12 @@ class NotesApp:
             bgcolor=self.p.bg,
             border_radius=9,
             padding=3,
-            content=ft.Row(spacing=2, controls=[opt('Светлая', 'light'), opt('Тёмная', 'dark')]),
+            content=ft.Row(spacing=2, controls=[opt(self.tr('light'), 'light'), opt(self.tr('dark'), 'dark')]),
         )
 
     def build_composer(self):
         self.text_input = ft.TextField(
-            hint_text='Сообщение…',
+            hint_text=self.tr('message_hint'),
             multiline=True,
             min_lines=1,
             max_lines=4,
@@ -285,11 +333,15 @@ class NotesApp:
         async def pick_video_handler(e):
             await self.pick_video()
 
+        def todo_handler(e):
+            self.open_todo_dialog()
+
         return ft.Row(
             spacing=6,
             controls=[
                 ft.IconButton(icon=ft.Icons.ATTACH_FILE, icon_color=self.p.text_soft, on_click=pick_image_handler),
                 ft.IconButton(icon=ft.Icons.VIDEOCAM, icon_color=self.p.text_soft, on_click=pick_video_handler),
+                ft.IconButton(icon=ft.Icons.CHECKLIST, icon_color=self.p.text_soft, on_click=todo_handler),
                 self.text_input,
                 self.send_btn,
             ],
@@ -341,13 +393,13 @@ class NotesApp:
 
         rows = []
         for c in chats:
-            rows.append(build_chat_row(c, self.state, self.p, self.open_chat))
+            rows.append(build_chat_row(c, self.state, self.p, self.open_chat, self.tr))
 
         if not rows:
             if self.state.chats:
-                msg = 'Ничего не найдено'
+                msg = self.tr('nothing_found')
             else:
-                msg = 'Пока нет чатов.\nСоздайте первый — нажмите кнопку ✎ внизу справа.'
+                msg = self.tr('no_chats')
             rows = [
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=30, vertical=60),
@@ -361,7 +413,8 @@ class NotesApp:
         matches = []
         for e in self.state.entries:
             text = (e.get('text', '') or '').lower()
-            if q in text or any(q in t for t in e.get('tags', [])):
+            items = ' '.join((i.get('text', '') or '') for i in (e.get('items') or []))
+            if q in text or q in items.lower() or any(q in t for t in e.get('tags', [])):
                 matches.append(e)
         matches.sort(key=lambda e: e['ts'], reverse=True)
 
@@ -370,14 +423,14 @@ class NotesApp:
             chat = self.state.chat_by_id(e['chatId'])
             if not chat:
                 continue
-            snippet = e.get('text', '') or chat_preview(e)
+            snippet = e.get('text', '') or chat_preview(e, self.tr)
             rows.append(self.build_search_row(chat, e, snippet, q))
 
         if not rows:
             rows = [
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=30, vertical=60),
-                    content=ft.Text('По запросу «{}» ничего не найдено'.format(self.search_q), size=14, color=self.p.text_faint, text_align=ft.TextAlign.CENTER),
+                    content=ft.Text(self.tr('no_search_results', self.search_q), size=14, color=self.p.text_faint, text_align=ft.TextAlign.CENTER),
                 )
             ]
         self.chat_list_view.controls = rows
@@ -453,7 +506,7 @@ class NotesApp:
         last_day = None
         target_key = None
         for entry in self.state.entries_for(self.current_chat_id):
-            day = fmt_day(entry['ts'])
+            day = fmt_day(entry['ts'], self.tr)
             if day != last_day:
                 items.append(day_pill(day, self.p))
                 last_day = day
@@ -470,7 +523,7 @@ class NotesApp:
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=40, vertical=60),
                     content=ft.Text(
-                        'Пока пусто. Напишите текст, прикрепите фото или запишите голосовую заметку — она появится здесь.',
+                        self.tr('no_messages'),
                         size=13.5,
                         color=self.p.text_faint,
                         text_align=ft.TextAlign.CENTER,
@@ -541,8 +594,8 @@ class NotesApp:
                         ft.Column(
                             spacing=1,
                             controls=[
-                                ft.Text('Голосовое сообщение', size=13, weight=ft.FontWeight.W_500, color=p.text),
-                                ft.Text('{} сек · {}'.format(entry.get('duration', 0), fmt_time(entry['ts'])), size=11, color=p.text_faint),
+                                ft.Text(self.tr('voice_message'), size=13, weight=ft.FontWeight.W_500, color=p.text),
+                                ft.Text('{} {} · {}'.format(entry.get('duration', 0), self.tr('sec'), fmt_time(entry['ts'])), size=11, color=p.text_faint),
                             ],
                         ),
                     ],
@@ -566,11 +619,23 @@ class NotesApp:
                             expand=True,
                             spacing=1,
                             controls=[
-                                ft.Text(entry.get('mediaName', 'Видео'), size=13, weight=ft.FontWeight.W_500, color=p.text, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                ft.Text(entry.get('mediaName', self.tr('video')), size=13, weight=ft.FontWeight.W_500, color=p.text, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
                                 ft.Text('{} · {}'.format(entry.get('mediaSize', ''), fmt_time(entry['ts'])), size=11, color=p.text_faint),
                             ],
                         ),
                     ],
+                ),
+            )
+        elif entry['type'] == 'todo':
+            bubble = ft.Container(
+                bgcolor=p.bubble_own,
+                border=ft.Border.all(1, p.bubble_border),
+                border_radius=ft.BorderRadius(14, 14, 14, 3),
+                padding=ft.Padding.only(left=10, top=9, right=12, bottom=7),
+                width=300,
+                content=ft.Column(
+                    spacing=2,
+                    controls=self.build_todo_items(entry),
                 ),
             )
         if highlight:
@@ -629,8 +694,8 @@ class NotesApp:
                         alignment=ft.MainAxisAlignment.END,
                         spacing=6,
                         controls=[
-                            ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=cancel),
-                            ft.FilledButton('Сохранить', bgcolor=p.accent, on_click=save),
+                            ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=cancel),
+                            ft.FilledButton(self.tr('save'), bgcolor=p.accent, on_click=save),
                         ],
                     ),
                 ],
@@ -648,7 +713,7 @@ class NotesApp:
         if self.text_input.value.strip():
             self.page.run_task(self.send_text)
         else:
-            self.toast('Голосовые заметки — скоро появятся', error=True)
+            self.toast(self.tr('voice_soon'), error=True)
 
     async def on_text_submit(self, e):
         await self.send_text()
@@ -682,7 +747,7 @@ class NotesApp:
             data = f.bytes if f.bytes else open(f.path, 'rb').read()
             await self.add_media('image', data)
         except Exception:
-            self.toast('Не получилось прикрепить фото', error=True)
+            self.toast(self.tr('photo_error'), error=True)
 
     async def pick_video(self):
         if not self.current_chat_id:
@@ -695,7 +760,7 @@ class NotesApp:
             data = f.bytes if f.bytes else open(f.path, 'rb').read()
             await self.add_media('video', data, name=f.name, size_label='{:.1f} МБ'.format(f.size / 1024 / 1024))
         except Exception:
-            self.toast('Не получилось прикрепить видео', error=True)
+            self.toast(self.tr('video_error'), error=True)
 
     async def add_media(self, mtype, data, name='', size_label=''):
         if not self.current_chat_id:
@@ -728,18 +793,31 @@ class NotesApp:
         p = self.p
         tiles = []
 
-        if entry['type'] == 'text':
-            def copy_action(e):
-                self.page.pop_dialog()
-                self.page.run_task(self.do_copy, entry['text'])
+        if entry['type'] in ('text', 'todo'):
+            if entry['type'] == 'todo':
+                def copy_action(e):
+                    self.page.pop_dialog()
+                    text = '\n'.join(
+                        ('☑ ' if i.get('done') else '☐ ') + (i.get('text', '') or '')
+                        for i in (entry.get('items') or [])
+                    )
+                    self.page.run_task(self.do_copy, text)
 
-            def edit_action(e):
-                self.page.pop_dialog()
-                self.editing_entry_id = entry['id']
-                self.render_messages()
+                def edit_action(e):
+                    self.page.pop_dialog()
+                    self.open_todo_dialog(entry)
+            else:
+                def copy_action(e):
+                    self.page.pop_dialog()
+                    self.page.run_task(self.do_copy, entry['text'])
 
-            tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.COPY), title=ft.Text('Копировать'), on_click=copy_action))
-            tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.EDIT), title=ft.Text('Изменить'), on_click=edit_action))
+                def edit_action(e):
+                    self.page.pop_dialog()
+                    self.editing_entry_id = entry['id']
+                    self.render_messages()
+
+            tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.COPY), title=ft.Text(self.tr('copy')), on_click=copy_action))
+            tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.EDIT), title=ft.Text(self.tr('edit')), on_click=edit_action))
 
         def forward_action(e):
             self.page.pop_dialog()
@@ -749,10 +827,10 @@ class NotesApp:
             self.page.pop_dialog()
             self.confirm_delete_entry(entry)
 
-        tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.FORWARD), title=ft.Text('Переслать'), on_click=forward_action))
+        tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.FORWARD), title=ft.Text(self.tr('forward')), on_click=forward_action))
         tiles.append(ft.ListTile(
             leading=ft.Icon(ft.Icons.DELETE, color=p.danger),
-            title=ft.Text('Удалить', color=p.danger),
+            title=ft.Text(self.tr('delete'), color=p.danger),
             on_click=delete_action,
         ))
 
@@ -766,7 +844,7 @@ class NotesApp:
     async def do_copy(self, text):
         try:
             await self.page.clipboard.set(text)
-            self.toast('Скопировано')
+            self.toast(self.tr('copied'))
         except Exception:
             pass
 
@@ -779,9 +857,9 @@ class NotesApp:
 
         rows = [build_forward_row(c, p, lambda ch=c: pick(ch)) for c in self.state.chats]
         dlg = ft.AlertDialog(
-            title=ft.Text('Переслать в…', size=16, weight=ft.FontWeight.W_700, color=p.text),
+            title=ft.Text(self.tr('forward_to'), size=16, weight=ft.FontWeight.W_700, color=p.text),
             content=ft.ListView(rows, height=300, spacing=2),
-            actions=[ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog())],
+            actions=[ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog())],
             bgcolor=p.modal_bg,
         )
         self.page.show_dialog(dlg)
@@ -796,16 +874,16 @@ class NotesApp:
         if chat['id'] == self.current_chat_id:
             self.render_messages()
         self.render_chat_list()
-        self.toast('Переслано в «{}»'.format(chat['name']))
+        self.toast(self.tr('forwarded_to', chat['name']))
 
     def confirm_delete_entry(self, entry):
         p = self.p
         dlg = ft.AlertDialog(
-            title=ft.Text('Удалить запись?', size=16, weight=ft.FontWeight.W_700, color=p.text),
+            title=ft.Text(self.tr('delete_entry_title'), size=16, weight=ft.FontWeight.W_700, color=p.text),
             bgcolor=p.modal_bg,
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
-                ft.TextButton('Удалить', style=ft.ButtonStyle(color=p.danger)),
+                ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.TextButton(self.tr('delete'), style=ft.ButtonStyle(color=p.danger)),
             ],
         )
         dlg.actions[1].on_click = self._make_delete_entry_handler(entry, dlg)
@@ -852,22 +930,22 @@ class NotesApp:
 
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text('Изменить чат' if chat else 'Новый чат заметок', size=16, weight=ft.FontWeight.W_700, color=p.text),
+            title=ft.Text(self.tr('edit_chat') if chat else self.tr('new_chat'), size=16, weight=ft.FontWeight.W_700, color=p.text),
             content=ft.Column(
                 tight=True,
                 spacing=12,
                 width=340,
                 controls=[
                     name_field,
-                    ft.Text('ИКОНКА', size=11.5, weight=ft.FontWeight.W_600, color=p.text_faint),
+                    ft.Text(self.tr('icon'), size=11.5, weight=ft.FontWeight.W_600, color=p.text_faint),
                     icon_row,
-                    ft.Text('ЦВЕТ', size=11.5, weight=ft.FontWeight.W_600, color=p.text_faint),
+                    ft.Text(self.tr('color'), size=11.5, weight=ft.FontWeight.W_600, color=p.text_faint),
                     color_row,
                 ],
             ),
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
-                ft.FilledButton('Сохранить' if chat else 'Создать', bgcolor=p.accent),
+                ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.FilledButton(self.tr('save') if chat else self.tr('create'), bgcolor=p.accent),
             ],
             bgcolor=p.modal_bg,
         )
@@ -944,16 +1022,16 @@ class NotesApp:
 
     def confirm_delete_chat(self):
         if len(self.state.chats) <= 1:
-            self.toast('Нужен хотя бы один чат', error=True)
+            self.toast(self.tr('need_chat'), error=True)
             return
         p = self.p
         dlg = ft.AlertDialog(
-            title=ft.Text('Удалить чат?', size=16, weight=ft.FontWeight.W_700, color=p.text),
-            content=ft.Text('Чат и все записи в нём будут удалены.', size=14, color=p.text_soft),
+            title=ft.Text(self.tr('delete_chat_title'), size=16, weight=ft.FontWeight.W_700, color=p.text),
+            content=ft.Text(self.tr('delete_chat_body'), size=14, color=p.text_soft),
             bgcolor=p.modal_bg,
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
-                ft.TextButton('Удалить', style=ft.ButtonStyle(color=p.danger)),
+                ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.TextButton(self.tr('delete'), style=ft.ButtonStyle(color=p.danger)),
             ],
         )
         dlg.actions[1].on_click = self._make_delete_chat_handler(dlg)
@@ -979,6 +1057,144 @@ class NotesApp:
         self.state.theme = theme
         await self.state.save()
         self.apply_theme()
+
+    async def set_lang(self, code):
+        self.state.lang = code
+        self.lang = code
+        self.tr = translator(code)
+        await self.state.save()
+        self.apply_theme()
+
+    # ---------------- TODO ----------------
+
+    def build_todo_items(self, entry):
+        p = self.p
+        items = entry.get('items') or []
+        rows = []
+        for it in items:
+            async def toggle(e, item=it):
+                item['done'] = not item.get('done')
+                await self.state.save()
+                self.render_messages()
+                self.render_chat_list()
+
+            rows.append(ft.Row(
+                spacing=6,
+                controls=[
+                    ft.Checkbox(
+                        value=bool(it.get('done')),
+                        on_change=toggle,
+                        active_color=p.accent,
+                    ),
+                    ft.Text(
+                        it.get('text', ''),
+                        size=13.5,
+                        color=p.text,
+                        expand=True,
+                        selectable=True,
+                        style=ft.TextStyle(
+                            decoration=ft.TextDecoration.LINE_THROUGH if it.get('done') else None,
+                            decoration_color=p.text_faint,
+                        ),
+                    ),
+                ],
+            ))
+        rows.append(ft.Row(
+            alignment=ft.MainAxisAlignment.END,
+            controls=[ft.Text(fmt_time(entry['ts']), size=10.5, color=p.text_faint)],
+        ))
+        return rows
+
+    def open_todo_dialog(self, entry=None):
+        p = self.p
+        editing = entry is not None
+        items = [dict(i) for i in (entry.get('items') or [])] if editing else []
+
+        input_field = ft.TextField(
+            hint_text=self.tr('todo_item_hint'),
+            dense=True,
+            border=ft.InputBorder.UNDERLINE,
+            text_size=13.5,
+            content_padding=ft.Padding.only(bottom=8),
+        )
+        list_col = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO)
+
+        def refresh():
+            rows = []
+            for it in items:
+                def remove(e, item=it):
+                    items.remove(item)
+                    refresh()
+
+                rows.append(ft.Row(
+                    controls=[
+                        ft.Icon(ft.Icons.CHECKLIST, size=18, color=p.text_soft),
+                        ft.Text(it.get('text', ''), size=13.5, color=p.text, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.IconButton(icon=ft.Icons.CLOSE, icon_size=18, icon_color=p.text_faint, on_click=remove),
+                    ],
+                ))
+            list_col.controls = rows
+            list_col.update()
+
+        async def add_item(e):
+            text = (input_field.value or '').strip()
+            if not text:
+                return
+            items.append({'id': uid('t'), 'text': text, 'done': False})
+            input_field.value = ''
+            input_field.update()
+            refresh()
+
+        async def save_todo(e):
+            cleaned = [i for i in items if (i.get('text') or '').strip()]
+            if not cleaned:
+                self.toast(self.tr('todo_empty'), error=True)
+                return
+            self.page.pop_dialog()
+            if editing:
+                entry['items'] = cleaned
+            else:
+                self.state.entries.append({
+                    'id': uid('e'),
+                    'chatId': self.current_chat_id,
+                    'type': 'todo',
+                    'text': '',
+                    'tags': [],
+                    'ts': int(time.time() * 1000),
+                    'items': cleaned,
+                })
+            await self.state.save()
+            self.render_messages()
+            self.render_chat_list()
+
+        refresh()
+        dlg = ft.AlertDialog(
+            title=ft.Text(self.tr('todo_edit_title') if editing else self.tr('todo_new_title'), size=16, weight=ft.FontWeight.W_700, color=p.text),
+            content=ft.Column(
+                tight=True,
+                width=340,
+                spacing=8,
+                controls=[
+                    ft.Row(spacing=4, controls=[
+                        input_field,
+                        ft.IconButton(icon=ft.Icons.ADD, icon_color=p.accent, on_click=add_item),
+                    ]),
+                    ft.Container(
+                        bgcolor=p.bg,
+                        border_radius=8,
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                        height=200,
+                        content=list_col,
+                    ),
+                ],
+            ),
+            actions=[
+                ft.TextButton(self.tr('cancel'), style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.FilledButton(self.tr('todo_done'), bgcolor=p.accent, on_click=save_todo),
+            ],
+            bgcolor=p.modal_bg,
+        )
+        self.page.show_dialog(dlg)
 
     # ---------------- MISC ----------------
 

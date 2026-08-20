@@ -47,6 +47,7 @@ class MediaStore:
 class State:
     def __init__(self):
         self.theme = 'light'
+        self.lang = 'ru'
         self.chats = list(DEFAULT_CHATS)
         self.entries = []
 
@@ -61,6 +62,8 @@ class State:
                     self.entries = data['entries']
                 if data.get('theme') in ('light', 'dark'):
                     self.theme = data['theme']
+                if isinstance(data.get('lang'), str):
+                    self.lang = data['lang']
         except Exception:
             pass
 
@@ -68,6 +71,7 @@ class State:
         try:
             await ft.SharedPreferences().set(STORAGE_KEY, json.dumps({
                 'theme': self.theme,
+                'lang': self.lang,
                 'chats': self.chats,
                 'entries': self.entries,
             }, ensure_ascii=False))

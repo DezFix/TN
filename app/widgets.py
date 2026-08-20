@@ -12,14 +12,14 @@ def fmt_time(ts):
     return datetime.datetime.fromtimestamp(ts / 1000).strftime('%H:%M')
 
 
-def fmt_day(ts):
+def fmt_day(ts, tr):
     import datetime
     d = datetime.datetime.fromtimestamp(ts / 1000)
     today = datetime.date.today()
     if d.date() == today:
-        return 'Сегодня'
+        return tr('today')
     if d.date() == today - datetime.timedelta(days=1):
-        return 'Вчера'
+        return tr('yesterday')
     return d.strftime('%d %B').lstrip('0')
 
 
@@ -68,20 +68,24 @@ def hashtag_text(text, p, size=14.5):
     return ft.Text(spans=spans, size=size, color=p.text, selectable=True)
 
 
-def chat_preview(entry):
+def chat_preview(entry, tr):
     t = entry.get('type')
     if t == 'text':
         return entry.get('text', '')[:60]
     if t == 'image':
-        return '📷 Фото'
+        return tr('photo')
     if t == 'audio':
-        return '🎙 Голосовое, {} сек'.format(entry.get('duration', 0))
+        return tr('voice_preview', entry.get('duration', 0))
     if t == 'video':
-        return '🎬 Видео'
+        return tr('video_preview')
+    if t == 'todo':
+        items = entry.get('items') or []
+        done = sum(1 for i in items if i.get('done'))
+        return tr('todo_progress', done, len(items))
     return ''
 
 
-def build_chat_row(chat, state, p, on_open):
+def build_chat_row(chat, state, p, on_open, tr):
     entries = state.entries_for(chat['id'])
     last = entries[-1] if entries else None
     return ft.GestureDetector(
@@ -106,7 +110,7 @@ def build_chat_row(chat, state, p, on_open):
                             ),
                             ft.Row(
                                 controls=[
-                                    ft.Text(chat_preview(last) if last else 'Нет записей', size=13.5, color=p.text_soft, expand=True, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
+                                    ft.Text(chat_preview(last, tr) if last else tr('no_entries'), size=13.5, color=p.text_soft, expand=True, overflow=ft.TextOverflow.ELLIPSIS, max_lines=1),
                                     ft.Container(
                                         bgcolor=p.accent,
                                         border_radius=10,
