@@ -7,5 +7,6 @@ build/
 dist/
 runlog.txt
 smoke.txt
+smoke_test.py
 *.log
 .DS_Store

@@ -9,6 +9,7 @@ from app.widgets import (
     avatar,
     build_chat_row,
     build_forward_row,
+    chat_preview,
     day_pill,
     fmt_day,
     fmt_time,
@@ -24,6 +25,7 @@ class NotesApp:
         self.p = palette_for(self.state.theme)
         self.current_chat_id = None
         self.editing_entry_id = None
+        self.highlight_entry_id = None
         self.search_q = ''
         self.selected_color = COLORS[0]
         self.selected_icon = ICONS[0]
@@ -302,9 +304,10 @@ class NotesApp:
         self.fab.visible = name == 'list'
         self.page.update()
 
-    def open_chat(self, chat_id):
+    def open_chat(self, chat_id, highlight_entry_id=None):
         self.current_chat_id = chat_id
         self.editing_entry_id = None
+        self.highlight_entry_id = highlight_entry_id
         self.chat_topbar.content = self.build_chat_topbar()
         self.chat_topbar.update()
         self.render_messages()
@@ -323,19 +326,12 @@ class NotesApp:
         self.render_chat_list()
 
     def render_chat_list(self):
-        q = self.search_q.lower()
-        chats = []
-        for c in self.state.chats:
-            if not q:
-                chats.append(c)
-                continue
-            if q in c['name'].lower():
-                chats.append(c)
-                continue
-            for e in self.state.entries_for(c['id']):
-                if q in (e.get('text', '') or '').lower() or any(q in t for t in e.get('tags', [])):
-                    chats.append(c)
-                    break
+        q = self.search_q.lower().strip()
+        if q:
+            self.render_search_results(q)
+            return
+
+        chats = list(self.state.chats)
 
         def last_ts(c):
             entries = self.state.entries_for(c['id'])
@@ -361,6 +357,93 @@ class NotesApp:
         self.chat_list_view.controls = rows
         self.chat_list_view.update()
 
+    def render_search_results(self, q):
+        matches = []
+        for e in self.state.entries:
+            text = (e.get('text', '') or '').lower()
+            if q in text or any(q in t for t in e.get('tags', [])):
+                matches.append(e)
+        matches.sort(key=lambda e: e['ts'], reverse=True)
+
+        rows = []
+        for e in matches:
+            chat = self.state.chat_by_id(e['chatId'])
+            if not chat:
+                continue
+            snippet = e.get('text', '') or chat_preview(e)
+            rows.append(self.build_search_row(chat, e, snippet, q))
+
+        if not rows:
+            rows = [
+                ft.Container(
+                    padding=ft.Padding.symmetric(horizontal=30, vertical=60),
+                    content=ft.Text('По запросу «{}» ничего не найдено'.format(self.search_q), size=14, color=self.p.text_faint, text_align=ft.TextAlign.CENTER),
+                )
+            ]
+        self.chat_list_view.controls = rows
+        self.chat_list_view.update()
+
+    def build_search_row(self, chat, entry, snippet, q):
+        p = self.p
+        idx = snippet.lower().find(q)
+
+        def open_result(e):
+            self.open_chat(chat['id'], highlight_entry_id=entry['id'])
+
+        return ft.GestureDetector(
+            on_tap=open_result,
+            content=ft.Container(
+                bgcolor=p.bg_list,
+                padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+                border=ft.Border.only(bottom=ft.BorderSide(1, p.divider)),
+                content=ft.Row(
+                    spacing=12,
+                    controls=[
+                        avatar(chat, size=44),
+                        ft.Column(
+                            expand=True,
+                            spacing=2,
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Text(chat['name'], size=14, weight=ft.FontWeight.W_600, color=p.text, expand=True, overflow=ft.TextOverflow.ELLIPSIS),
+                                        ft.Text(fmt_time(entry['ts']), size=12, color=p.text_faint),
+                                    ],
+                                ),
+                                ft.Text(
+                                    self.highlight_spans(snippet, q, p),
+                                    size=13.5,
+                                    color=p.text_soft,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                    max_lines=1,
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+    def highlight_spans(self, text, q, p):
+        spans = []
+        last = 0
+        low = text.lower()
+        pos = 0
+        while True:
+            i = low.find(q, pos)
+            if i < 0:
+                break
+            if i > last:
+                spans.append(ft.TextSpan(text[last:i]))
+            spans.append(ft.TextSpan(text[i:i + len(q)], style=ft.TextStyle(color=p.accent_dk, weight=ft.FontWeight.W_600)))
+            last = i + len(q)
+            pos = last
+        if last < len(text):
+            spans.append(ft.TextSpan(text[last:]))
+        if not spans:
+            spans.append(ft.TextSpan(text))
+        return spans
+
     # ---------------- MESSAGES ----------------
 
     def render_messages(self):
@@ -368,12 +451,20 @@ class NotesApp:
             return
         items = []
         last_day = None
+        target_key = None
         for entry in self.state.entries_for(self.current_chat_id):
             day = fmt_day(entry['ts'])
             if day != last_day:
                 items.append(day_pill(day, self.p))
                 last_day = day
-            items.append(self.build_bubble(entry))
+            bubble = self.build_bubble(entry, highlight=(self.highlight_entry_id == entry['id']))
+            if bubble is not None:
+                key = 'msg_' + entry['id']
+                bubble.key = ft.ValueKey(key)
+                if self.highlight_entry_id == entry['id']:
+                    target_key = key
+            items.append(bubble)
+        self.highlight_entry_id = None
         if not items:
             items = [
                 ft.Container(
@@ -388,8 +479,14 @@ class NotesApp:
             ]
         self.messages_view.controls = items
         self.messages_view.update()
+        if target_key is not None:
+            self.page.run_task(self._scroll_to_message, target_key)
 
-    def build_bubble(self, entry):
+    async def _scroll_to_message(self, key):
+        await self.messages_view.scroll_to(scroll_key=ft.ValueKey(key), duration=400, curve=ft.AnimationCurve.EASE_OUT)
+        self.messages_view.update()
+
+    def build_bubble(self, entry, highlight=False):
         p = self.p
         bubble = None
         if entry['type'] == 'text':
@@ -476,6 +573,8 @@ class NotesApp:
                     ],
                 ),
             )
+        if highlight:
+            bubble.border = ft.Border.all(2, p.accent)
         return ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.END,
             controls=[
