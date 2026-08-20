@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.flet/
+build/
+dist/
+runlog.txt
+smoke.txt
+*.log
+.DS_Store
