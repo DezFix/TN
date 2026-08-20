@@ -1,9 +1,24 @@
+# Python legacy
 __pycache__/
 *.pyc
 .venv/
 venv/
-.flet/
+
+# Flutter/Dart
+.dart_tool/
+.packages
 build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-plugins-dependencies.nolink
+*.iml
+.idea/
+android/.gradle/
+android/local.properties
+android/app/.cxx/
+android/app/build/
+
+# Misc
 dist/
 runlog.txt
 smoke.txt
