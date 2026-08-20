@@ -13,11 +13,7 @@ MEDIA_DIR = 'tn_media'
 COLORS = ['#2AABEE', '#E0663E', '#7C5CD6', '#3EA66E', '#D6538B', '#C99A2E', '#5C7CFA', '#20B2AA']
 ICONS = [None, '💡', '📌', '💼', '🎯', '📚', '🎨', '🎧', '🍳', '✈️', '🌱', '⚡', '🧠', '❤️', '🏋️', '🎵']
 
-DEFAULT_CHATS = [
-    {'id': 'c_saved', 'name': 'Избранное', 'color': '#2AABEE', 'icon': None},
-    {'id': 'c_ideas', 'name': 'Идеи', 'color': '#C99A2E', 'icon': '💡'},
-    {'id': 'c_work', 'name': 'Работа', 'color': '#3EA66E', 'icon': '💼'},
-]
+DEFAULT_CHATS = []
 
 
 class MediaStore:

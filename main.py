@@ -233,8 +233,12 @@ class NotesApp:
     def build_theme_toggle(self):
         def opt(label, theme):
             active = self.state.theme == theme
+
+            async def tap(e):
+                await self.set_theme(theme)
+
             return ft.GestureDetector(
-                on_tap=lambda e: self.set_theme(theme),
+                on_tap=tap,
                 content=ft.Container(
                     padding=ft.Padding.symmetric(horizontal=14, vertical=6),
                     border_radius=7,
@@ -270,14 +274,20 @@ class NotesApp:
             content_padding=ft.Padding.symmetric(horizontal=14, vertical=9),
             expand=True,
             on_change=lambda e: self.update_send_btn(),
-            on_submit=lambda e: self.send_text(),
+            on_submit=self.on_text_submit,
         )
-        self.send_btn = ft.IconButton(icon=ft.Icons.MIC, icon_color=ft.Colors.WHITE, bgcolor=self.p.accent, on_click=lambda e: self.on_send_click())
+        self.send_btn = ft.IconButton(icon=ft.Icons.MIC, icon_color=ft.Colors.WHITE, bgcolor=self.p.accent, on_click=self.on_send_click)
+        async def pick_image_handler(e):
+            await self.pick_image()
+
+        async def pick_video_handler(e):
+            await self.pick_video()
+
         return ft.Row(
             spacing=6,
             controls=[
-                ft.IconButton(icon=ft.Icons.ATTACH_FILE, icon_color=self.p.text_soft, on_click=lambda e: self.pick_image()),
-                ft.IconButton(icon=ft.Icons.VIDEOCAM, icon_color=self.p.text_soft, on_click=lambda e: self.pick_video()),
+                ft.IconButton(icon=ft.Icons.ATTACH_FILE, icon_color=self.p.text_soft, on_click=pick_image_handler),
+                ft.IconButton(icon=ft.Icons.VIDEOCAM, icon_color=self.p.text_soft, on_click=pick_video_handler),
                 self.text_input,
                 self.send_btn,
             ],
@@ -338,10 +348,14 @@ class NotesApp:
             rows.append(build_chat_row(c, self.state, self.p, self.open_chat))
 
         if not rows:
+            if self.state.chats:
+                msg = 'Ничего не найдено'
+            else:
+                msg = 'Пока нет чатов.\nСоздайте первый — нажмите кнопку ✎ внизу справа.'
             rows = [
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=30, vertical=60),
-                    content=ft.Text('Ничего не найдено', size=14, color=self.p.text_faint, text_align=ft.TextAlign.CENTER),
+                    content=ft.Text(msg, size=14, color=self.p.text_faint, text_align=ft.TextAlign.CENTER),
                 )
             ]
         self.chat_list_view.controls = rows
@@ -531,11 +545,14 @@ class NotesApp:
         self.send_btn.icon = ft.Icons.SEND if has else ft.Icons.MIC
         self.send_btn.update()
 
-    def on_send_click(self):
+    def on_send_click(self, e=None):
         if self.text_input.value.strip():
-            self.send_text()
+            self.page.run_task(self.send_text)
         else:
             self.toast('Голосовые заметки — скоро появятся', error=True)
+
+    async def on_text_submit(self, e):
+        await self.send_text()
 
     async def send_text(self):
         text = self.text_input.value.strip()
@@ -614,11 +631,11 @@ class NotesApp:
 
         if entry['type'] == 'text':
             def copy_action(e):
-                self.page.pop_dialog(sheet)
+                self.page.pop_dialog()
                 self.page.run_task(self.do_copy, entry['text'])
 
             def edit_action(e):
-                self.page.pop_dialog(sheet)
+                self.page.pop_dialog()
                 self.editing_entry_id = entry['id']
                 self.render_messages()
 
@@ -626,11 +643,11 @@ class NotesApp:
             tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.EDIT), title=ft.Text('Изменить'), on_click=edit_action))
 
         def forward_action(e):
-            self.page.pop_dialog(sheet)
+            self.page.pop_dialog()
             self.open_forward(entry)
 
         def delete_action(e):
-            self.page.pop_dialog(sheet)
+            self.page.pop_dialog()
             self.confirm_delete_entry(entry)
 
         tiles.append(ft.ListTile(leading=ft.Icon(ft.Icons.FORWARD), title=ft.Text('Переслать'), on_click=forward_action))
@@ -658,14 +675,14 @@ class NotesApp:
         p = self.p
 
         def pick(chat):
-            self.page.pop_dialog(dlg)
+            self.page.pop_dialog()
             self.page.run_task(self.do_forward, entry, chat)
 
         rows = [build_forward_row(c, p, lambda ch=c: pick(ch)) for c in self.state.chats]
         dlg = ft.AlertDialog(
             title=ft.Text('Переслать в…', size=16, weight=ft.FontWeight.W_700, color=p.text),
             content=ft.ListView(rows, height=300, spacing=2),
-            actions=[ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog(dlg))],
+            actions=[ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog())],
             bgcolor=p.modal_bg,
         )
         self.page.show_dialog(dlg)
@@ -688,18 +705,20 @@ class NotesApp:
             title=ft.Text('Удалить запись?', size=16, weight=ft.FontWeight.W_700, color=p.text),
             bgcolor=p.modal_bg,
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog(dlg)),
-                ft.TextButton(
-                    'Удалить',
-                    style=ft.ButtonStyle(color=p.danger),
-                    on_click=lambda e: self.delete_entry(entry, dlg),
-                ),
+                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.TextButton('Удалить', style=ft.ButtonStyle(color=p.danger)),
             ],
         )
+        dlg.actions[1].on_click = self._make_delete_entry_handler(entry, dlg)
         self.page.show_dialog(dlg)
 
+    def _make_delete_entry_handler(self, entry, dlg):
+        async def handler(e):
+            await self.delete_entry(entry, dlg)
+        return handler
+
     async def delete_entry(self, entry, dlg):
-        self.page.pop_dialog(dlg)
+        self.page.pop_dialog()
         self.media.remove(entry.get('media', ''))
         self.state.entries = [e for e in self.state.entries if e['id'] != entry['id']]
         await self.state.save()
@@ -748,12 +767,18 @@ class NotesApp:
                 ],
             ),
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog(dlg)),
-                ft.FilledButton('Сохранить' if chat else 'Создать', bgcolor=p.accent, on_click=lambda e: self.save_chat_modal(name_field, dlg)),
+                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.FilledButton('Сохранить' if chat else 'Создать', bgcolor=p.accent),
             ],
             bgcolor=p.modal_bg,
         )
+        dlg.actions[1].on_click = self._make_save_chat_handler(name_field, dlg)
         self.page.show_dialog(dlg)
+
+    def _make_save_chat_handler(self, name_field, dlg):
+        async def handler(e):
+            await self.save_chat_modal(name_field, dlg)
+        return handler
 
     def build_icon_picker(self, icon_row, initial=False):
         p = self.p
@@ -813,7 +838,7 @@ class NotesApp:
             chat = {'id': uid('c'), 'name': name, 'color': self.selected_color, 'icon': self.selected_icon}
             self.state.chats.append(chat)
         await self.state.save()
-        self.page.pop_dialog(dlg)
+        self.page.pop_dialog()
         self.render_chat_list()
         if not self.editing_chat_id:
             self.open_chat(chat['id'])
@@ -828,14 +853,20 @@ class NotesApp:
             content=ft.Text('Чат и все записи в нём будут удалены.', size=14, color=p.text_soft),
             bgcolor=p.modal_bg,
             actions=[
-                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog(dlg)),
-                ft.TextButton('Удалить', style=ft.ButtonStyle(color=p.danger), on_click=lambda e: self.delete_chat(dlg)),
+                ft.TextButton('Отмена', style=ft.ButtonStyle(color=p.text_soft), on_click=lambda e: self.page.pop_dialog()),
+                ft.TextButton('Удалить', style=ft.ButtonStyle(color=p.danger)),
             ],
         )
+        dlg.actions[1].on_click = self._make_delete_chat_handler(dlg)
         self.page.show_dialog(dlg)
 
+    def _make_delete_chat_handler(self, dlg):
+        async def handler(e):
+            await self.delete_chat(dlg)
+        return handler
+
     async def delete_chat(self, dlg):
-        self.page.pop_dialog(dlg)
+        self.page.pop_dialog()
         for e in self.state.entries_for(self.current_chat_id):
             self.media.remove(e.get('media', ''))
         self.state.entries = [e for e in self.state.entries if e['chatId'] != self.current_chat_id]
