@@ -8,5 +8,8 @@ dist/
 runlog.txt
 smoke.txt
 smoke_test.py
+apk_build*.txt
+pack*.txt
+sdk_*.txt
 *.log
 .DS_Store
