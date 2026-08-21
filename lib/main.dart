@@ -18,7 +18,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '1.6.0';
+const _appVersion = '1.6.1';
 
 class _TNState extends State<TN> {
   late final Future<AppModel> _future = _load();
@@ -99,14 +99,33 @@ class _TNState extends State<TN> {
       if (seen == _appVersion) return;
       if (!context.mounted) return;
       final p = model.p;
+      final fix = model.tr('whatsnew_fix');
+      final upd = model.tr('whatsnew_update');
+      final hasSplit = fix != 'whatsnew_fix' && upd != 'whatsnew_update';
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: p.modalBg,
           title: Text(model.tr('whatsnew_title'),
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
-          content: Text(model.tr('whatsnew_body'),
-              style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+          content: SingleChildScrollView(
+            child: hasSplit
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Fix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: 0.5)),
+                      const SizedBox(height: 4),
+                      Text(fix, style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+                      const SizedBox(height: 12),
+                      Text('Update', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: 0.5)),
+                      const SizedBox(height: 4),
+                      Text(upd, style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+                    ],
+                  )
+                : Text(model.tr('whatsnew_body'),
+                    style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+          ),
           actions: [
             TextButton(
               onPressed: () async {
