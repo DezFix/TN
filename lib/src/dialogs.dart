@@ -13,6 +13,7 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
   final nameField = TextEditingController(text: chat?.name ?? '');
   var selectedIcon = chat?.icon;
   var selectedColor = chat?.color ?? appColors[0];
+  var selectedKind = chat?.kind ?? 'note';
 
   return showDialog<Chat>(
     context: context,
@@ -40,6 +41,29 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
                     enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
                     focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
                   ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Тип чата',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF8A9BA8))),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final k in chatKinds)
+                      GestureDetector(
+                        onTap: () => setState(() => selectedKind = k.$1),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: selectedKind == k.$1 ? p.accent.withValues(alpha: .18) : p.bgChat,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: selectedKind == k.$1 ? p.accent : p.divider, width: 1.5),
+                          ),
+                          child: Text('${k.$2} ${k.$1}', style: TextStyle(fontSize: 12, color: selectedKind == k.$1 ? p.accent : p.text)),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Text(tr('icon'),
@@ -109,11 +133,12 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
             onPressed: () {
               final name = nameField.text.trim();
               if (name.isEmpty) return;
-              final result = chat ?? Chat(id: uid('c'), name: name, color: selectedColor);
+              final result = chat ?? Chat(id: uid('c'), name: name, color: selectedColor, kind: selectedKind);
               result
                 ..name = name
                 ..icon = selectedIcon
-                ..color = selectedColor;
+                ..color = selectedColor
+                ..kind = selectedKind;
               Navigator.pop(ctx, result);
             },
             child: Text(tr(chat != null ? 'save' : 'create')),

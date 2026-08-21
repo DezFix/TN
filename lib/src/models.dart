@@ -24,6 +24,15 @@ class Folder {
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
 }
 
+const chatKinds = [
+  ('note', '📝'),
+  ('tasks', '✅'),
+  ('diary', '📔'),
+  ('ideas', '💡'),
+  ('project', '🚀'),
+  ('custom', '⭐'),
+];
+
 class Chat {
   Chat({
     required this.id,
@@ -32,6 +41,7 @@ class Chat {
     this.icon,
     this.pinned = false,
     this.folderId,
+    this.kind = 'note',
   });
 
   final String id;
@@ -40,6 +50,7 @@ class Chat {
   String? icon;
   bool pinned = false;
   String? folderId;
+  String kind = 'note';
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -48,6 +59,7 @@ class Chat {
         icon: j['icon'] as String?,
         pinned: j['pinned'] as bool? ?? false,
         folderId: j['folderId'] as String?,
+        kind: j['kind'] as String? ?? 'note',
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +68,7 @@ class Chat {
         'color': color,
         'icon': icon,
         'pinned': pinned,
+        'kind': kind,
         if (folderId != null) 'folderId': folderId,
       };
 }

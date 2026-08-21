@@ -64,13 +64,21 @@ class RemindersService {
         title: title,
         body: body,
         scheduledDate: when,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
-            'reminders',
-            'Reminders',
-            channelDescription: 'Reminders about notes',
-            importance: Importance.high,
+            'tn_messages',
+            'TN messages',
+            channelDescription: 'Messages and reminders like Telegram',
+            importance: Importance.max,
             priority: Priority.high,
+            category: AndroidNotificationCategory.message,
+            styleInformation: MessagingStyleInformation(
+              const Person(name: 'Вы'),
+              conversationTitle: title,
+              groupConversation: false,
+              messages: [Message(body, DateTime.now(), Person(name: title))],
+            ),
+            ticker: '$title: $body',
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -97,13 +105,21 @@ class RemindersService {
         id: id,
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
-            'reminders',
-            'Reminders',
-            channelDescription: 'Reminders about notes',
-            importance: Importance.high,
+            'tn_messages',
+            'TN messages',
+            channelDescription: 'Messages and reminders like Telegram',
+            importance: Importance.max,
             priority: Priority.high,
+            category: AndroidNotificationCategory.message,
+            styleInformation: MessagingStyleInformation(
+              const Person(name: 'Вы'),
+              conversationTitle: title,
+              groupConversation: false,
+              messages: [Message(body, DateTime.now(), Person(name: title))],
+            ),
+            ticker: '$title: $body',
           ),
         ),
       );
