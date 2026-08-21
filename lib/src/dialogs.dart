@@ -482,7 +482,7 @@ Future<AttachOption?> showAttachMenuPopup(
   );
 }
 
-enum ChatTopAction { remind, edit, delete, toggleHide }
+enum ChatTopAction { remind, edit, delete, toggleHide, toggleNotifications }
 
 Future<ChatTopAction?> showChatTopMenuPopup(
     BuildContext context, AppModel model) {

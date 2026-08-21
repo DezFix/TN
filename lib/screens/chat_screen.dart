@@ -650,11 +650,26 @@ class _ChatScreenState extends State<ChatScreen> {
                   await widget.model.save();
                   if (mounted) setState(() {});
                   break;
+                case ChatTopAction.toggleNotifications:
+                  _chat.notificationsEnabled = !_chat.notificationsEnabled;
+                  await widget.model.save();
+                  if (mounted) {
+                    setState(() {});
+                    _toast(_chat.notificationsEnabled ? 'Уведомления включены' : 'Уведомления выключены');
+                  }
+                  break;
                 case ChatTopAction.remind:
                   break;
               }
             },
             itemBuilder: (ctx) => [
+              PopupMenuItem(
+                  value: ChatTopAction.toggleNotifications,
+                  child: Row(children: [
+                    Icon(_chat.notificationsEnabled ? Icons.notifications : Icons.notifications_off, size: 18, color: p.textSoft),
+                    const SizedBox(width: 10),
+                    Text(_chat.notificationsEnabled ? 'Выключить уведомления' : 'Включить уведомления', style: TextStyle(color: p.text))
+                  ])),
               if (_chat.kind == 'tasks')
                 PopupMenuItem(
                     value: ChatTopAction.toggleHide,
@@ -965,6 +980,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     )
                   : const SizedBox(width: 260, height: 300),
             ),
+            if (entry.text.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+                child: Text(entry.text, style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35)),
+              ),
             Padding(
               padding: const EdgeInsets.only(right: 8, bottom: 4),
               child: Text(fmtTime(entry.ts),
@@ -1172,6 +1192,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildComposer() {
     final model = widget.model;
+    if (_chat.kind == 'rss') {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        color: p.bgList,
+        child: Row(
+          children: [
+            Icon(Icons.rss_feed, color: p.textFaint, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Только канал — пишет RSS', style: TextStyle(color: p.textFaint, fontSize: 13))),
+            TextButton(onPressed: () async { await RssService.fetchForChat(_chat, model.state); if (mounted) setState(() {}); }, child: Text('Обновить', style: TextStyle(color: p.accent))),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
       color: p.bgList,

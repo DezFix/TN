@@ -26,6 +26,7 @@ class Folder {
 
 const chatKinds = [
   ('note', '📝'),
+  ('rss', '📡'),
   ('tasks', '✅'),
   ('diary', '📔'),
   ('ideas', '💡'),
@@ -44,6 +45,8 @@ class Chat {
     this.kind = 'note',
     this.tasksHideDone = false,
     this.rssUrl,
+    this.notificationsEnabled = true,
+    this.notificationSound,
   });
 
   final String id;
@@ -55,6 +58,8 @@ class Chat {
   String kind = 'note';
   bool tasksHideDone = false;
   String? rssUrl;
+  bool notificationsEnabled = true;
+  String? notificationSound;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -66,6 +71,8 @@ class Chat {
         kind: j['kind'] as String? ?? 'note',
         tasksHideDone: j['tasksHideDone'] as bool? ?? false,
         rssUrl: j['rssUrl'] as String?,
+        notificationsEnabled: j['notificationsEnabled'] as bool? ?? true,
+        notificationSound: j['notificationSound'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -76,6 +83,8 @@ class Chat {
         'pinned': pinned,
         'kind': kind,
         'tasksHideDone': tasksHideDone,
+        'notificationsEnabled': notificationsEnabled,
+        if (notificationSound != null) 'notificationSound': notificationSound,
         if (rssUrl != null) 'rssUrl': rssUrl,
         if (folderId != null) 'folderId': folderId,
       };
