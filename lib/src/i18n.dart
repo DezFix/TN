@@ -89,7 +89,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Закрепить',
     'rec_locked': 'Запись закреплена',
     'rec_too_short': 'Слишком коротко',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• RSS-канал: только канал пишет, фото сверху + текст снизу\n• Настройки уведомлений по чатам (вкл/выкл, звук)\n• Гибкая отправка: раз/будни/выходные/кастом + задача ✓\n• Скрытая история задач, «Отправить позже» в сообщении\n• RSS-каналы к чатам + очистка кеша, fix «Что нового» + ko-fi\n• Чаты сверху вниз, меню под пальцем, Enter — отправка\n• Вложения к задачам, повторяющиеся задачи, теги # и сортировка по дедлайну\n• Типы чатов — обычный и Задачи (ToDo + время, скрыть выполненные)\n• Markdown, таблицы и чек-листы\n• Выпадающие меню у пальца — зажатие отправки больше не тянет вниз\n• Одна кнопка 📎 с под-меню (фото, список дел), камера убрана\n• Верхняя панель чата — меню ⋮ (напоминание, изменить, удалить)\n• Бэкапы в Настройках → Загрузки (скоро Google Drive)\n• Новая иконка-иллюзия TN',
     'whatsnew_fix': '• Исправлен показ «Что нового»\n• Чаты сверху вниз\n• Все меню под пальцем\n• Enter отправляет сообщение',
@@ -208,7 +208,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Lock',
     'rec_locked': 'Recording locked',
     'rec_too_short': 'Too short',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• RSS channel: read-only, photo top + text below\n• Per-chat notifications (on/off, sound)\n• Flexible send: once/weekdays/weekends/custom + task ✓\n• Hidden task history, message «Send later»\n• RSS channels + cache clear, fix whatsnew + ko-fi\n• Chats top-down, menus at finger, Enter to send\n• Task attachments, recurring tasks, tags # and deadline sort\n• Chat types — note & Tasks (ToDo + deadline, hide done)\n• Markdown, tables & checklists\n• Dropdown menus at your finger — long-press send no longer spans the screen\n• Single attach button 📎 with submenu (photo, to-do), camera removed\n• Chat header menu ⋮ (reminder, edit, delete)\n• Backups in Settings → Downloads (Google Drive soon)\n• New TN illusion icon',
     'whatsnew_fix': '• Fixed whatsnew display\n• Chats top-down\n• All menus at finger\n• Enter to send',
@@ -327,7 +327,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Закріпити',
     'rec_locked': 'Запис закріплено',
     'rec_too_short': 'Занадто коротко',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• RSS-канал: тільки канал пише, фото зверху + текст знизу\n• Налаштування сповіщень по чатах\n• Гнучке надсилання: раз/будні/вихідні/кастом + задача ✓\n• Прихована історія задач, «Надіслати пізніше»\n• RSS-канали + очищення кешу, fix «Що нового» + ko-fi\n• Чати зверху вниз, меню під пальцем, Enter — надсилання\n• Вкладення до задач, повторювані задачі, теги # та сортування\n• Типи чатів — звичайний і Задачі (ToDo + час, сховати виконані)\n• Markdown, таблиці та чек-листи\n• Спливаючі меню біля пальця — довге натиснення більше не тягне вниз\n• Одна кнопка 📎 з під-меню (фото, список справ), камеру прибрано\n• Верхнє меню чату ⋮ (нагадування, змінити, видалити)\n• Бекапи в Налаштуваннях → Завантаження (скоро Google Drive)\n• Нова іконка-ілюзія TN',
     'whatsnew_fix': '• Виправлено показ «Що нового»\n• Чати зверху вниз\n• Всі меню під пальцем\n• Enter надсилає',
@@ -446,7 +446,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Sperren',
     'rec_locked': 'Aufnahme gesperrt',
     'rec_too_short': 'Zu kurz',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• RSS-Kanal: nur Kanal schreibt, Foto oben + Text unten\n• Benachrichtigungen pro Chat\n• Flexibler Versand: einmal/Wochentage/Wochenende/custom + Aufgabe ✓\n• Versteckter Aufgabenverlauf, «Später senden»\n• RSS-Kanäle + Cache leeren, fix whatsnew + ko-fi\n• Chats Top-Down, Menüs am Finger, Enter sendet\n• Aufgaben-Anhänge, wiederkehrende Aufgaben, Tags # und Sortierung\n• Chat-Typen — Notiz & Aufgaben (ToDo + Termin, Erledigtes ausblenden)\n• Markdown, Tabellen & Checklisten\n• Dropdown-Menüs am Finger — langes Drücken reicht nicht mehr nach unten\n• Ein Anhang-Button 📎 mit Untermenü (Foto, Aufgaben), Kamera entfernt\n• Chat-Header-Menü ⋮ (Erinnerung, Bearbeiten, Löschen)\n• Backups in Einstellungen → Downloads (bald Google Drive)\n• Neues TN-Illusions-Icon',
     'whatsnew_fix': '• Fix whatsnew Anzeige\n• Chats Top-Down\n• Alle Menüs am Finger\n• Enter sendet',
@@ -565,7 +565,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Bloquear',
     'rec_locked': 'Grabación bloqueada',
     'rec_too_short': 'Demasiado corto',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• Canal RSS: solo canal escribe, foto arriba + texto abajo\n• Notificaciones por chat\n• Envío flexible: una vez/laborables/fin de semana/custom + tarea ✓\n• Historial oculto, «Enviar más tarde»\n• Canales RSS + limpiar caché, fix whatsnew + ko-fi\n• Chats de arriba abajo, menús bajo el dedo, Enter envía\n• Adjuntos a tareas, tareas recurrentes, etiquetas # y orden\n• Tipos de chat — nota y Tareas (ToDo + fecha, ocultar hechas)\n• Markdown, tablas y listas\n• Menús desplegables en el dedo — mantener enviar ya no baja\n• Un botón 📎 con submenú (foto, lista), cámara eliminada\n• Menú del chat ⋮ (recordatorio, editar, eliminar)\n• Copias en Ajustes → Descargas (pronto Google Drive)\n• Nuevo icono ilusión TN',
     'whatsnew_fix': '• Fix whatsnew\n• Chats de arriba abajo\n• Todos los menús bajo el dedo\n• Enter envía',
@@ -684,7 +684,7 @@ const strings = <String, Map<String, String>>{
     'rec_lock_hint': 'Verrouiller',
     'rec_locked': 'Enregistrement verrouillé',
     'rec_too_short': 'Trop court',
-    'whatsnew_title': 'TN 1.7.1',
+    'whatsnew_title': 'TN 1.7.2',
     'whatsnew_body':
         '• Canal RSS: lecture seule, photo en haut + texte en bas\n• Notifications par chat\n• Envoi flexible: une fois/semaine/week-end/custom + tâche ✓\n• Historique caché, «Envoyer plus tard»\n• Canaux RSS + vider cache, fix whatsnew + ko-fi\n• Chats haut-bas, menus sous le doigt, Entrée envoie\n• Pièces jointes aux tâches, tâches récurrentes, tags # et tri\n• Types de chat — note & Tâches (ToDo + échéance, masquer fait)\n• Markdown, tableaux & listes\n• Menus déroulants au doigt — appui long n\'étire plus en bas\n• Bouton joint 📎 unique avec sous-menu (photo, tâches), caméra retirée\n• Menu d\'en-tête ⋮ (rappel, modifier, supprimer)\n• Sauvegardes dans Paramètres → Téléchargements (bientôt Google Drive)\n• Nouvelle icône illusion TN',
     'whatsnew_fix': '• Fix whatsnew\n• Chats haut-bas\n• Tous les menus sous le doigt\n• Entrée envoie',

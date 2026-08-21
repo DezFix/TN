@@ -956,8 +956,9 @@ class _ChatScreenState extends State<ChatScreen> {
     return GestureDetector(
       onTap: () => _showImage(entry),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 260, maxHeight: 340),
+        width: 260,
         decoration: BoxDecoration(
+          color: p.bubbleOwn,
           border: Border.all(color: p.bubbleBorder),
           borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(14),
@@ -968,7 +969,7 @@ class _ChatScreenState extends State<ChatScreen> {
         clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             FutureBuilder<String>(
               future: MediaStore().pathOf(entry.media!),
@@ -976,9 +977,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? SizedBox(
                       width: 260,
                       height: 300,
-                      child: Image.file(File(snap.data!), fit: BoxFit.cover),
+                      child: Image.file(File(snap.data!), fit: BoxFit.cover, alignment: Alignment.center),
                     )
-                  : const SizedBox(width: 260, height: 300),
+                  : Container(width: 260, height: 300, color: p.bgChat),
             ),
             if (entry.text.isNotEmpty)
               Padding(
@@ -987,8 +988,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             Padding(
               padding: const EdgeInsets.only(right: 8, bottom: 4),
-              child: Text(fmtTime(entry.ts),
-                  style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(fmtTime(entry.ts), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+              ),
             ),
           ],
         ),
