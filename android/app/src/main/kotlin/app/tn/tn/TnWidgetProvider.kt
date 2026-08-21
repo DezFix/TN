@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.widget.RemoteViews
 import org.json.JSONObject
 
@@ -34,6 +35,23 @@ class TnWidgetProvider : AppWidgetProvider() {
             )
             rv.setOnClickPendingIntent(R.id.w_root, pi)
 
+            // transparency
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            var alpha = 1.0f
+            try {
+                if (prefs.contains("flutter.tn-widget-alpha")) {
+                    try {
+                        alpha = prefs.getFloat("flutter.tn-widget-alpha", 1.0f)
+                    } catch (_: Exception) {
+                        val s = prefs.getString("flutter.tn-widget-alpha", null)
+                        if (s != null) alpha = s.toFloatOrNull() ?: 1.0f
+                    }
+                }
+            } catch (_: Exception) {}
+            alpha = alpha.coerceIn(0.2f, 1.0f)
+            val bg = Color.argb((alpha * 255).toInt(), 0x17, 0x21, 0x2B)
+            try { rv.setInt(R.id.w_root, "setBackgroundColor", bg) } catch (_: Exception) {}
+
             val lines = latestLines(context)
             val ids = intArrayOf(R.id.w_item0, R.id.w_item1, R.id.w_item2, R.id.w_item3, R.id.w_item4)
             for ((i, viewId) in ids.withIndex()) {
@@ -50,6 +68,7 @@ class TnWidgetProvider : AppWidgetProvider() {
         private fun latestLines(context: Context): List<String> {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return emptyList()
+            val widgetChat = prefs.getString("flutter.tn-widget-chatId", "") ?: ""
             return try {
                 val data = JSONObject(raw)
                 val names = HashMap<String, String>()
@@ -62,12 +81,23 @@ class TnWidgetProvider : AppWidgetProvider() {
                 }
                 val entries = data.optJSONArray("entries") ?: return emptyList()
                 val rows = ArrayList<Triple<Long, String, String>>()
+                val todayStart = todayStartMillis()
+                val todayEnd = todayStart + 24*60*60*1000L - 1
                 for (i in 0 until entries.length()) {
                     val e = entries.getJSONObject(i)
-                    if (e.has("scheduledAt")) continue // delayed messages are not shown yet
+                    if (e.has("scheduledAt")) continue
                     val chatId = e.optString("chatId", "")
+                    // filter by widget chat
+                    if (widgetChat.isNotEmpty()) {
+                        if (widgetChat == "today") {
+                            // only tasks due today
+                            val due = if (e.has("dueAt")) e.optLong("dueAt", 0) else 0L
+                            if (due == 0L || due < todayStart || due > todayEnd) continue
+                        } else if (chatId != widgetChat) continue
+                    }
                     val chatName = names[chatId] ?: ""
-                    rows.add(Triple(e.optLong("ts", 0), chatName, previewOf(e)))
+                    val ts = if (e.has("dueAt")) e.optLong("dueAt", e.optLong("ts", 0)) else e.optLong("ts", 0)
+                    rows.add(Triple(ts, chatName, previewOf(e)))
                 }
                 rows.sortByDescending { it.first }
                 rows.take(5).map { (ts, name, preview) ->
@@ -77,6 +107,15 @@ class TnWidgetProvider : AppWidgetProvider() {
             } catch (_: Exception) {
                 emptyList()
             }
+        }
+
+        private fun todayStartMillis(): Long {
+            val cal = java.util.Calendar.getInstance()
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            return cal.timeInMillis
         }
 
         private fun previewOf(e: JSONObject): String {

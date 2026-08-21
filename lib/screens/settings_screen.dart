@@ -2,11 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../src/app_model.dart';
 import '../src/backup.dart';
 import '../src/i18n.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
+import '../src/widget_bridge.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.model});
@@ -18,10 +21,43 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  String _widgetChat = '';
+  double _widgetAlpha = 1.0;
+  int _cacheMaxGb = 5; // 0 = ∞
+
   @override
   void initState() {
     super.initState();
     widget.model.addListener(_onModel);
+    _loadWidgetPrefs();
+  }
+
+  Future<void> _loadWidgetPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chat = prefs.getString('tn-widget-chatId') ?? '';
+      final alpha = prefs.getDouble('tn-widget-alpha') ?? 1.0;
+      final cache = prefs.getInt('tn-cache-max-gb') ?? 5;
+      if (mounted) setState(() { _widgetChat = chat; _widgetAlpha = alpha.clamp(0.2, 1.0); _cacheMaxGb = cache; });
+    } catch (_) {}
+  }
+
+  Future<void> _saveWidgetPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tn-widget-chatId', _widgetChat);
+      await prefs.setDouble('tn-widget-alpha', _widgetAlpha);
+      await prefs.setInt('tn-cache-max-gb', _cacheMaxGb);
+      await WidgetBridge.refresh();
+    } catch (_) {}
+  }
+
+  Future<void> _saveCacheMax(int v) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('tn-cache-max-gb', v);
+      if (mounted) setState(() => _cacheMaxGb = v);
+    } catch (_) {}
   }
 
   @override
@@ -131,6 +167,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кеш очищен')));
                   },
                   child: Text('Очистить', style: TextStyle(color: p.accent)),
+                ),
+              ],
+            ),
+          ),
+          _sectionLabel(tr('section_widget'), p),
+          _card(
+            p,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tr('widget_chat'), style: TextStyle(fontSize: 13, color: p.text)),
+                const SizedBox(height: 6),
+                DropdownButton<String>(
+                  value: ['', 'today', ...widget.model.state.chats.map((c) => c.id)].contains(_widgetChat) ? _widgetChat : '',
+                  isExpanded: true,
+                  dropdownColor: p.modalBg,
+                  style: TextStyle(color: p.text, fontSize: 13),
+                  items: [
+                    DropdownMenuItem(value: '', child: Text(tr('widget_all'))),
+                    DropdownMenuItem(value: 'today', child: Text(tr('widget_today'))),
+                    for (final c in widget.model.state.chats) DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) async { setState(() => _widgetChat = v ?? ''); await _saveWidgetPrefs(); },
+                ),
+                const SizedBox(height: 12),
+                Text(tr('widget_transparency'), style: TextStyle(fontSize: 13, color: p.text)),
+                Slider(value: _widgetAlpha, min: 0.2, max: 1.0, divisions: 8, label: '${(_widgetAlpha * 100).round()}%', activeColor: p.accent, onChanged: (v) => setState(() => _widgetAlpha = v), onChangeEnd: (v) async { _widgetAlpha = v; await _saveWidgetPrefs(); }),
+                Text(tr('widget_transparency_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Максимальный размер кэша', style: TextStyle(color: p.accent, fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (final v in [5, 16, 32, 0])
+                      Text(v == 0 ? '∞' : '$v GB', style: TextStyle(color: _cacheMaxGb == v ? p.accent : p.textFaint, fontSize: 15, fontWeight: _cacheMaxGb == v ? FontWeight.w700 : FontWeight.w400)),
+                  ],
+                ),
+                Slider(
+                  value: [5, 16, 32, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
+                  min: 0,
+                  max: 3,
+                  divisions: 3,
+                  activeColor: p.accent,
+                  inactiveColor: p.divider,
+                  thumbColor: p.accent,
+                  onChanged: (v) => setState(() => _cacheMaxGb = [5, 16, 32, 0][v.round()]),
+                  onChangeEnd: (v) => _saveCacheMax([5, 16, 32, 0][v.round()]),
                 ),
               ],
             ),

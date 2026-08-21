@@ -18,7 +18,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '1.7.2';
+const _appVersion = '7.2';
 
 class _TNState extends State<TN> {
   late final Future<AppModel> _future = _load();

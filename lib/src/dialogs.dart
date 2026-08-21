@@ -70,11 +70,14 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
                 Text(tr('icon'),
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.textFaint)),
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final icon in appIcons)
+                SizedBox(
+                  height: 110,
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final icon in appIcons)
                       GestureDetector(
                         onTap: () => setState(() => selectedIcon = icon),
                         child: Container(
@@ -91,6 +94,8 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
                         ),
                       ),
                   ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(tr('color'),
@@ -120,21 +125,23 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                const Text('RSS Atom (опционально)',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF8A9BA8))),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: rssField,
-                  style: TextStyle(color: p.text, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'https://example.com/rss',
-                    hintStyle: TextStyle(color: p.textFaint, fontSize: 13),
-                    isDense: true,
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                if (selectedKind == 'rss') ...[
+                  const SizedBox(height: 12),
+                  const Text('RSS Atom',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF8A9BA8))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: rssField,
+                    style: TextStyle(color: p.text, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'https://example.com/rss',
+                      hintStyle: TextStyle(color: p.textFaint, fontSize: 13),
+                      isDense: true,
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
+                      focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
