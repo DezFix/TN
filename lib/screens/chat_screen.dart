@@ -596,10 +596,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 case ChatTopAction.delete:
                   await _deleteChat();
                   break;
+                case ChatTopAction.toggleHide:
+                  _chat.tasksHideDone = !_chat.tasksHideDone;
+                  await widget.model.save();
+                  if (mounted) setState(() {});
+                  break;
               }
             },
             itemBuilder: (ctx) => [
               PopupMenuItem(value: ChatTopAction.remind, child: Row(children: [Icon(Icons.alarm, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('remind'), style: TextStyle(color: p.text))])),
+              if (_chat.kind == 'tasks')
+                PopupMenuItem(
+                    value: ChatTopAction.toggleHide,
+                    child: Row(children: [
+                      Icon(_chat.tasksHideDone ? Icons.visibility_off : Icons.visibility, size: 18, color: p.textSoft),
+                      const SizedBox(width: 10),
+                      Text(_chat.tasksHideDone ? 'Показать выполненные' : 'Скрыть выполненные', style: TextStyle(color: p.text))
+                    ])),
               PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('edit_chat'), style: TextStyle(color: p.text))])),
               PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))])),
             ],
@@ -976,13 +989,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildTodoBubble(AppModel model, Entry entry) {
-    final items = entry.items ?? const <TodoItem>[];
+    final allItems = entry.items ?? const <TodoItem>[];
+    final items = (_chat.kind == 'tasks' && _chat.tasksHideDone) ? allItems.where((i) => !i.done).toList() : allItems;
+    final overdue = entry.dueAt != null && entry.dueAt! < DateTime.now().millisecondsSinceEpoch && items.any((i) => !i.done);
     return Container(
       width: 300,
       padding: const EdgeInsets.fromLTRB(10, 9, 12, 7),
       decoration: BoxDecoration(
         color: p.bubbleOwn,
-        border: Border.all(color: p.bubbleBorder),
+        border: Border.all(color: overdue ? p.danger.withValues(alpha: .5) : p.bubbleBorder),
         borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(14),
             topRight: Radius.circular(14),
@@ -992,6 +1007,36 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (entry.dueAt != null)
+            GestureDetector(
+              onTap: _chat.kind == 'tasks'
+                  ? () async {
+                      // ignore: use_build_context_synchronously
+                      final when = await showReminderPicker(context, model);
+                      if (when == null) return;
+                      entry.dueAt = when.millisecondsSinceEpoch;
+                      await model.save();
+                      await RemindersService.instance.schedule(
+                        Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
+                        model.tr('remind_title', [_chat.name]),
+                        model.tr('remind_body'),
+                      );
+                      if (mounted) setState(() {});
+                    }
+                  : null,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: overdue ? p.danger.withValues(alpha: .12) : p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.schedule, size: 13, color: overdue ? p.danger : p.accent),
+                  const SizedBox(width: 4),
+                  Text('${fmtDay(entry.dueAt!, model.tr)} ${fmtTime(entry.dueAt!)}', style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          if (items.isEmpty && allItems.isNotEmpty)
+            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text('Выполнено ✓', style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
           for (final item in items)
             Row(
               children: [
@@ -1043,14 +1088,30 @@ class _ChatScreenState extends State<ChatScreen> {
                 case AttachOption.todo:
                   final items = await showTodoEditorDialog(context, model);
                   if (items == null || items.isEmpty) return;
-                  model.state.entries.add(Entry(
+                  int? dueAt;
+                  if (_chat.kind == 'tasks') {
+                    if (!mounted) return;
+                    final when = await showReminderPicker(context, model);
+                    if (when != null) dueAt = when.millisecondsSinceEpoch;
+                  }
+                  final entry = Entry(
                     id: uid('e'),
                     chatId: widget.chatId,
                     type: 'todo',
                     ts: DateTime.now().millisecondsSinceEpoch,
                     items: items,
-                  ));
+                    dueAt: dueAt,
+                  );
+                  model.state.entries.add(entry);
                   await model.save();
+                  if (dueAt != null) {
+                    await RemindersService.instance.requestPermissions();
+                    await RemindersService.instance.schedule(
+                      Reminder(id: entry.id, chatId: widget.chatId, when: dueAt),
+                      model.tr('remind_title', [_chat.name]),
+                      model.tr('remind_body'),
+                    );
+                  }
                   if (mounted) setState(() {});
                   break;
               }

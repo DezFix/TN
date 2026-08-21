@@ -42,6 +42,7 @@ class Chat {
     this.pinned = false,
     this.folderId,
     this.kind = 'note',
+    this.tasksHideDone = false,
   });
 
   final String id;
@@ -51,6 +52,7 @@ class Chat {
   bool pinned = false;
   String? folderId;
   String kind = 'note';
+  bool tasksHideDone = false;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -60,6 +62,7 @@ class Chat {
         pinned: j['pinned'] as bool? ?? false,
         folderId: j['folderId'] as String?,
         kind: j['kind'] as String? ?? 'note',
+        tasksHideDone: j['tasksHideDone'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +72,7 @@ class Chat {
         'icon': icon,
         'pinned': pinned,
         'kind': kind,
+        'tasksHideDone': tasksHideDone,
         if (folderId != null) 'folderId': folderId,
       };
 }
@@ -106,6 +110,7 @@ class Entry {
     this.waveform,
     this.recurrence,
     this.recurrenceDays,
+    this.dueAt,
   });
 
   final String id;
@@ -123,6 +128,7 @@ class Entry {
   List<int>? waveform; // 0..100 amplitude bars for voice messages
   String? recurrence; // null | 'daily' | 'weekly'
   List<int>? recurrenceDays; // 1=Mon..7=Sun for weekly
+  int? dueAt; // for tasks-chat todos: deadline millis
 
   bool get isScheduled => scheduledAt != null;
 
@@ -142,6 +148,7 @@ class Entry {
         recurrence: j['recurrence'] as String?,
         recurrenceDays:
             (j['recurrenceDays'] as List?)?.map((e) => (e as num).toInt()).toList(),
+        dueAt: (j['dueAt'] as num?)?.toInt(),
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -163,6 +170,7 @@ class Entry {
         if (waveform != null) 'waveform': waveform,
         if (recurrence != null) 'recurrence': recurrence,
         if (recurrenceDays != null) 'recurrenceDays': recurrenceDays,
+        if (dueAt != null) 'dueAt': dueAt,
       };
 }
 
