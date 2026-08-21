@@ -39,6 +39,9 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _text = TextEditingController();
   final _editText = TextEditingController();
+  final _searchCtrl = TextEditingController();
+  bool _searching = false;
+  String _searchQuery = '';
   final _imagePicker = ImagePicker();
   final _audioPlayer = AudioPlayer();
   final _recorder = AudioRecorder();
@@ -92,6 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.model.removeListener(_onModel);
     _text.dispose();
     _editText.dispose();
+    _searchCtrl.dispose();
     _audioPlayer.dispose();
     _recorder.dispose();
     _recordTimer?.cancel();
@@ -599,6 +603,19 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildTopbar(Chat chat) {
+    if (_searching) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        color: p.bgList,
+        child: Row(
+          children: [
+            IconButton(icon: Icon(Icons.arrow_back, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
+            Expanded(child: TextField(controller: _searchCtrl, autofocus: true, onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()), style: TextStyle(color: p.text, fontSize: 14), decoration: InputDecoration(hintText: 'Поиск в чате', hintStyle: TextStyle(color: p.textFaint), border: InputBorder.none, isDense: true))),
+            IconButton(icon: Icon(Icons.close, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       color: p.bgList,
@@ -639,6 +656,9 @@ class _ChatScreenState extends State<ChatScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             onSelected: (v) async {
               switch (v) {
+                case ChatTopAction.search:
+                  setState(() => _searching = true);
+                  break;
                 case ChatTopAction.edit:
                   await _editChat();
                   break;
@@ -663,6 +683,7 @@ class _ChatScreenState extends State<ChatScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              PopupMenuItem(value: ChatTopAction.search, child: Row(children: [Icon(Icons.search, size: 18, color: p.accent), const SizedBox(width: 10), Text('Поиск в чате', style: TextStyle(color: p.text))])),
               PopupMenuItem(
                   value: ChatTopAction.toggleNotifications,
                   child: Row(children: [
@@ -707,6 +728,10 @@ class _ChatScreenState extends State<ChatScreen> {
           return items.any((i) => !i.done);
         }).toList();
       }
+    }
+    if (_searching && _searchQuery.isNotEmpty) {
+      final q = _searchQuery;
+      entries = entries.where((e) => e.text.toLowerCase().contains(q) || e.tags.any((t) => t.toLowerCase().contains(q)) || (e.items?.any((i) => i.text.toLowerCase().contains(q)) ?? false)).toList();
     }
     final tr = model.tr;
     _bubbleContexts.clear();

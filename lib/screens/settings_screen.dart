@@ -156,18 +156,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionLabel('RSS каналы', p),
           _card(
             p,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                Text('Кеш каналов', style: TextStyle(fontSize: 14.5, color: p.text)),
-                TextButton(
-                  onPressed: () async {
-                    await RssService.clearCache();
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кеш очищен')));
-                  },
-                  child: Text('Очистить', style: TextStyle(color: p.accent)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Кеш каналов', style: TextStyle(fontSize: 14.5, color: p.text)),
+                    TextButton(
+                      onPressed: () async {
+                        await RssService.clearCache();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кеш очищен')));
+                      },
+                      child: Text('Очистить', style: TextStyle(color: p.accent)),
+                    ),
+                  ],
                 ),
+                const Divider(height: 24, color: Color(0xFF2A3441)),
+                Align(alignment: Alignment.centerLeft, child: Text('Максимальный размер кэша', style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (final v in [100, 500, 1024, 0])
+                      Text(v == 0 ? '∞' : v >= 1024 ? '${v ~/ 1024} GB' : '$v MB', style: TextStyle(color: _cacheMaxGb == v ? p.accent : p.textFaint, fontSize: 13, fontWeight: _cacheMaxGb == v ? FontWeight.w700 : FontWeight.w400)),
+                  ],
+                ),
+                Slider(
+                  value: [100, 500, 1024, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
+                  min: 0,
+                  max: 3,
+                  divisions: 3,
+                  activeColor: p.accent,
+                  inactiveColor: p.divider,
+                  thumbColor: p.accent,
+                  onChanged: (v) => setState(() => _cacheMaxGb = [100, 500, 1024, 0][v.round()]),
+                  onChangeEnd: (v) => _saveCacheMax([100, 500, 1024, 0][v.round()]),
+                ),
+                Text('Для RSS и медиа', style: TextStyle(fontSize: 11, color: p.textFaint)),
               ],
             ),
           ),
@@ -195,35 +221,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(tr('widget_transparency'), style: TextStyle(fontSize: 13, color: p.text)),
                 Slider(value: _widgetAlpha, min: 0.2, max: 1.0, divisions: 8, label: '${(_widgetAlpha * 100).round()}%', activeColor: p.accent, onChanged: (v) => setState(() => _widgetAlpha = v), onChangeEnd: (v) async { _widgetAlpha = v; await _saveWidgetPrefs(); }),
                 Text(tr('widget_transparency_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Максимальный размер кэша', style: TextStyle(color: p.accent, fontSize: 16, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final v in [5, 16, 32, 0])
-                      Text(v == 0 ? '∞' : '$v GB', style: TextStyle(color: _cacheMaxGb == v ? p.accent : p.textFaint, fontSize: 15, fontWeight: _cacheMaxGb == v ? FontWeight.w700 : FontWeight.w400)),
-                  ],
-                ),
-                Slider(
-                  value: [5, 16, 32, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
-                  min: 0,
-                  max: 3,
-                  divisions: 3,
-                  activeColor: p.accent,
-                  inactiveColor: p.divider,
-                  thumbColor: p.accent,
-                  onChanged: (v) => setState(() => _cacheMaxGb = [5, 16, 32, 0][v.round()]),
-                  onChangeEnd: (v) => _saveCacheMax([5, 16, 32, 0][v.round()]),
-                ),
               ],
             ),
           ),

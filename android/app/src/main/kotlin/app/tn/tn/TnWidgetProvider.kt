@@ -34,6 +34,11 @@ class TnWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             rv.setOnClickPendingIntent(R.id.w_root, pi)
+            try {
+                val settingsIntent = Intent(context, MainActivity::class.java).apply { putExtra("open_settings", true) }
+                val settingsPi = PendingIntent.getActivity(context, 1, settingsIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                rv.setOnClickPendingIntent(R.id.w_settings, settingsPi)
+            } catch (_: Exception) {}
 
             // transparency
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
