@@ -363,3 +363,178 @@ Future<DateTime?> showReminderPicker(BuildContext context, AppModel model) async
   if (time == null) return null;
   return DateTime(date.year, date.month, date.day, time.hour, time.minute);
 }
+
+enum SendOption { later, daily, weekly }
+
+/// Telegram-style menu shown when the send button is long-pressed.
+Future<SendOption?> showSendMenuSheet(BuildContext context, AppModel model) {
+  final p = model.p;
+  final tr = model.tr;
+  Widget tile(IconData icon, String label, SendOption option) => ListTile(
+        leading: Icon(icon, color: p.accent),
+        title: Text(label, style: TextStyle(fontSize: 15, color: p.text)),
+        onTap: () => Navigator.pop(context, option),
+      );
+  return showModalBottomSheet<SendOption>(
+    context: context,
+    backgroundColor: p.modalBg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          tile(Icons.schedule, tr('send_later'), SendOption.later),
+          tile(Icons.today, tr('send_daily'), SendOption.daily),
+          tile(Icons.date_range, tr('send_weekly'), SendOption.weekly),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Multi-select weekday picker. Returns selected weekdays (1=Mon..7=Sun).
+Future<List<int>?> showWeekdayPickerDialog(
+    BuildContext context, AppModel model, List<int> initial) {
+  final p = model.p;
+  final tr = model.tr;
+  final names = tr('weekdays_short').split(' ');
+  final selected = Set<int>.of(initial);
+  return showDialog<List<int>>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(tr('send_weekly'), style: TextStyle(color: p.text)),
+        content: Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (var d = 1; d <= 7; d++)
+              FilterChip(
+                label: Text(names[d - 1]),
+                selected: selected.contains(d),
+                onSelected: (v) => setState(() => v ? selected.add(d) : selected.remove(d)),
+                labelStyle: TextStyle(color: selected.contains(d) ? Colors.white : p.textSoft),
+                selectedColor: p.accent,
+                checkmarkColor: Colors.white,
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('close'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, selected.toList()..sort()),
+            child: Text(tr('todo_done')),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<String?> showFolderNameDialog(
+  BuildContext context,
+  AppModel model, {
+  String? initial,
+}) {
+  final p = model.p;
+  final tr = model.tr;
+  final ctrl = TextEditingController(text: initial ?? '');
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: p.modalBg,
+      title: Text(tr(initial == null ? 'new_folder' : 'edit_folder'),
+          style: TextStyle(color: p.text)),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        style: TextStyle(color: p.text),
+        decoration: InputDecoration(
+          hintText: tr('folder_name_hint'),
+          hintStyle: TextStyle(color: p.textFaint),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('close'))),
+        TextButton(
+          onPressed: () {
+            final name = ctrl.text.trim();
+            Navigator.pop(ctx, name.isEmpty ? null : name);
+          },
+          child: Text(tr('todo_done')),
+        ),
+      ],
+    ),
+  );
+}
+
+enum ChatAction { pin, unpin, moveToFolder, edit, delete }
+
+Future<ChatAction?> showChatCtxSheet(BuildContext context, AppModel model, Chat chat) {
+  final p = model.p;
+  final tr = model.tr;
+  Widget tile(IconData icon, String label, ChatAction action, {Color? color}) => ListTile(
+        leading: Icon(icon, color: color ?? p.accent),
+        title: Text(label, style: TextStyle(fontSize: 15, color: color ?? p.text)),
+        onTap: () => Navigator.pop(context, action),
+      );
+  return showModalBottomSheet<ChatAction>(
+    context: context,
+    backgroundColor: p.modalBg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          tile(
+            Icons.push_pin,
+            tr(chat.pinned ? 'unpin' : 'pin'),
+            chat.pinned ? ChatAction.unpin : ChatAction.pin,
+          ),
+          tile(Icons.folder_copy_outlined, tr('move_to_folder'), ChatAction.moveToFolder),
+          tile(Icons.edit_outlined, tr('edit'), ChatAction.edit),
+          tile(Icons.delete_outline, tr('delete'), ChatAction.delete, color: Colors.redAccent),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Returns folder id, empty string for "no folder", null to cancel.
+Future<String?> showMoveToFolderSheet(BuildContext context, AppModel model) {
+  final p = model.p;
+  final tr = model.tr;
+  Widget tile(String? folderId, String label, IconData icon) => ListTile(
+        leading: Icon(icon, color: p.accent),
+        title: Text(label, style: TextStyle(fontSize: 15, color: p.text)),
+        onTap: () => Navigator.pop(context, folderId ?? ''),
+      );
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: p.modalBg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          tile(null, tr('no_folder'), Icons.folder_off_outlined),
+          for (final f in model.state.folders)
+            tile(f.id, f.name, Icons.folder_outlined),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}

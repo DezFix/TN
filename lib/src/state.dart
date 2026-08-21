@@ -7,6 +7,7 @@ import 'models.dart';
 class AppState {
   String theme = 'light';
   String lang = 'ru';
+  final List<Folder> folders = [];
   final List<Chat> chats = [];
   final List<Entry> entries = [];
   final List<Reminder> reminders = [];
@@ -18,6 +19,13 @@ class AppState {
   Chat? chatById(String id) {
     for (final c in chats) {
       if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  Folder? folderById(String id) {
+    for (final f in folders) {
+      if (f.id == id) return f;
     }
     return null;
   }
@@ -44,6 +52,11 @@ class AppState {
 
   void loadFromJson(String raw) {
     final data = jsonDecode(raw) as Map<String, dynamic>;
+    folders
+      ..clear()
+      ..addAll((data['folders'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(Folder.fromJson));
     chats
       ..clear()
       ..addAll((data['chats'] as List? ?? const [])
@@ -66,6 +79,7 @@ class AppState {
   String toJson() => jsonEncode({
         'theme': theme,
         'lang': lang,
+        'folders': folders.map((f) => f.toJson()).toList(),
         'chats': chats.map((c) => c.toJson()).toList(),
         'entries': entries.map((e) => e.toJson()).toList(),
         'reminders': reminders.map((r) => r.toJson()).toList(),

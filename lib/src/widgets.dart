@@ -54,6 +54,7 @@ class ChatRow extends StatelessWidget {
     required this.preview,
     required this.time,
     required this.onTap,
+    this.onLongPress,
     this.highlight = false,
   });
 
@@ -62,6 +63,7 @@ class ChatRow extends StatelessWidget {
   final String preview;
   final String time;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool highlight;
 
   @override
@@ -70,6 +72,7 @@ class ChatRow extends StatelessWidget {
       color: highlight ? p.rowActive : Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
@@ -82,6 +85,10 @@ class ChatRow extends StatelessWidget {
                   children: [
                     Row(
                       children: [
+                        if (chat.pinned) ...[
+                          Icon(Icons.push_pin, size: 13, color: p.textFaint),
+                          const SizedBox(width: 4),
+                        ],
                         Expanded(
                           child: Text(chat.name,
                               maxLines: 1,

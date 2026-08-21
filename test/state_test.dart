@@ -15,7 +15,14 @@ void main() {
 
   test('json roundtrip keeps everything', () {
     final s = AppState();
-    s.chats.add(Chat(id: 'c1', name: 'Идеи', color: '#2AABEE', icon: '💡'));
+    s.folders.add(Folder(id: 'f1', name: 'Работа'));
+    s.chats.add(Chat(
+        id: 'c1',
+        name: 'Идеи',
+        color: '#2AABEE',
+        icon: '💡',
+        pinned: true,
+        folderId: 'f1'));
     s.entries.add(Entry(
         id: 'e1', chatId: 'c1', type: 'text', ts: 1, text: 'хелло #тег', tags: ['тег']));
     s.entries.add(Entry(
@@ -39,16 +46,29 @@ void main() {
         ts: 4,
         text: 'отложка',
         scheduledAt: 9999999999999));
+    s.entries.add(Entry(
+        id: 'e5',
+        chatId: 'c1',
+        type: 'text',
+        ts: 5,
+        text: 'зарядка',
+        recurrence: 'weekly',
+        recurrenceDays: [1, 3, 5],
+        scheduledAt: 9999999999999));
     s.theme = 'dark';
     s.lang = 'en';
 
     final s2 = AppState()..loadFromJson(s.toJson());
+    expect(s2.folders.length, 1);
+    expect(s2.folders[0].name, 'Работа');
     expect(s2.chats.length, 1);
     expect(s2.chats[0].name, 'Идеи');
     expect(s2.chats[0].icon, '💡');
+    expect(s2.chats[0].pinned, isTrue);
+    expect(s2.chats[0].folderId, 'f1');
     expect(s2.theme, 'dark');
     expect(s2.lang, 'en');
-    expect(s2.entriesFor('c1').length, 4);
+    expect(s2.entriesFor('c1').length, 5);
     final todo = s2.entries.firstWhere((e) => e.type == 'todo');
     expect(todo.items!.single.done, isTrue);
     expect(todo.items!.single.text, 'купить');
@@ -59,6 +79,41 @@ void main() {
     final sched = s2.entries.firstWhere((e) => e.id == 'e4');
     expect(sched.isScheduled, isTrue);
     expect(sched.scheduledAt, 9999999999999);
+    final weekly = s2.entries.firstWhere((e) => e.id == 'e5');
+    expect(weekly.recurrence, 'weekly');
+    expect(weekly.recurrenceDays, [1, 3, 5]);
+  });
+
+  test('nextOccurrenceMs: daily moves one day ahead at same time', () {
+    final base = DateTime(2026, 8, 21, 9, 30).millisecondsSinceEpoch;
+    final e = Entry(
+        id: 'x',
+        chatId: 'c1',
+        type: 'text',
+        ts: base,
+        recurrence: 'daily',
+        scheduledAt: base);
+    final next = DateTime.fromMillisecondsSinceEpoch(nextOccurrenceMs(e));
+    expect(next.day, 22);
+    expect(next.hour, 9);
+    expect(next.minute, 30);
+  });
+
+  test('nextOccurrenceMs: weekly picks next selected weekday', () {
+    // 2026-08-21 is a Friday (weekday 5).
+    final friday = DateTime(2026, 8, 21, 18, 0).millisecondsSinceEpoch;
+    final e = Entry(
+        id: 'x',
+        chatId: 'c1',
+        type: 'text',
+        ts: friday,
+        recurrence: 'weekly',
+        recurrenceDays: [1, 7], // Mon + Sun
+        scheduledAt: friday);
+    final next = DateTime.fromMillisecondsSinceEpoch(nextOccurrenceMs(e));
+    expect(next.weekday, 7); // Sunday
+    expect(next.day, 23);
+    expect(next.hour, 18);
   });
 
   test('dueScheduledEntries finds only due messages', () {

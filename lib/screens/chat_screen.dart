@@ -331,7 +331,41 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _scheduleText() async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
-    final when = await showReminderPicker(context, widget.model);
+    final model = widget.model;
+    final option = await showSendMenuSheet(context, model);
+    if (option == null || !mounted) return;
+
+    DateTime? when;
+    String? recurrence;
+    List<int>? days;
+
+    switch (option) {
+      case SendOption.later:
+        when = await showReminderPicker(context, model);
+      case SendOption.daily:
+        if (!mounted) return;
+        final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+        if (time == null) return;
+        final now = DateTime.now();
+        var next = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+        if (!next.isAfter(now)) next = next.add(const Duration(days: 1));
+        when = next;
+        recurrence = 'daily';
+      case SendOption.weekly:
+        final picked = await showWeekdayPickerDialog(context, model, const []);
+        if (picked == null || picked.isEmpty || !mounted) return;
+        final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+        if (time == null) return;
+        final now = DateTime.now();
+        var cand = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+        do {
+          cand = cand.add(const Duration(days: 1));
+        } while (!picked.contains(cand.weekday));
+        when = cand;
+        recurrence = 'weekly';
+        days = picked;
+    }
+
     if (when == null) return;
     final whenMs = when.millisecondsSinceEpoch;
     final entry = Entry(
@@ -342,10 +376,12 @@ class _ChatScreenState extends State<ChatScreen> {
       text: text,
       tags: extractTags(text),
       scheduledAt: whenMs,
+      recurrence: recurrence,
+      recurrenceDays: days,
     );
     _text.clear();
-    widget.model.state.entries.add(entry);
-    await widget.model.save();
+    model.state.entries.add(entry);
+    await model.save();
     // Fallback notification in case the app is closed at send time.
     await RemindersService.instance.requestPermissions();
     await RemindersService.instance.schedule(
@@ -673,7 +709,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.schedule, size: 13, color: p.accent),
+                      Icon(
+                        entry.recurrence == null ? Icons.schedule : Icons.repeat,
+                        size: 13,
+                        color: p.accent,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         model.tr('scheduled_at', [

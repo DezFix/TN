@@ -10,22 +10,54 @@ const appIcons = <String?>[
   null, '💡', '📌', '💼', '🎯', '📚', '🎨', '🎧', '🍳', '✈️', '🌱', '⚡', '🧠', '❤️', '🏋️', '🎵',
 ];
 
+class Folder {
+  Folder({required this.id, required this.name});
+
+  final String id;
+  String name;
+
+  factory Folder.fromJson(Map<String, dynamic> j) => Folder(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
+
 class Chat {
-  Chat({required this.id, required this.name, required this.color, this.icon});
+  Chat({
+    required this.id,
+    required this.name,
+    required this.color,
+    this.icon,
+    this.pinned = false,
+    this.folderId,
+  });
 
   final String id;
   String name;
   String color;
   String? icon;
+  bool pinned = false;
+  String? folderId;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         color: j['color'] as String? ?? appColors[0],
         icon: j['icon'] as String?,
+        pinned: j['pinned'] as bool? ?? false,
+        folderId: j['folderId'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'color': color, 'icon': icon};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'color': color,
+        'icon': icon,
+        'pinned': pinned,
+        if (folderId != null) 'folderId': folderId,
+      };
 }
 
 class TodoItem {
@@ -59,6 +91,8 @@ class Entry {
     this.items,
     this.scheduledAt,
     this.waveform,
+    this.recurrence,
+    this.recurrenceDays,
   });
 
   final String id;
@@ -74,6 +108,8 @@ class Entry {
   List<TodoItem>? items;
   int? scheduledAt; // epoch millis; set while message is delayed
   List<int>? waveform; // 0..100 amplitude bars for voice messages
+  String? recurrence; // null | 'daily' | 'weekly'
+  List<int>? recurrenceDays; // 1=Mon..7=Sun for weekly
 
   bool get isScheduled => scheduledAt != null;
 
@@ -90,6 +126,9 @@ class Entry {
         duration: (j['duration'] as num?)?.toInt(),
         scheduledAt: (j['scheduledAt'] as num?)?.toInt(),
         waveform: (j['waveform'] as List?)?.map((e) => (e as num).toInt()).toList(),
+        recurrence: j['recurrence'] as String?,
+        recurrenceDays:
+            (j['recurrenceDays'] as List?)?.map((e) => (e as num).toInt()).toList(),
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -109,6 +148,8 @@ class Entry {
         'items': items?.map((i) => i.toJson()).toList(),
         if (scheduledAt != null) 'scheduledAt': scheduledAt,
         if (waveform != null) 'waveform': waveform,
+        if (recurrence != null) 'recurrence': recurrence,
+        if (recurrenceDays != null) 'recurrenceDays': recurrenceDays,
       };
 }
 

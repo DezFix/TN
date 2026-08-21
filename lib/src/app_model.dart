@@ -7,6 +7,7 @@ import 'models.dart';
 import 'reminders.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'widget_bridge.dart';
 
 class AppModel extends ChangeNotifier {
   AppModel({AppState? state}) : state = state ?? AppState() {
@@ -28,6 +29,7 @@ class AppModel extends ChangeNotifier {
     state
       ..theme = loaded.theme
       ..lang = loaded.lang
+      ..folders.addAll(loaded.folders)
       ..chats.addAll(loaded.chats)
       ..entries.addAll(loaded.entries)
       ..reminders.addAll(loaded.reminders);
@@ -35,7 +37,12 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> save() => state.save();
+  Future<void> save() async {
+    await state.save();
+    // Fire-and-forget: the native widget update must not block saving
+    // (in tests the method channel has no handler).
+    unawaited(WidgetBridge.refresh());
+  }
 
   Future<void> setTheme(String theme) async {
     state.theme = theme;
@@ -77,6 +84,33 @@ class AppModel extends ChangeNotifier {
     final due = dueScheduledEntries(nowMs: now);
     if (due.isEmpty) return;
     for (final e in due) {
+      if (e.recurrence != null) {
+        // Recurring: spawn a real message copy, move template to next slot.
+        state.entries.add(Entry(
+          id: uid('e'),
+          chatId: e.chatId,
+          type: e.type,
+          ts: e.scheduledAt!,
+          text: e.text,
+          tags: List.of(e.tags),
+          media: e.media,
+          mediaName: e.mediaName,
+          mediaSize: e.mediaSize,
+          duration: e.duration,
+          items: e.items
+              ?.map((i) => TodoItem(id: i.id, text: i.text, done: i.done))
+              .toList(),
+          waveform: e.waveform == null ? null : List.of(e.waveform!),
+        ));
+        final next = nextOccurrenceMs(e);
+        e.scheduledAt = next;
+        await RemindersService.instance.schedule(
+          Reminder(id: e.id, chatId: e.chatId, when: next),
+          tr('sched_notif_title'),
+          tr('sched_notif_body', [_chatName(e.chatId)]),
+        );
+        continue;
+      }
       e.scheduledAt = null;
       // If released long after the target time, the fallback notification
       // has most likely already fired — don't duplicate it.
@@ -97,6 +131,23 @@ class AppModel extends ChangeNotifier {
     final chat = state.chatById(chatId);
     return chat?.name ?? '';
   }
+}
+
+/// Next fire time for a recurring entry. Daily: same time tomorrow.
+/// Weekly: first selected weekday after the current occurrence.
+int nextOccurrenceMs(Entry e) {
+  final cur = DateTime.fromMillisecondsSinceEpoch(e.scheduledAt ?? e.ts);
+  var candidate = cur.add(const Duration(days: 1));
+  if (e.recurrence == 'weekly') {
+    final days = e.recurrenceDays ?? const <int>[];
+    var guard = 0;
+    while (!days.contains(candidate.weekday) && guard < 8) {
+      candidate = candidate.add(const Duration(days: 1));
+      guard++;
+    }
+  }
+  return DateTime(candidate.year, candidate.month, candidate.day, cur.hour, cur.minute)
+      .millisecondsSinceEpoch;
 }
 
 String fmtTime(int ts) {
