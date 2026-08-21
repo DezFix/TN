@@ -152,27 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _pickVideo() async {
-    try {
-      final file = await _imagePicker.pickVideo(source: ImageSource.gallery);
-      if (file == null) return;
-      final name = await MediaStore().saveFile(file.path, 'video');
-      final size = await File(file.path).length();
-      widget.model.state.entries.add(Entry(
-        id: uid('e'),
-        chatId: widget.chatId,
-        type: 'video',
-        ts: DateTime.now().millisecondsSinceEpoch,
-        media: name,
-        mediaName: file.name,
-        mediaSize: '${humanSize(size)} ${widget.model.tr('mb')}',
-      ));
-      await widget.model.save();
-      if (mounted) setState(() {});
-    } catch (_) {
-      _toast(widget.model.tr('video_error'), error: true);
-    }
-  }
+
 
   Future<void> _beginRecord() async {
     if (_recording || _finishing) return;
@@ -328,11 +308,11 @@ class _ChatScreenState extends State<ChatScreen> {
     await _audioPlayer.play(DeviceFileSource(path));
   }
 
-  Future<void> _scheduleText() async {
+  Future<void> _scheduleTextAt(Offset globalPos) async {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     final model = widget.model;
-    final option = await showSendMenuSheet(context, model);
+    final option = await showSendMenuPopup(context, model, globalPos);
     if (option == null || !mounted) return;
 
     DateTime? when;
@@ -397,6 +377,8 @@ class _ChatScreenState extends State<ChatScreen> {
       ));
     }
   }
+
+
 
   void _showImage(Entry entry) {
     Navigator.of(context).push(MaterialPageRoute(
@@ -600,20 +582,28 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: Icon(Icons.alarm, color: p.textSoft),
-            tooltip: widget.model.tr('remind'),
-            onPressed: _setReminder,
-          ),
-          IconButton(
-            icon: Icon(Icons.edit, color: p.textSoft),
-            tooltip: widget.model.tr('edit_chat'),
-            onPressed: _editChat,
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, color: p.textSoft),
-            tooltip: widget.model.tr('delete'),
-            onPressed: _deleteChat,
+          PopupMenuButton<ChatTopAction>(
+            icon: Icon(Icons.more_vert, color: p.textSoft),
+            color: p.modalBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (v) async {
+              switch (v) {
+                case ChatTopAction.remind:
+                  await _setReminder();
+                  break;
+                case ChatTopAction.edit:
+                  await _editChat();
+                  break;
+                case ChatTopAction.delete:
+                  await _deleteChat();
+                  break;
+              }
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: ChatTopAction.remind, child: Row(children: [Icon(Icons.alarm, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('remind'), style: TextStyle(color: p.text))])),
+              PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('edit_chat'), style: TextStyle(color: p.text))])),
+              PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))])),
+            ],
           ),
         ],
       ),
@@ -1012,29 +1002,35 @@ class _ChatScreenState extends State<ChatScreen> {
       color: p.bgList,
       child: Row(
         children: [
-          IconButton(
+          PopupMenuButton<AttachOption>(
             icon: Icon(Icons.attach_file, color: p.textSoft),
-            onPressed: _pickImage,
-          ),
-          IconButton(
-            icon: Icon(Icons.videocam, color: p.textSoft),
-            onPressed: _pickVideo,
-          ),
-          IconButton(
-            icon: Icon(Icons.checklist, color: p.textSoft),
-            onPressed: () async {
-              final items = await showTodoEditorDialog(context, model);
-              if (items == null || items.isEmpty) return;
-              model.state.entries.add(Entry(
-                id: uid('e'),
-                chatId: widget.chatId,
-                type: 'todo',
-                ts: DateTime.now().millisecondsSinceEpoch,
-                items: items,
-              ));
-              await model.save();
-              if (mounted) setState(() {});
+            color: p.modalBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            tooltip: 'attach',
+            onSelected: (v) async {
+              switch (v) {
+                case AttachOption.photo:
+                  await _pickImage();
+                  break;
+                case AttachOption.todo:
+                  final items = await showTodoEditorDialog(context, model);
+                  if (items == null || items.isEmpty) return;
+                  model.state.entries.add(Entry(
+                    id: uid('e'),
+                    chatId: widget.chatId,
+                    type: 'todo',
+                    ts: DateTime.now().millisecondsSinceEpoch,
+                    items: items,
+                  ));
+                  await model.save();
+                  if (mounted) setState(() {});
+                  break;
+              }
             },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: AttachOption.photo, child: Row(children: [Icon(Icons.photo_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_photo'), style: TextStyle(color: p.text))])),
+              PopupMenuItem(value: AttachOption.todo, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_todo'), style: TextStyle(color: p.text))])),
+            ],
           ),
           Expanded(
             child: Container(
@@ -1063,7 +1059,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 4),
           if (_text.text.isNotEmpty)
             GestureDetector(
-              onLongPress: _scheduleText,
+              onLongPressStart: (d) => _scheduleTextAt(d.globalPosition),
               child: IconButton.filled(
                 icon: const Icon(Icons.send, color: Colors.white),
                 style: IconButton.styleFrom(backgroundColor: p.accent),

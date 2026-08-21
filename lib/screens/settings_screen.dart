@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../src/app_model.dart';
+import '../src/backup.dart';
 import '../src/i18n.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
@@ -126,6 +129,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             )
           else
             for (final r in reminders) _reminderRow(model, r, tr),
+          _sectionLabel(tr('section_backup'), p),
+          _card(
+            p,
+            child: Column(
+              children: [
+                Row(children: [
+                  Expanded(child: FilledButton.icon(icon: const Icon(Icons.upload, size: 18), style: FilledButton.styleFrom(backgroundColor: p.accent), label: Text(tr('backup_export')), onPressed: () async { try { final path = await BackupService.export(model.state); if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_exported', [path])))); } catch (_) { if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); } })),
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton.icon(icon: Icon(Icons.download, size: 18, color: p.text), label: Text(tr('backup_import'), style: TextStyle(color: p.text)), onPressed: () async { final files = await BackupService.listBackups(); if (!context.mounted) return; if (files.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); return; } final picked = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(backgroundColor: p.modalBg, title: Text(tr('backup_import'), style: TextStyle(color: p.text)), children: [for (final f in files.take(20)) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, f.path), child: Text(f.path.split('/').last, style: TextStyle(color: p.text, fontSize: 13))), SimpleDialogOption(onPressed: () => Navigator.pop(ctx), child: Text(tr('close'), style: TextStyle(color: p.textSoft)))]));                   if (picked == null) return; try { final file = File(picked); await BackupService.importFrom(file, model.state); model.tr = makeTranslator(model.state.lang); model.refresh(); if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_imported')))); setState(() {}); } catch (_) { if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); } })),
+                ]),
+                const SizedBox(height: 8),
+                Text(tr('backup_soon'), style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
         ],
       ),

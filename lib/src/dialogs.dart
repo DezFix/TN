@@ -366,33 +366,73 @@ Future<DateTime?> showReminderPicker(BuildContext context, AppModel model) async
 
 enum SendOption { later, daily, weekly }
 
-/// Telegram-style menu shown when the send button is long-pressed.
-Future<SendOption?> showSendMenuSheet(BuildContext context, AppModel model) {
+/// Small popup near the finger — no reach to top/bottom.
+Future<SendOption?> showSendMenuPopup(
+    BuildContext context, AppModel model, Offset globalPos) {
   final p = model.p;
   final tr = model.tr;
-  Widget tile(IconData icon, String label, SendOption option) => ListTile(
-        leading: Icon(icon, color: p.accent),
-        title: Text(label, style: TextStyle(fontSize: 15, color: p.text)),
-        onTap: () => Navigator.pop(context, option),
-      );
-  return showModalBottomSheet<SendOption>(
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  return showMenu<SendOption>(
     context: context,
-    backgroundColor: p.modalBg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: RelativeRect.fromRect(
+      Rect.fromPoints(globalPos, globalPos),
+      Offset.zero & overlay.size,
     ),
-    builder: (_) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          tile(Icons.schedule, tr('send_later'), SendOption.later),
-          tile(Icons.today, tr('send_daily'), SendOption.daily),
-          tile(Icons.date_range, tr('send_weekly'), SendOption.weekly),
-          const SizedBox(height: 8),
-        ],
-      ),
+    items: [
+      PopupMenuItem(value: SendOption.later, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_later'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: SendOption.daily, child: Row(children: [Icon(Icons.today, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_daily'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: SendOption.weekly, child: Row(children: [Icon(Icons.date_range, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_weekly'), style: TextStyle(color: p.text))])),
+    ],
+  );
+}
+
+/// Legacy bottom sheet (kept for tests / fallback).
+Future<SendOption?> showSendMenuSheet(BuildContext context, AppModel model) =>
+    showSendMenuPopup(context, model, Offset(MediaQuery.of(context).size.width / 2, MediaQuery.of(context).size.height - 120));
+
+enum AttachOption { photo, todo }
+
+Future<AttachOption?> showAttachMenuPopup(
+    BuildContext context, AppModel model, Offset globalPos) {
+  final p = model.p;
+  final tr = model.tr;
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  return showMenu<AttachOption>(
+    context: context,
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: RelativeRect.fromRect(
+      Rect.fromPoints(globalPos, globalPos),
+      Offset.zero & overlay.size,
     ),
+    items: [
+      PopupMenuItem(value: AttachOption.photo, child: Row(children: [Icon(Icons.photo_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('attach_photo'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: AttachOption.todo, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('attach_todo'), style: TextStyle(color: p.text))])),
+    ],
+  );
+}
+
+enum ChatTopAction { remind, edit, delete }
+
+Future<ChatTopAction?> showChatTopMenuPopup(
+    BuildContext context, AppModel model) {
+  final p = model.p;
+  final tr = model.tr;
+  return showMenu<ChatTopAction>(
+    context: context,
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: const RelativeRect.fromLTRB(1000, 0, 0, 0),
+    items: [
+      PopupMenuItem(value: ChatTopAction.remind, child: Row(children: [Icon(Icons.alarm, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('remind'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit_chat'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.danger))])),
+    ],
   );
 }
 

@@ -57,6 +57,8 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void refresh() => notifyListeners();
+
   // ---------------- scheduled messages ----------------
 
   void startScheduler() {

@@ -1,6 +1,8 @@
 # TN
 
-Заметки в виде телеграм-чата.
+[![Sponsor](https://img.shields.io/badge/Sponsor%20me-ko--fi-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/k_k)
+
+Заметки в виде телеграм-чата. [Поддержать проект — ko-fi.com/k_k](https://ko-fi.com/k_k)
 
 Приложение ведёт заметки как переписку с самим собой: чаты-темы, сообщения, фото, видео, голосовые, списки дел, хэштеги и напоминания. Написано на Flutter (Dart).
 
@@ -38,6 +40,10 @@ APK: `build/app/outputs/flutter-apk/app-release.apk`
 ```
 flutter test
 ```
+
+## Поддержать
+
+Если TN вам полезен — поддержите: **https://ko-fi.com/k_k** — Sponsor this project на GitHub указан.
 
 ## Лицензия
 
