@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 
@@ -769,7 +770,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    final spans = _highlightTags(entry.text, p);
+    final isMd = _isMarkdown(entry.text);
     return Container(
       constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -787,16 +788,45 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: SelectableText.rich(
-              TextSpan(children: spans),
-              style: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
-            ),
+            child: isMd
+                ? MarkdownBody(
+                    data: entry.text,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
+                      strong: TextStyle(fontWeight: FontWeight.w700, color: p.text),
+                      em: TextStyle(fontStyle: FontStyle.italic, color: p.text),
+                      code: TextStyle(fontFamily: 'monospace', fontSize: 13, color: p.text, backgroundColor: p.bgChat),
+                      blockquote: TextStyle(color: p.textSoft, fontStyle: FontStyle.italic),
+                      tableHead: TextStyle(fontWeight: FontWeight.w700, color: p.text),
+                      tableBody: TextStyle(color: p.text),
+                      checkbox: TextStyle(color: p.accent),
+                    ),
+                    onTapLink: (text, href, title) {},
+                  )
+                : SelectableText.rich(
+                    TextSpan(children: _highlightTags(entry.text, p)),
+                    style: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
+                  ),
           ),
           Text(fmtTime(entry.ts),
               style: TextStyle(fontSize: 10.5, color: p.textFaint)),
         ],
       ),
     );
+  }
+
+  bool _isMarkdown(String t) {
+    if (t.contains('```')) return true;
+    if (t.contains('|') && t.contains('\n')) return true;
+    if (RegExp(r'(^|\n)#{1,6}\s').hasMatch(t)) return true;
+    if (RegExp(r'\*\*[^*]+\*\*').hasMatch(t)) return true;
+    if (RegExp(r'__[^_]+__').hasMatch(t)) return true;
+    if (RegExp(r'^\s*[-*]\s+\[.\].*', multiLine: true).hasMatch(t)) return true;
+    if (RegExp(r'^\s*[-*]\s+').hasMatch(t)) return true;
+    if (RegExp(r'^\s*\d+\.\s+').hasMatch(t)) return true;
+    if (t.contains('](')) return true;
+    return false;
   }
 
   List<TextSpan> _highlightTags(String text, Palette p) {
