@@ -574,8 +574,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               fontWeight: FontWeight.w600,
                               color: p.text)),
                     ),
-                    Text(widget.model.tr('chat_subtitle'),
-                        style: TextStyle(fontSize: 11.5, color: p.textFaint)),
                   ],
                 ),
               ],
