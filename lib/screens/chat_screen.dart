@@ -14,6 +14,7 @@ import '../src/dialogs.dart';
 import '../src/media.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
+import '../src/rss.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 
@@ -79,6 +80,11 @@ class _ChatScreenState extends State<ChatScreen> {
       if (d > Duration.zero) _playDur = d;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
+    if (_chat.rssUrl != null && _chat.rssUrl!.isNotEmpty) {
+      RssService.fetchForChat(_chat, widget.model.state).then((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -346,6 +352,27 @@ class _ChatScreenState extends State<ChatScreen> {
         when = cand;
         recurrence = 'weekly';
         days = picked;
+      case SendOption.custom:
+        final res = await showCustomScheduleDialog(context, model);
+        if (res == null) return;
+        when = res['when'] as DateTime?;
+        recurrence = res['recurrence'] as String?;
+        days = res['days'] as List<int>?;
+        final isTask = res['isTask'] as bool? ?? false;
+        if (when == null) return;
+        if (isTask) {
+          // create as task instead of text
+          final entryTask = Entry(id: uid('e'), chatId: widget.chatId, type: 'todo', ts: DateTime.now().millisecondsSinceEpoch, items: [TodoItem(id: uid('t'), text: text)], dueAt: when.millisecondsSinceEpoch, recurrence: recurrence, recurrenceDays: days);
+          _text.clear();
+          model.state.entries.add(entryTask);
+          await model.save();
+          if (entryTask.dueAt != null) {
+            await RemindersService.instance.requestPermissions();
+            await RemindersService.instance.schedule(Reminder(id: entryTask.id, chatId: widget.chatId, when: entryTask.dueAt!), model.tr('remind_title', [_chat.name]), model.tr('remind_body'));
+          }
+          if (mounted) setState(() {});
+          return;
+        }
     }
 
     if (when == null) return;
@@ -409,6 +436,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
+  // ignore: unused_element
   Future<void> _setReminder() async {
     final when = await showReminderPicker(context, widget.model);
     if (when == null) return;
@@ -490,6 +518,15 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.entries.removeWhere((e) => e.id == entry.id);
         await widget.model.save();
         if (mounted) setState(() {});
+      case EntryAction.scheduleLater:
+        final when = await showReminderPicker(context, widget.model);
+        if (when == null) return;
+        entry.scheduledAt = when.millisecondsSinceEpoch;
+        await widget.model.save();
+        await RemindersService.instance.requestPermissions();
+        await RemindersService.instance.schedule(Reminder(id: entry.id, chatId: entry.chatId, when: when.millisecondsSinceEpoch), widget.model.tr('sched_notif_title'), widget.model.tr('sched_notif_body', [_chat.name]));
+        if (mounted) setState(() {});
+        break;
       case EntryAction.cancelSchedule:
         await RemindersService.instance.cancelById(entry.id.hashCode);
         await MediaStore().remove(entry.media);
@@ -602,9 +639,6 @@ class _ChatScreenState extends State<ChatScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             onSelected: (v) async {
               switch (v) {
-                case ChatTopAction.remind:
-                  await _setReminder();
-                  break;
                 case ChatTopAction.edit:
                   await _editChat();
                   break;
@@ -616,10 +650,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   await widget.model.save();
                   if (mounted) setState(() {});
                   break;
+                case ChatTopAction.remind:
+                  break;
               }
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(value: ChatTopAction.remind, child: Row(children: [Icon(Icons.alarm, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('remind'), style: TextStyle(color: p.text))])),
               if (_chat.kind == 'tasks')
                 PopupMenuItem(
                     value: ChatTopAction.toggleHide,
@@ -649,8 +684,14 @@ class _ChatScreenState extends State<ChatScreen> {
           final c = a.dueAt!.compareTo(b.dueAt!);
           return c != 0 ? c : a.ts.compareTo(b.ts);
         });
-      // hide done is handled in bubble, but optionally hide fully done entries entirely
-      // keep them visible with "Выполнено" placeholder — no filtering here
+      if (_chat.tasksHideDone) {
+        entries = entries.where((e) {
+          if (e.type != 'todo') return true;
+          final items = e.items ?? const <TodoItem>[];
+          if (items.isEmpty) return true;
+          return items.any((i) => !i.done);
+        }).toList();
+      }
     }
     final tr = model.tr;
     _bubbleContexts.clear();

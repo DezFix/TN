@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/app_model.dart';
@@ -17,7 +18,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '1.5.0';
+const _appVersion = '1.6.0';
 
 class _TNState extends State<TN> {
   late final Future<AppModel> _future = _load();
@@ -35,12 +36,6 @@ class _TNState extends State<TN> {
           );
         }
         final model = snap.data!;
-        if (!_whatsNewChecked) {
-          _whatsNewChecked = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _maybeShowWhatsNew(context, model);
-          });
-        }
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
@@ -71,7 +66,17 @@ class _TNState extends State<TN> {
                 dialogTheme: DialogThemeData(backgroundColor: p.modalBg),
                 bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.modalBg),
               ),
-              home: ListScreen(model: model),
+              home: Builder(
+                builder: (innerCtx) {
+                  if (!_whatsNewChecked) {
+                    _whatsNewChecked = true;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _maybeShowWhatsNew(innerCtx, model);
+                    });
+                  }
+                  return ListScreen(model: model);
+                },
+              ),
             );
           },
         );
@@ -103,6 +108,15 @@ class _TNState extends State<TN> {
           content: Text(model.tr('whatsnew_body'),
               style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
           actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ko-fi.com/k_k скопировано')));
+                }
+              },
+              child: Text('❤️ ko-fi', style: TextStyle(color: p.accent)),
+            ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: p.accent),
               onPressed: () => Navigator.pop(ctx),

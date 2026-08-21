@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import '../src/app_model.dart';
 import '../src/backup.dart';
 import '../src/i18n.dart';
-import '../src/models.dart';
-import '../src/reminders.dart';
+import '../src/rss.dart';
 import '../src/theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -35,28 +34,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _removeReminder(String id) async {
-    Reminder? r;
-    for (final x in widget.model.state.reminders) {
-      if (x.id == id) {
-        r = x;
-        break;
-      }
-    }
-    if (r == null) return;
-    await RemindersService.instance.cancel(r);
-    widget.model.state.reminders.removeWhere((x) => x.id == id);
-    await widget.model.save();
-    setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
     final p = model.p;
     final tr = model.tr;
-    final reminders = model.state.reminders.toList()
-      ..sort((a, b) => a.when.compareTo(b.when));
 
     return Scaffold(
       backgroundColor: p.bgList,
@@ -120,15 +102,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel(tr('section_reminders'), p),
-          if (reminders.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(tr('remind_empty'),
-                  style: TextStyle(fontSize: 13, color: p.textFaint)),
-            )
-          else
-            for (final r in reminders) _reminderRow(model, r, tr),
           _sectionLabel(tr('section_backup'), p),
           _card(
             p,
@@ -141,6 +114,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ]),
                 const SizedBox(height: 8),
                 Text(tr('backup_soon'), style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+              ],
+            ),
+          ),
+          _sectionLabel('RSS каналы', p),
+          _card(
+            p,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Кеш каналов', style: TextStyle(fontSize: 14.5, color: p.text)),
+                TextButton(
+                  onPressed: () async {
+                    await RssService.clearCache();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кеш очищен')));
+                  },
+                  child: Text('Очистить', style: TextStyle(color: p.accent)),
+                ),
               ],
             ),
           ),
@@ -201,41 +192,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _reminderRow(AppModel model, Reminder r, String Function(String) tr) {
-    final p = model.p;
-    final chat = model.state.chatById(r.chatId);
-    final dt = DateTime.fromMillisecondsSinceEpoch(r.when).toLocal();
-    String two(int v) => v.toString().padLeft(2, '0');
-    final when = '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: p.bgChat,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.alarm, color: p.accent, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(chat?.name ?? r.chatId,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.text)),
-                Text(when, style: TextStyle(fontSize: 12.5, color: p.textSoft)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.close, color: p.textFaint, size: 20),
-            onPressed: () => _removeReminder(r.id),
-          ),
-        ],
-      ),
-    );
-  }
 }

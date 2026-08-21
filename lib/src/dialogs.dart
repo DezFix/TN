@@ -5,12 +5,13 @@ import 'models.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum EntryAction { copy, edit, forward, delete, cancelSchedule }
+enum EntryAction { copy, edit, forward, delete, cancelSchedule, scheduleLater }
 
 Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? chat}) async {
   final p = model.p;
   final tr = model.tr;
   final nameField = TextEditingController(text: chat?.name ?? '');
+  final rssField = TextEditingController(text: chat?.rssUrl ?? '');
   var selectedIcon = chat?.icon;
   var selectedColor = chat?.color ?? appColors[0];
   var selectedKind = chat?.kind ?? 'note';
@@ -119,6 +120,21 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
                       ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                const Text('RSS Atom (опционально)',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF8A9BA8))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: rssField,
+                  style: TextStyle(color: p.text, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'https://example.com/rss',
+                    hintStyle: TextStyle(color: p.textFaint, fontSize: 13),
+                    isDense: true,
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                  ),
+                ),
               ],
             ),
           ),
@@ -133,12 +149,14 @@ Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? ch
             onPressed: () {
               final name = nameField.text.trim();
               if (name.isEmpty) return;
+              final rss = rssField.text.trim();
               final result = chat ?? Chat(id: uid('c'), name: name, color: selectedColor, kind: selectedKind);
               result
                 ..name = name
                 ..icon = selectedIcon
                 ..color = selectedColor
-                ..kind = selectedKind;
+                ..kind = selectedKind
+                ..rssUrl = rss.isEmpty ? null : rss;
               Navigator.pop(ctx, result);
             },
             child: Text(tr(chat != null ? 'save' : 'create')),
@@ -208,6 +226,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
       if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.edit, child: Row(children: [Icon(Icons.edit, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.forward, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('forward'), style: TextStyle(color: p.text))])),
+      if (!entry.isScheduled) PopupMenuItem(value: EntryAction.scheduleLater, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.accent), const SizedBox(width: 10), Text('Отправить позже', style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.danger))])),
     ],
   );
@@ -410,7 +429,7 @@ Future<DateTime?> showReminderPicker(BuildContext context, AppModel model) async
   return DateTime(date.year, date.month, date.day, time.hour, time.minute);
 }
 
-enum SendOption { later, daily, weekly }
+enum SendOption { later, daily, weekly, custom }
 
 /// Small popup near the finger — no reach to top/bottom.
 Future<SendOption?> showSendMenuPopup(
@@ -431,6 +450,7 @@ Future<SendOption?> showSendMenuPopup(
       PopupMenuItem(value: SendOption.later, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_later'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: SendOption.daily, child: Row(children: [Icon(Icons.today, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_daily'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: SendOption.weekly, child: Row(children: [Icon(Icons.date_range, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('send_weekly'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: SendOption.custom, child: Row(children: [Icon(Icons.tune, size: 18, color: p.accent), const SizedBox(width: 10), Text('Настроить...', style: TextStyle(color: p.text))])),
     ],
   );
 }
@@ -519,6 +539,88 @@ Future<List<int>?> showWeekdayPickerDialog(
         ],
       ),
     ),
+  );
+}
+
+class _CustomScheduleDialog extends StatefulWidget {
+  const _CustomScheduleDialog({required this.model, required this.initialTextIsTask});
+  final AppModel model;
+  final bool initialTextIsTask;
+  @override
+  State<_CustomScheduleDialog> createState() => _CustomScheduleDialogState();
+}
+
+class _CustomScheduleDialogState extends State<_CustomScheduleDialog> {
+  DateTime? _date;
+  TimeOfDay? _time;
+  String _rec = 'once';
+  final List<int> _customDays = [];
+  late bool _isTask;
+
+  @override
+  void initState() {
+    super.initState();
+    _isTask = widget.initialTextIsTask;
+    final now = DateTime.now().add(const Duration(minutes: 5));
+    _date = now;
+    _time = TimeOfDay.fromDateTime(now);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.model.p;
+    final tr = widget.model.tr;
+    final names = tr('weekdays_short').split(' ');
+    return AlertDialog(
+      backgroundColor: p.modalBg,
+      title: Text('Настроить отправку', style: TextStyle(color: p.text, fontSize: 16, fontWeight: FontWeight.w700)),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(icon: Icon(Icons.calendar_today, size: 16, color: p.accent), label: Text(_date == null ? 'Дата' : '${_date!.day}.${_date!.month}.${_date!.year}', style: TextStyle(color: p.text, fontSize: 13)), onPressed: () async { final d = await showDatePicker(context: context, initialDate: _date ?? DateTime.now(), firstDate: DateTime.now().subtract(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 365*2))); if (d != null) { setState(() => _date = d); } })),
+            const SizedBox(width: 8),
+            Expanded(child: OutlinedButton.icon(icon: Icon(Icons.access_time, size: 16, color: p.accent), label: Text(_time == null ? 'Время' : _time!.format(context), style: TextStyle(color: p.text, fontSize: 13)), onPressed: () async { final t = await showTimePicker(context: context, initialTime: _time ?? TimeOfDay.now()); if (t != null) { setState(() => _time = t); } })),
+          ]),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(initialValue: _rec, decoration: InputDecoration(labelText: 'Повтор', labelStyle: TextStyle(color: p.textFaint)), dropdownColor: p.modalBg, style: TextStyle(color: p.text), items: const [DropdownMenuItem(value: 'once', child: Text('Один раз')), DropdownMenuItem(value: 'daily', child: Text('Каждый день')), DropdownMenuItem(value: 'weekdays', child: Text('Будни (Пн-Пт)')), DropdownMenuItem(value: 'weekends', child: Text('Выходные (Сб-Вс)')), DropdownMenuItem(value: 'weekly', child: Text('Выбрать дни'))], onChanged: (v) => setState(() => _rec = v ?? 'once')),
+          if (_rec == 'weekly') ...[
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [for (var d=1; d<=7; d++) FilterChip(label: Text(names[d-1]), selected: _customDays.contains(d), onSelected: (v)=> setState(()=> v ? _customDays.add(d) : _customDays.remove(d)), selectedColor: p.accent, checkmarkColor: Colors.white, labelStyle: TextStyle(color: _customDays.contains(d)? Colors.white : p.textSoft))]),
+          ],
+          const SizedBox(height: 12),
+          Row(children: [Checkbox(value: _isTask, activeColor: p.accent, onChanged: (v)=> setState(()=> _isTask = v ?? false)), const SizedBox(width: 4), Expanded(child: Text('Это задача (с галочкой)', style: TextStyle(color: p.text, fontSize: 13)))]),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('close'), style: TextStyle(color: p.textSoft))),
+        FilledButton(style: FilledButton.styleFrom(backgroundColor: p.accent), onPressed: () {
+          if (_date == null || _time == null) return;
+          var when = DateTime(_date!.year, _date!.month, _date!.day, _time!.hour, _time!.minute);
+          String? rec;
+          List<int>? days;
+          if (_rec == 'daily') { rec = 'daily'; }
+          else if (_rec == 'weekdays') { rec = 'weekly'; days = [1,2,3,4,5]; }
+          else if (_rec == 'weekends') { rec = 'weekly'; days = [6,7]; }
+          else if (_rec == 'weekly') {
+            if (_customDays.isEmpty) { return; }
+            rec = 'weekly'; days = List<int>.from(_customDays)..sort();
+            if (!days.contains(when.weekday)) {
+              var cand = when;
+              do { cand = cand.add(const Duration(days: 1)); } while (!days.contains(cand.weekday));
+              when = cand;
+            }
+          }
+          Navigator.pop(context, {'when': when, 'recurrence': rec, 'days': days, 'isTask': _isTask});
+        }, child: const Text('Готово')),
+      ],
+    );
+  }
+}
+
+Future<Map<String, dynamic>?> showCustomScheduleDialog(BuildContext context, AppModel model, {bool isTask = false}) {
+  return showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (ctx) => _CustomScheduleDialog(model: model, initialTextIsTask: isTask),
   );
 }
 

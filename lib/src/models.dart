@@ -43,6 +43,7 @@ class Chat {
     this.folderId,
     this.kind = 'note',
     this.tasksHideDone = false,
+    this.rssUrl,
   });
 
   final String id;
@@ -53,6 +54,7 @@ class Chat {
   String? folderId;
   String kind = 'note';
   bool tasksHideDone = false;
+  String? rssUrl;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -63,6 +65,7 @@ class Chat {
         folderId: j['folderId'] as String?,
         kind: j['kind'] as String? ?? 'note',
         tasksHideDone: j['tasksHideDone'] as bool? ?? false,
+        rssUrl: j['rssUrl'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -73,6 +76,7 @@ class Chat {
         'pinned': pinned,
         'kind': kind,
         'tasksHideDone': tasksHideDone,
+        if (rssUrl != null) 'rssUrl': rssUrl,
         if (folderId != null) 'folderId': folderId,
       };
 }
