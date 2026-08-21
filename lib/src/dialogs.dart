@@ -192,6 +192,27 @@ Future<bool?> showDeleteEntryDialog(BuildContext context, AppModel model) {
   );
 }
 
+Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Entry entry, Offset globalPos) {
+  final p = model.p;
+  final tr = model.tr;
+  final canEdit = entry.type == 'text' || entry.type == 'todo';
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  return showMenu<EntryAction>(
+    context: context,
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
+    items: [
+      if (entry.isScheduled) PopupMenuItem(value: EntryAction.cancelSchedule, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('cancel_schedule'), style: TextStyle(color: p.danger))])),
+      if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
+      if (canEdit) PopupMenuItem(value: EntryAction.edit, child: Row(children: [Icon(Icons.edit, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: EntryAction.forward, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('forward'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: EntryAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.danger))])),
+    ],
+  );
+}
+
 Future<EntryAction?> showEntryCtxSheet(BuildContext context, AppModel model, Entry entry) {
   final p = model.p;
   final tr = model.tr;
@@ -540,6 +561,25 @@ Future<String?> showFolderNameDialog(
 
 enum ChatAction { pin, unpin, moveToFolder, edit, delete }
 
+Future<ChatAction?> showChatCtxPopup(BuildContext context, AppModel model, Chat chat, Offset globalPos) {
+  final p = model.p;
+  final tr = model.tr;
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  return showMenu<ChatAction>(
+    context: context,
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
+    items: [
+      PopupMenuItem(value: chat.pinned ? ChatAction.unpin : ChatAction.pin, child: Row(children: [Icon(Icons.push_pin, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr(chat.pinned ? 'unpin' : 'pin'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: ChatAction.moveToFolder, child: Row(children: [Icon(Icons.folder_copy_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('move_to_folder'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: ChatAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: ChatAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: Colors.redAccent))])),
+    ],
+  );
+}
+
 Future<ChatAction?> showChatCtxSheet(BuildContext context, AppModel model, Chat chat) {
   final p = model.p;
   final tr = model.tr;
@@ -571,6 +611,23 @@ Future<ChatAction?> showChatCtxSheet(BuildContext context, AppModel model, Chat 
         ],
       ),
     ),
+  );
+}
+
+Future<String?> showMoveToFolderPopup(BuildContext context, AppModel model, Offset globalPos) {
+  final p = model.p;
+  final tr = model.tr;
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  return showMenu<String>(
+    context: context,
+    color: p.modalBg,
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
+    items: [
+      PopupMenuItem(value: '', child: Row(children: [Icon(Icons.folder_off_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('no_folder'), style: TextStyle(color: p.text))])),
+      for (final f in model.state.folders) PopupMenuItem(value: f.id, child: Row(children: [Icon(Icons.folder_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(f.name, style: TextStyle(color: p.text))])),
+    ],
   );
 }
 

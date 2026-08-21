@@ -1,3 +1,4 @@
+// ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
 import 'dart:io';
 
@@ -512,6 +513,20 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
+  int _nextDueMs(Entry e) {
+    final cur = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
+    var cand = cur.add(const Duration(days: 1));
+    if (e.recurrence == 'weekly') {
+      final days = e.recurrenceDays ?? const <int>[];
+      var guard = 0;
+      while (!days.contains(cand.weekday) && guard < 8) {
+        cand = cand.add(const Duration(days: 1));
+        guard++;
+      }
+    }
+    return DateTime(cand.year, cand.month, cand.day, cur.hour, cur.minute).millisecondsSinceEpoch;
+  }
+
   void _toast(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -623,7 +638,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessages(AppModel model) {
-    final entries = sortedEntriesFor(model.state, widget.chatId);
+    var entries = sortedEntriesFor(model.state, widget.chatId);
+    // tasks: sort by due date nearest first (nulls last), otherwise by time
+    if (_chat.kind == 'tasks') {
+      entries = List.of(entries)
+        ..sort((a, b) {
+          if (a.dueAt == null && b.dueAt == null) return a.ts.compareTo(b.ts);
+          if (a.dueAt == null) return 1;
+          if (b.dueAt == null) return -1;
+          final c = a.dueAt!.compareTo(b.dueAt!);
+          return c != 0 ? c : a.ts.compareTo(b.ts);
+        });
+      // hide done is handled in bubble, but optionally hide fully done entries entirely
+      // keep them visible with "Выполнено" placeholder — no filtering here
+    }
     final tr = model.tr;
     _bubbleContexts.clear();
 
@@ -655,12 +683,12 @@ class _ChatScreenState extends State<ChatScreen> {
         return _buildBubble(model, e, highlight: highlight);
       });
       children.add(GestureDetector(
-        onLongPress: () async {
-          final action = await showEntryCtxSheet(context, model, e);
+        onLongPressStart: (d) async {
+          final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
           if (action != null) await _onCtxAction(e, action);
         },
-        onSecondaryTapDown: (_) async {
-          final action = await showEntryCtxSheet(context, model, e);
+        onSecondaryTapDown: (d) async {
+          final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
           if (action != null) await _onCtxAction(e, action);
         },
         child: bubble,
@@ -669,8 +697,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      reverse: true,
-      children: children.reversed.toList(),
+      children: children,
     );
   }
 
@@ -822,6 +849,15 @@ class _ChatScreenState extends State<ChatScreen> {
                     style: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
                   ),
           ),
+          if (entry.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [for (final t in entry.tags) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)), child: Text('#$t', style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600)))],
+              ),
+            ),
           Text(fmtTime(entry.ts),
               style: TextStyle(fontSize: 10.5, color: p.textFaint)),
         ],
@@ -1046,6 +1082,31 @@ class _ChatScreenState extends State<ChatScreen> {
                   onChanged: (_) async {
                     item.done = !item.done;
                     await model.save();
+                    // recurring tasks: when all done, spawn next occurrence
+                    if (item.done && entry.recurrence != null && entry.dueAt != null) {
+                      final allDone = allItems.every((i) => i.done);
+                      if (allDone) {
+                        final nextDue = _nextDueMs(entry);
+                        final next = Entry(
+                          id: uid('e'),
+                          chatId: entry.chatId,
+                          type: 'todo',
+                          ts: DateTime.now().millisecondsSinceEpoch,
+                          items: allItems.map((i) => TodoItem(id: uid('t'), text: i.text, done: false)).toList(),
+                          dueAt: nextDue,
+                          recurrence: entry.recurrence,
+                          recurrenceDays: entry.recurrenceDays == null ? null : List.of(entry.recurrenceDays!),
+                        );
+                        model.state.entries.add(next);
+                        await model.save();
+                        await RemindersService.instance.requestPermissions();
+                        await RemindersService.instance.schedule(
+                          Reminder(id: next.id, chatId: next.chatId, when: nextDue),
+                          model.tr('remind_title', [_chat.name]),
+                          model.tr('remind_body'),
+                        );
+                      }
+                    }
                     if (mounted) setState(() {});
                   },
                 ),
@@ -1089,10 +1150,47 @@ class _ChatScreenState extends State<ChatScreen> {
                   final items = await showTodoEditorDialog(context, model);
                   if (items == null || items.isEmpty) return;
                   int? dueAt;
+                  String? recurrence;
+                  List<int>? recurrenceDays;
                   if (_chat.kind == 'tasks') {
                     if (!mounted) return;
                     final when = await showReminderPicker(context, model);
                     if (when != null) dueAt = when.millisecondsSinceEpoch;
+                    if (dueAt != null) {
+                      if (!mounted) return;
+                      final rec = await showDialog<SendOption>(
+                        context: context,
+                        builder: (ctx) => SimpleDialog(
+                          backgroundColor: p.modalBg,
+                          title: Text('Повтор?', style: TextStyle(color: p.text, fontSize: 14)),
+                          children: [
+                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.later), child: Text('Один раз', style: TextStyle(color: p.text))),
+                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.daily), child: Text('Каждый день', style: TextStyle(color: p.text))),
+                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('По дням недели', style: TextStyle(color: p.text))),
+                          ],
+                        ),
+                      );
+                      if (rec == SendOption.daily) {
+                        recurrence = 'daily';
+                      } else if (rec == SendOption.weekly) {
+                        if (!mounted) return;
+                        final days = await showWeekdayPickerDialog(context, model, const []);
+                        if (days != null && days.isNotEmpty) {
+                          recurrence = 'weekly';
+                          recurrenceDays = days;
+                          // adjust due to next selected weekday
+                          final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
+                          var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
+                          // if cand weekday not in days, move to next
+                          if (!days.contains(cand.weekday)) {
+                            do {
+                              cand = cand.add(const Duration(days: 1));
+                            } while (!days.contains(cand.weekday));
+                            dueAt = cand.millisecondsSinceEpoch;
+                          }
+                        }
+                      }
+                    }
                   }
                   final entry = Entry(
                     id: uid('e'),
@@ -1101,6 +1199,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ts: DateTime.now().millisecondsSinceEpoch,
                     items: items,
                     dueAt: dueAt,
+                    recurrence: recurrence,
+                    recurrenceDays: recurrenceDays,
                   );
                   model.state.entries.add(entry);
                   await model.save();
@@ -1134,7 +1234,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 style: TextStyle(color: p.text, fontSize: 14.5),
                 minLines: 1,
                 maxLines: 4,
-                textInputAction: TextInputAction.newline,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) {
+                  if (_text.text.trim().isNotEmpty) _sendText();
+                },
                 decoration: InputDecoration(
                   hintText: model.tr('message_hint'),
                   hintStyle: TextStyle(color: p.textFaint),

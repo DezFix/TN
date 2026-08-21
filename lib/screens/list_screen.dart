@@ -58,9 +58,9 @@ class _ListScreenState extends State<ListScreen> {
     await _openChat(chat);
   }
 
-  Future<void> _chatCtx(Chat chat) async {
+  Future<void> _chatCtxAt(Chat chat, Offset globalPos) async {
     final model = widget.model;
-    final action = await showChatCtxSheet(context, model, chat);
+    final action = await showChatCtxPopup(context, model, chat, globalPos);
     if (action == null) return;
     switch (action) {
       case ChatAction.pin:
@@ -69,7 +69,7 @@ class _ListScreenState extends State<ListScreen> {
         chat.pinned = false;
       case ChatAction.moveToFolder:
         if (!mounted) return;
-        final folderId = await showMoveToFolderSheet(context, model);
+        final folderId = await showMoveToFolderPopup(context, model, globalPos);
         if (folderId == null) return;
         chat.folderId = folderId.isEmpty ? null : folderId;
       case ChatAction.edit:
@@ -88,36 +88,19 @@ class _ListScreenState extends State<ListScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _folderCtx(Folder folder) async {
+  Future<void> _folderCtxAt(Folder folder, Offset globalPos) async {
     final model = widget.model;
-    final tr = model.tr;
-    final action = await showModalBottomSheet<String>(
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final action = await showMenu<String>(
       context: context,
-      backgroundColor: model.p.modalBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: Icon(Icons.edit_outlined, color: model.p.accent),
-              title: Text(tr('edit_folder'),
-                  style: TextStyle(fontSize: 15, color: model.p.text)),
-              onTap: () => Navigator.pop(context, 'edit'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              title: Text(tr('delete_folder_title'),
-                  style: TextStyle(fontSize: 15, color: Colors.redAccent)),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      color: model.p.modalBg,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
+      items: [
+        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: model.p.accent), const SizedBox(width: 10), Text(model.tr('edit_folder'), style: TextStyle(color: model.p.text))])),
+        PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 10), Text(model.tr('delete_folder_title'), style: TextStyle(color: Colors.redAccent))])),
+      ],
     );
     if (action == null) return;
     if (action == 'edit') {
@@ -237,13 +220,15 @@ class _ListScreenState extends State<ListScreen> {
     for (final chat in visible) {
       final entries = model.state.entriesFor(chat.id);
       final last = entries.isEmpty ? null : entries.last;
-      rows.add(ChatRow(
-        chat: chat,
-        p: p,
-        preview: last == null ? tr('no_entries') : entryPreview(last, tr),
-        time: last == null ? '' : fmtTime(last.ts),
-        onTap: () => _openChat(chat),
-        onLongPress: () => _chatCtx(chat),
+      rows.add(GestureDetector(
+        onLongPressStart: (d) => _chatCtxAt(chat, d.globalPosition),
+        child: ChatRow(
+          chat: chat,
+          p: p,
+          preview: last == null ? tr('no_entries') : entryPreview(last, tr),
+          time: last == null ? '' : fmtTime(last.ts),
+          onTap: () => _openChat(chat),
+        ),
       ));
     }
     if (rows.isEmpty) {
@@ -316,12 +301,14 @@ class _ListScreenState extends State<ListScreen> {
             ),
             const SizedBox(width: 6),
             for (final f in model.state.folders) ...[
-              chip(
-                label: f.name,
-                icon: Icons.folder_outlined,
-                selected: _folderFilter == f.id,
-                onTap: () => setState(() => _folderFilter = f.id),
-                onLongPress: () => _folderCtx(f),
+              GestureDetector(
+                onLongPressStart: (d) => _folderCtxAt(f, d.globalPosition),
+                child: chip(
+                  label: f.name,
+                  icon: Icons.folder_outlined,
+                  selected: _folderFilter == f.id,
+                  onTap: () => setState(() => _folderFilter = f.id),
+                ),
               ),
               const SizedBox(width: 6),
             ],
