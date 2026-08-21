@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/app_model.dart';
 import 'src/reminders.dart';
@@ -16,8 +17,11 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
+const _appVersion = '1.0.0';
+
 class _TNState extends State<TN> {
   late final Future<AppModel> _future = _load();
+  bool _whatsNewChecked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +35,12 @@ class _TNState extends State<TN> {
           );
         }
         final model = snap.data!;
+        if (!_whatsNewChecked) {
+          _whatsNewChecked = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _maybeShowWhatsNew(context, model);
+          });
+        }
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
@@ -73,6 +83,35 @@ class _TNState extends State<TN> {
     final model = AppModel();
     await model.load();
     await RemindersService.instance.init();
+    model.startScheduler();
     return model;
+  }
+
+  Future<void> _maybeShowWhatsNew(BuildContext context, AppModel model) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getString('tn-last-version');
+      if (seen == _appVersion) return;
+      if (!context.mounted) return;
+      final p = model.p;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: p.modalBg,
+          title: Text(model.tr('whatsnew_title'),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+          content: Text(model.tr('whatsnew_body'),
+              style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: p.accent),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(model.tr('close')),
+            ),
+          ],
+        ),
+      );
+      await prefs.setString('tn-last-version', _appVersion);
+    } catch (_) {}
   }
 }

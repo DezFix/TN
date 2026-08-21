@@ -57,6 +57,8 @@ class Entry {
     this.mediaSize,
     this.duration,
     this.items,
+    this.scheduledAt,
+    this.waveform,
   });
 
   final String id;
@@ -70,6 +72,10 @@ class Entry {
   String? mediaSize;
   int? duration;
   List<TodoItem>? items;
+  int? scheduledAt; // epoch millis; set while message is delayed
+  List<int>? waveform; // 0..100 amplitude bars for voice messages
+
+  bool get isScheduled => scheduledAt != null;
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
         id: j['id'] as String,
@@ -82,6 +88,8 @@ class Entry {
         mediaName: j['mediaName'] as String?,
         mediaSize: j['mediaSize'] as String?,
         duration: (j['duration'] as num?)?.toInt(),
+        scheduledAt: (j['scheduledAt'] as num?)?.toInt(),
+        waveform: (j['waveform'] as List?)?.map((e) => (e as num).toInt()).toList(),
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -99,6 +107,8 @@ class Entry {
         'mediaSize': mediaSize,
         'duration': duration,
         'items': items?.map((i) => i.toJson()).toList(),
+        if (scheduledAt != null) 'scheduledAt': scheduledAt,
+        if (waveform != null) 'waveform': waveform,
       };
 }
 

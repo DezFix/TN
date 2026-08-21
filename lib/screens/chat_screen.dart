@@ -44,9 +44,16 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _highlightId;
   String? _playingId;
   bool _recording = false;
+  bool _recLocked = false;
+  bool _finishing = false;
   int _recordSec = 0;
+  double _dragDx = 0;
+  double _dragDy = 0;
+  final List<double> _recLevels = [];
   Timer? _recordTimer;
-  String? _recordPath;
+  StreamSubscription<Amplitude>? _ampSub;
+  Duration _playPos = Duration.zero;
+  Duration? _playDur;
 
   Chat get _chat => widget.model.state.chatById(widget.chatId)!;
   Palette get p => widget.model.p;
@@ -59,8 +66,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _audioPlayer.onPlayerStateChanged.listen((s) {
       if (s == PlayerState.completed && _playingId != null) {
         _playingId = null;
+        _playPos = Duration.zero;
         if (mounted) setState(() {});
       }
+    });
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (mounted && _playingId != null) setState(() => _playPos = pos);
+    });
+    _audioPlayer.onDurationChanged.listen((d) {
+      if (d > Duration.zero) _playDur = d;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
   }
@@ -73,6 +87,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _audioPlayer.dispose();
     _recorder.dispose();
     _recordTimer?.cancel();
+    _ampSub?.cancel();
     super.dispose();
   }
 
@@ -159,11 +174,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _toggleRecord() async {
-    if (_recording) {
-      await _stopRecord();
-      return;
-    }
+  Future<void> _beginRecord() async {
+    if (_recording || _finishing) return;
     try {
       final ok = await _recorder.hasPermission();
       if (!ok) {
@@ -172,11 +184,25 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       final tmp = '${Directory.systemTemp.path}${Platform.pathSeparator}${uid('rec')}.m4a';
       await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: tmp);
-      _recordPath = tmp;
       _recordSec = 0;
+      _recLevels.clear();
+      _dragDx = 0;
+      _dragDy = 0;
+      _recLocked = false;
+      _finishing = false;
       _recording = true;
       _recordTimer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (mounted) setState(() => _recordSec++);
+      });
+      _ampSub?.cancel();
+      _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((a) {
+        // dBFS: silence ≈ -60, loud ≈ 0
+        final level = ((a.max + 60) / 60).clamp(0.05, 1.0);
+        if (!mounted) return;
+        setState(() {
+          _recLevels.add(level);
+          if (_recLevels.length > 60) _recLevels.removeAt(0);
+        });
       });
       setState(() {});
     } catch (_) {
@@ -184,31 +210,104 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _stopRecord() async {
+  void _onRecDrag(LongPressMoveUpdateDetails d) {
+    if (!_recording || _finishing) return;
+    final offset = d.offsetFromOrigin;
+    setState(() {
+      _dragDx = offset.dx;
+      _dragDy = offset.dy;
+    });
+    if (!_recLocked && offset.dy < -70) {
+      setState(() {
+        _recLocked = true;
+        _dragDx = 0;
+        _dragDy = 0;
+      });
+      HapticFeedback.mediumImpact();
+      return;
+    }
+    if (!_recLocked && offset.dx < -70) {
+      _finishRecord(send: false);
+    }
+  }
+
+  void _endRecPress(LongPressEndDetails d) {
+    if (!_recording || _finishing) return;
+    if (_recLocked) return; // keep recording while locked
+    _finishRecord(send: true);
+  }
+
+  List<int> _downsampleWaveform(List<double> levels, int target) {
+    if (levels.isEmpty) return const <int>[];
+    final out = <int>[];
+    final step = levels.length / target;
+    for (var i = 0; i < target; i++) {
+      final start = (i * step).floor();
+      var end = ((i + 1) * step).ceil();
+      if (end <= start) end = start + 1;
+      var peak = 0.0;
+      for (var j = start; j < end && j < levels.length; j++) {
+        if (levels[j] > peak) peak = levels[j];
+      }
+      out.add(((peak * 100).round()).clamp(6, 100));
+    }
+    return out;
+  }
+
+  Future<void> _finishRecord({required bool send}) async {
+    if (!_recording || _finishing) return;
+    _finishing = true;
     _recordTimer?.cancel();
+    await _ampSub?.cancel();
+    _ampSub = null;
+    String? path;
     try {
-      final path = await _recorder.stop();
-      final secs = _recordSec;
-      _recording = false;
-      setState(() {});
-      if (path != null && path.isNotEmpty && secs > 0) {
-        final name = await MediaStore().saveFile(path, 'audio');
-        widget.model.state.entries.add(Entry(
-          id: uid('e'),
-          chatId: widget.chatId,
-          type: 'audio',
-          ts: DateTime.now().millisecondsSinceEpoch,
-          media: name,
-          duration: secs,
-        ));
-        await widget.model.save();
-        if (mounted) setState(() {});
-      }
-      if (_recordPath != null) {
-        final f = File(_recordPath!);
-        if (await f.exists()) await f.delete();
-        _recordPath = null;
-      }
+      path = await _recorder.stop();
+    } catch (_) {}
+    final secs = _recordSec;
+    final levels = List<double>.of(_recLevels);
+    final wasLocked = _recLocked;
+    _recording = false;
+    _recLocked = false;
+    _recLevels.clear();
+    _dragDx = 0;
+    _dragDy = 0;
+    if (mounted) setState(() {});
+
+    if (!send) {
+      await _deleteTemp(path);
+      _finishing = false;
+      return;
+    }
+    if (path == null || path.isEmpty || secs < 1) {
+      await _deleteTemp(path);
+      _finishing = false;
+      if (secs < 1 && wasLocked == false) _toast(widget.model.tr('rec_too_short'));
+      return;
+    }
+    try {
+      final name = await MediaStore().saveFile(path, 'audio');
+      widget.model.state.entries.add(Entry(
+        id: uid('e'),
+        chatId: widget.chatId,
+        type: 'audio',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        media: name,
+        duration: secs,
+        waveform: _downsampleWaveform(levels, 40),
+      ));
+      await widget.model.save();
+      if (mounted) setState(() {});
+    } catch (_) {}
+    await _deleteTemp(path);
+    _finishing = false;
+  }
+
+  Future<void> _deleteTemp(String? path) async {
+    if (path == null) return;
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
     } catch (_) {}
   }
 
@@ -216,11 +315,51 @@ class _ChatScreenState extends State<ChatScreen> {
     final path = await MediaStore().pathOf(entry.media!);
     if (_playingId == entry.id) {
       await _audioPlayer.stop();
-      setState(() => _playingId = null);
+      setState(() {
+        _playingId = null;
+        _playPos = Duration.zero;
+      });
       return;
     }
-    setState(() => _playingId = entry.id);
+    setState(() {
+      _playingId = entry.id;
+      _playPos = Duration.zero;
+    });
     await _audioPlayer.play(DeviceFileSource(path));
+  }
+
+  Future<void> _scheduleText() async {
+    final text = _text.text.trim();
+    if (text.isEmpty) return;
+    final when = await showReminderPicker(context, widget.model);
+    if (when == null) return;
+    final whenMs = when.millisecondsSinceEpoch;
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: 'text',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: text,
+      tags: extractTags(text),
+      scheduledAt: whenMs,
+    );
+    _text.clear();
+    widget.model.state.entries.add(entry);
+    await widget.model.save();
+    // Fallback notification in case the app is closed at send time.
+    await RemindersService.instance.requestPermissions();
+    await RemindersService.instance.schedule(
+      Reminder(id: entry.id, chatId: widget.chatId, when: whenMs),
+      widget.model.tr('sched_notif_title'),
+      widget.model.tr('sched_notif_body', [_chat.name]),
+    );
+    if (mounted) {
+      setState(() {});
+      _toast(widget.model.tr(
+        'scheduled_at',
+        ['${fmtDay(whenMs, widget.model.tr)} ${fmtTime(whenMs)}'],
+      ));
+    }
   }
 
   void _showImage(Entry entry) {
@@ -331,6 +470,15 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.entries.removeWhere((e) => e.id == entry.id);
         await widget.model.save();
         if (mounted) setState(() {});
+      case EntryAction.cancelSchedule:
+        await RemindersService.instance.cancelById(entry.id.hashCode);
+        await MediaStore().remove(entry.media);
+        widget.model.state.entries.removeWhere((e) => e.id == entry.id);
+        await widget.model.save();
+        if (mounted) {
+          setState(() {});
+          _toast(widget.model.tr('cancel_schedule_done'));
+        }
     }
   }
 
@@ -363,11 +511,16 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: p.bg,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            _buildTopbar(chat),
-            Expanded(child: _buildMessages(model)),
-            _buildComposer(),
+            Column(
+              children: [
+                _buildTopbar(chat),
+                Expanded(child: _buildMessages(model)),
+                _buildComposer(),
+              ],
+            ),
+            if (_recording) Positioned(left: 0, right: 0, bottom: 0, child: _buildRecordingPanel()),
           ],
         ),
       ),
@@ -507,7 +660,34 @@ class _ChatScreenState extends State<ChatScreen> {
           bottomRight: Radius.circular(3),
         ),
       ),
-      child: content,
+      child: entry.isScheduled
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: .15),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.schedule, size: 13, color: p.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        model.tr('scheduled_at', [
+                          '${fmtDay(entry.scheduledAt!, model.tr)} ${fmtTime(entry.scheduledAt!)}',
+                        ]),
+                        style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                Opacity(opacity: .75, child: content),
+              ],
+            )
+          : content,
     );
   }
 
@@ -650,8 +830,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildAudioBubble(AppModel model, Entry entry) {
     final playing = _playingId == entry.id;
+    final dur = entry.duration ?? 0;
+    final total = _playDur?.inMilliseconds ?? dur * 1000;
+    final progress =
+        playing && total > 0 ? (_playPos.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
+    String two(int v) => v.toString().padLeft(2, '0');
+    final posLabel = '${_playPos.inMinutes}:${two(_playPos.inSeconds % 60)}';
     return Container(
-      width: 240,
+      width: 250,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: p.bubbleOwn,
@@ -668,26 +854,26 @@ class _ChatScreenState extends State<ChatScreen> {
           Row(
             children: [
               IconButton(
-                icon: Icon(playing ? Icons.stop_circle : Icons.play_circle,
+                icon: Icon(playing ? Icons.pause_circle : Icons.play_circle,
                     color: p.accent, size: 32),
                 onPressed: () => _playAudio(entry),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(model.tr('voice_message'),
-                        style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w500, color: p.text)),
-                    Text(
-                      '${playing ? model.tr('playing') : '${entry.duration ?? 0} ${model.tr('sec')}'} · ${fmtTime(entry.ts)}',
-                      style: TextStyle(fontSize: 11, color: p.textFaint),
-                    ),
-                  ],
+                child: _StaticWaveform(
+                  samples: entry.waveform ?? const <int>[],
+                  progress: progress,
+                  playedColor: p.accent,
+                  restColor: p.textFaint.withValues(alpha: .45),
                 ),
               ),
             ],
+          ),
+          Text(
+            playing
+                ? '$posLabel · ${model.tr('playing')}'
+                : '${entry.duration ?? 0} ${model.tr('sec')} · ${fmtTime(entry.ts)}',
+            style: TextStyle(fontSize: 11, color: p.textFaint),
           ),
         ],
       ),
@@ -835,26 +1021,238 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          if (_recording)
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: p.danger),
-              onPressed: _toggleRecord,
-              child: Text('${model.tr('record_stop')} $_recordSec'),
-            )
-          else if (_text.text.isNotEmpty)
-            IconButton.filled(
-              icon: const Icon(Icons.send, color: Colors.white),
-              style: IconButton.styleFrom(backgroundColor: p.accent),
-              onPressed: _sendText,
+          if (_text.text.isNotEmpty)
+            GestureDetector(
+              onLongPress: _scheduleText,
+              child: IconButton.filled(
+                icon: const Icon(Icons.send, color: Colors.white),
+                style: IconButton.styleFrom(backgroundColor: p.accent),
+                onPressed: _sendText,
+              ),
             )
           else
-            IconButton(
-              icon: Icon(Icons.mic, color: p.textSoft),
-              tooltip: model.tr('record_start'),
-              onPressed: _toggleRecord,
+            GestureDetector(
+              onLongPressStart: (d) => _beginRecord(),
+              onLongPressMoveUpdate: _onRecDrag,
+              onLongPressEnd: _endRecPress,
+              onLongPressCancel: () => _finishRecord(send: true),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
+                child: Icon(Icons.mic, color: Colors.white, size: 24),
+              ),
             ),
         ],
       ),
     );
   }
+
+  Widget _buildRecordingPanel() {
+    final model = widget.model;
+    final lockProgress = (-_dragDy / 70).clamp(0.0, 1.0);
+    final cancelProgress = (-_dragDx / 70).clamp(0.0, 1.0);
+
+    String two(int v) => v.toString().padLeft(2, '0');
+    final timeLabel = '${(_recordSec / 60).floor()}:${two(_recordSec % 60)}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      color: p.bgList,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_recLocked) ...[
+            Opacity(
+              opacity: lockProgress,
+              child: Column(
+                children: [
+                  Icon(Icons.lock, color: p.accent, size: 22),
+                  Text(model.tr('rec_lock_hint'),
+                      style: TextStyle(fontSize: 11, color: p.textSoft)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Row(
+            children: [
+              if (_recLocked)
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: p.danger, size: 26),
+                  tooltip: model.tr('rec_cancel'),
+                  onPressed: () => _finishRecord(send: false),
+                )
+              else
+                Opacity(
+                  opacity: cancelProgress,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.delete_outline, color: p.danger, size: 24),
+                      const SizedBox(width: 4),
+                      Text(model.tr('rec_cancel'),
+                          style: TextStyle(fontSize: 12.5, color: p.danger)),
+                    ],
+                  ),
+                ),
+              const Spacer(),
+              Icon(Icons.fiber_manual_record, color: p.danger, size: 14),
+              const SizedBox(width: 6),
+              Text(timeLabel,
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: p.text)),
+              const SizedBox(width: 10),
+              _LiveWaveform(levels: _recLevels, color: p.accent),
+              const Spacer(),
+              if (_recLocked)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: p.accent),
+                  icon: const Icon(Icons.send, size: 18, color: Colors.white),
+                  label: Text(model.tr('record_stop')),
+                  onPressed: () => _finishRecord(send: true),
+                )
+              else
+                Opacity(
+                  opacity: .9,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.mic, color: p.textFaint, size: 20),
+                      const SizedBox(width: 4),
+                      Text(model.tr('record_start'),
+                          style: TextStyle(fontSize: 12, color: p.textFaint)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          if (_recLocked) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock, color: p.accent, size: 13),
+                const SizedBox(width: 4),
+                Text(model.tr('rec_locked'),
+                    style: TextStyle(fontSize: 11.5, color: p.textSoft)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveWaveform extends StatelessWidget {
+  const _LiveWaveform({required this.levels, required this.color});
+
+  final List<double> levels;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = levels.length > 36 ? levels.sublist(levels.length - 36) : levels;
+    return SizedBox(
+      height: 30,
+      width: 120,
+      child: CustomPaint(
+        painter: _WaveformPainter(
+          samples: shown.map((l) => (l * 100).round().clamp(6, 100)).toList(),
+          progress: 1,
+          playedColor: color,
+          restColor: color.withValues(alpha: .35),
+          barWidth: 2.5,
+          gap: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _StaticWaveform extends StatelessWidget {
+  const _StaticWaveform({
+    required this.samples,
+    required this.progress,
+    required this.playedColor,
+    required this.restColor,
+  });
+
+  final List<int> samples;
+  final double progress;
+  final Color playedColor;
+  final Color restColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (samples.isEmpty) {
+      return Container(
+        height: 4,
+        margin: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: restColor,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 30,
+      child: CustomPaint(
+        painter: _WaveformPainter(
+          samples: samples,
+          progress: progress,
+          playedColor: playedColor,
+          restColor: restColor,
+          barWidth: 2.5,
+          gap: 1.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  _WaveformPainter({
+    required this.samples,
+    required this.progress,
+    required this.playedColor,
+    required this.restColor,
+    required this.barWidth,
+    required this.gap,
+  });
+
+  final List<int> samples;
+  final double progress;
+  final Color playedColor;
+  final Color restColor;
+  final double barWidth;
+  final double gap;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+    final step = barWidth + gap;
+    final count = (size.width / step).floor();
+    final paintPlayed = Paint()..color = playedColor;
+    final paintRest = Paint()..color = restColor;
+    for (var i = 0; i < count; i++) {
+      // stretch/compress sample list to fit the available width
+      final idx = (i * samples.length / count).floor().clamp(0, samples.length - 1);
+      final h = (samples[idx] / 100) * size.height;
+      final x = i * step;
+      final rect = Rect.fromLTWH(x, (size.height - h) / 2, barWidth, h);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(1.5)),
+        (i / count) < progress ? paintPlayed : paintRest,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveformPainter old) =>
+      old.samples != samples ||
+      old.progress != progress ||
+      old.playedColor != playedColor ||
+      old.restColor != restColor;
 }

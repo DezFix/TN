@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'i18n.dart';
 import 'models.dart';
+import 'reminders.dart';
 import 'state.dart';
 import 'theme.dart';
 
@@ -12,6 +15,7 @@ class AppModel extends ChangeNotifier {
 
   final AppState state;
   late String Function(String, [List<String>?]) tr;
+  Timer? _schedTicker;
 
   Palette get p => paletteFor(state.theme);
 
@@ -44,6 +48,54 @@ class AppModel extends ChangeNotifier {
     await state.save();
     _reloadLanguage();
     notifyListeners();
+  }
+
+  // ---------------- scheduled messages ----------------
+
+  void startScheduler() {
+    _schedTicker?.cancel();
+    releaseDueScheduled(notify: false);
+    _schedTicker = Timer.periodic(const Duration(seconds: 20), (_) {
+      releaseDueScheduled();
+    });
+  }
+
+  void stopScheduler() {
+    _schedTicker?.cancel();
+    _schedTicker = null;
+  }
+
+  List<Entry> dueScheduledEntries({int? nowMs}) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    return state.entries
+        .where((e) => e.scheduledAt != null && e.scheduledAt! <= now)
+        .toList();
+  }
+
+  Future<void> releaseDueScheduled({bool notify = true}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final due = dueScheduledEntries(nowMs: now);
+    if (due.isEmpty) return;
+    for (final e in due) {
+      e.scheduledAt = null;
+      // If released long after the target time, the fallback notification
+      // has most likely already fired — don't duplicate it.
+      if (now - e.ts < 90 * 1000) {
+        await RemindersService.instance.cancelById(e.id.hashCode);
+        await RemindersService.instance.showNow(
+          id: e.id.hashCode,
+          title: tr('sched_notif_title'),
+          body: tr('sched_notif_body', [_chatName(e.chatId)]),
+        );
+      }
+    }
+    await state.save();
+    if (notify) notifyListeners();
+  }
+
+  String _chatName(String chatId) {
+    final chat = state.chatById(chatId);
+    return chat?.name ?? '';
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tn/src/app_model.dart';
 import 'package:tn/src/models.dart';
 import 'package:tn/src/state.dart';
 
@@ -29,7 +30,15 @@ void main() {
         type: 'audio',
         ts: 3,
         media: 'a.m4a',
-        duration: 5));
+        duration: 5,
+        waveform: [10, 50, 90]));
+    s.entries.add(Entry(
+        id: 'e4',
+        chatId: 'c1',
+        type: 'text',
+        ts: 4,
+        text: 'отложка',
+        scheduledAt: 9999999999999));
     s.theme = 'dark';
     s.lang = 'en';
 
@@ -39,13 +48,27 @@ void main() {
     expect(s2.chats[0].icon, '💡');
     expect(s2.theme, 'dark');
     expect(s2.lang, 'en');
-    expect(s2.entriesFor('c1').length, 3);
+    expect(s2.entriesFor('c1').length, 4);
     final todo = s2.entries.firstWhere((e) => e.type == 'todo');
     expect(todo.items!.single.done, isTrue);
     expect(todo.items!.single.text, 'купить');
     final audio = s2.entries.firstWhere((e) => e.type == 'audio');
     expect(audio.duration, 5);
     expect(audio.media, 'a.m4a');
+    expect(audio.waveform, [10, 50, 90]);
+    final sched = s2.entries.firstWhere((e) => e.id == 'e4');
+    expect(sched.isScheduled, isTrue);
+    expect(sched.scheduledAt, 9999999999999);
+  });
+
+  test('dueScheduledEntries finds only due messages', () {
+    final s = AppState();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    s.entries.add(Entry(id: 'past', chatId: 'c1', type: 'text', ts: now - 5000, scheduledAt: now - 1000));
+    s.entries.add(Entry(id: 'future', chatId: 'c1', type: 'text', ts: now, scheduledAt: now + 60000));
+    s.entries.add(Entry(id: 'plain', chatId: 'c1', type: 'text', ts: now));
+    final model = AppModel(state: s);
+    expect(model.dueScheduledEntries().map((e) => e.id), ['past']);
   });
 
   test('entriesFor sorts by ts ascending', () {

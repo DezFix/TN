@@ -84,6 +84,32 @@ class RemindersService {
     } catch (_) {}
   }
 
+  Future<void> cancelById(int id) async {
+    try {
+      await _plugin.cancel(id: id);
+    } catch (_) {}
+  }
+
+  Future<void> showNow({required int id, required String title, required String body}) async {
+    if (!_ready) await init();
+    try {
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'reminders',
+            'Reminders',
+            channelDescription: 'Reminders about notes',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> cancelAll() async {
     try {
       await _plugin.cancelAllPendingNotifications();

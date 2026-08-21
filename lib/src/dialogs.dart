@@ -5,7 +5,7 @@ import 'models.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum EntryAction { copy, edit, forward, delete }
+enum EntryAction { copy, edit, forward, delete, cancelSchedule }
 
 Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? chat}) async {
   final p = model.p;
@@ -179,6 +179,12 @@ Future<EntryAction?> showEntryCtxSheet(BuildContext context, AppModel model, Ent
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (entry.isScheduled)
+            ListTile(
+              leading: Icon(Icons.schedule, color: p.danger),
+              title: Text(tr('cancel_schedule'), style: TextStyle(color: p.danger)),
+              onTap: () => Navigator.pop(ctx, EntryAction.cancelSchedule),
+            ),
           if (canEdit) ...[
             ListTile(
               leading: Icon(Icons.copy, color: p.textSoft),
