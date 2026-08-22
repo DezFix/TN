@@ -206,6 +206,18 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 )
             )
 
+            // Gear opens the widget settings screen inside the app.
+            val settings = Intent(context, MainActivity::class.java).apply {
+                putExtra("open_settings", true)
+            }
+            rv.setOnClickPendingIntent(
+                R.id.dw_settings,
+                PendingIntent.getActivity(
+                    context, 3, settings,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+
             val mode = prefs.getString("flutter.tn-daywidget-mode", "tasks") ?: "tasks"
             val scopeChat = prefs.getString("flutter.tn-daywidget-chatId", "") ?: ""
             val title = when {

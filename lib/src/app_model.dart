@@ -134,7 +134,7 @@ class AppModel extends ChangeNotifier {
         await RemindersService.instance.schedule(
           Reminder(id: e.id, chatId: e.chatId, when: next),
           tr('sched_notif_title'),
-          tr('sched_notif_body', [_chatName(e.chatId)]),
+          _notifBody(e),
         );
         continue;
       }
@@ -146,7 +146,7 @@ class AppModel extends ChangeNotifier {
         await RemindersService.instance.showNow(
           id: e.id.hashCode,
           title: tr('sched_notif_title'),
-          body: tr('sched_notif_body', [_chatName(e.chatId)]),
+          body: _notifBody(e),
         );
       }
     }
@@ -157,6 +157,11 @@ class AppModel extends ChangeNotifier {
   String _chatName(String chatId) {
     final chat = state.chatById(chatId);
     return chat?.name ?? '';
+  }
+
+  String _notifBody(Entry e) {
+    final t = entryNotifBody(e, tr);
+    return t.isEmpty ? tr('sched_notif_body', [_chatName(e.chatId)]) : t;
   }
 }
 
@@ -213,6 +218,16 @@ String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {
       return tr('todo_progress', ['$done', '${items.length}']);
   }
   return '';
+}
+
+/// Notification body: the actual note/task content, not a generic phrase.
+String entryNotifBody(Entry e, String Function(String, [List<String>?]) tr) {
+  if (e.type == 'todo') {
+    final open = (e.items ?? const <TodoItem>[]).where((i) => !i.done).toList();
+    final t = (open.isNotEmpty ? open.map((i) => i.text).join('\n') : e.text).trim();
+    if (t.isNotEmpty) return t;
+  }
+  return entryPreview(e, tr);
 }
 
 List<Entry> sortedEntriesFor(AppState state, String chatId) =>

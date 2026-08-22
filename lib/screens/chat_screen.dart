@@ -138,12 +138,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     _text.clear();
+    final isTasksChat = _chat.kind == 'tasks';
     widget.model.state.entries.add(Entry(
       id: uid('e'),
       chatId: widget.chatId,
-      type: 'text',
+      type: isTasksChat ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      text: text,
+      text: isTasksChat ? '' : text,
+      items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
       tags: extractTags(text),
     ));
     HapticFeedback.lightImpact();
@@ -404,7 +406,7 @@ class _ChatScreenState extends State<ChatScreen> {
           await model.save();
           if (entryTask.dueAt != null) {
             await RemindersService.instance.requestPermissions();
-            await RemindersService.instance.schedule(Reminder(id: entryTask.id, chatId: widget.chatId, when: entryTask.dueAt!), model.tr('remind_title', [_chat.name]), model.tr('remind_body'));
+            await RemindersService.instance.schedule(Reminder(id: entryTask.id, chatId: widget.chatId, when: entryTask.dueAt!), model.tr('remind_title', [_chat.name]), entryNotifBody(entryTask, model.tr));
           }
           if (mounted) setState(() {});
           return;
@@ -432,7 +434,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await RemindersService.instance.schedule(
       Reminder(id: entry.id, chatId: widget.chatId, when: whenMs),
       widget.model.tr('sched_notif_title'),
-      widget.model.tr('sched_notif_body', [_chat.name]),
+      entryNotifBody(entry, widget.model.tr),
     );
     if (mounted) {
       setState(() {});
@@ -1416,7 +1418,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       await RemindersService.instance.schedule(
                         Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
                         model.tr('remind_title', [_chat.name]),
-                        model.tr('remind_body'),
+                        entryNotifBody(entry, model.tr),
                       );
                       if (mounted) setState(() {});
                     }
@@ -1465,7 +1467,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         await RemindersService.instance.schedule(
                           Reminder(id: next.id, chatId: next.chatId, when: nextDue),
                           model.tr('remind_title', [_chat.name]),
-                          model.tr('remind_body'),
+                          entryNotifBody(next, model.tr),
                         );
                       }
                     }

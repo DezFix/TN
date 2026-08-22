@@ -36,6 +36,15 @@
             android:textColor="#2AABEE"
             android:textSize="13sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/dw_settings"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginStart="8dp"
+            android:src="@android:drawable/ic_menu_manage"
+            android:contentDescription="widget settings"
+            android:tint="#8A9BA8" />
     </LinearLayout>
 
     <LinearLayout
