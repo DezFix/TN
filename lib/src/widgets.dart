@@ -89,14 +89,8 @@ class ChatRow extends StatelessWidget {
                           Icon(Icons.push_pin, size: 13, color: p.textFaint),
                           const SizedBox(width: 4),
                         ],
-                        if (chat.kind == 'rss') ...[
-                          Icon(Icons.rss_feed, size: 13, color: p.textFaint),
-                          const SizedBox(width: 4),
-                        ],
-                        if (chat.kind != 'note' && chat.kind != 'rss') ...[
-                          Text(chatKinds.firstWhere((k) => k.$1 == chat.kind, orElse: () => ('note', '📝')).$2, style: const TextStyle(fontSize: 13)),
-                          const SizedBox(width: 4),
-                        ],
+                        Text(chatKinds.firstWhere((k) => k.$1 == chat.kind, orElse: () => ('note', '📝')).$2, style: const TextStyle(fontSize: 13)),
+                        const SizedBox(width: 4),
                         Expanded(
                           child: Text(chat.name,
                               maxLines: 1,

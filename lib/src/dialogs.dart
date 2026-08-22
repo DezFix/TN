@@ -5,7 +5,7 @@ import 'models.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum EntryAction { copy, edit, forward, delete, cancelSchedule, scheduleLater }
+enum EntryAction { copy, edit, forward, delete, cancelSchedule, scheduleLater, select, share, download }
 
 Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? chat}) async {
   final p = model.p;
@@ -221,6 +221,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
   final p = model.p;
   final tr = model.tr;
   final canEdit = entry.type == 'text' || entry.type == 'todo';
+  final isImage = entry.type == 'image';
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   return showMenu<EntryAction>(
     context: context,
@@ -230,9 +231,13 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
     position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
     items: [
       if (entry.isScheduled) PopupMenuItem(value: EntryAction.cancelSchedule, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('cancel_schedule'), style: TextStyle(color: p.danger))])),
+      PopupMenuItem(value: EntryAction.select, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('select'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.edit, child: Row(children: [Icon(Icons.edit, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.forward, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('forward'), style: TextStyle(color: p.text))])),
+      // external share
+      PopupMenuItem(value: EntryAction.share, child: Row(children: [Icon(Icons.share, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr(isImage ? 'share_photo' : 'share_text'), style: TextStyle(color: p.text))])),
+      if (isImage) PopupMenuItem(value: EntryAction.download, child: Row(children: [Icon(Icons.download, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('download'), style: TextStyle(color: p.text))])),
       if (!entry.isScheduled) PopupMenuItem(value: EntryAction.scheduleLater, child: Row(children: [Icon(Icons.schedule, size: 18, color: p.accent), const SizedBox(width: 10), Text('Отправить позже', style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.danger))])),
     ],

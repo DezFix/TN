@@ -250,6 +250,15 @@ class _ListScreenState extends State<ListScreen> {
     );
   }
 
+  void _reorderFolders(int oldIndex, int newIndex) {
+    final folders = widget.model.state.folders;
+    if (newIndex > oldIndex) newIndex--;
+    final item = folders.removeAt(oldIndex);
+    folders.insert(newIndex, item);
+    widget.model.save();
+    if (mounted) setState(() {});
+  }
+
   Widget _buildFolderTabs(AppModel model, Palette p, String Function(String, [List<String>?]) tr) {
     Widget chip({
       required String label,
@@ -257,6 +266,7 @@ class _ListScreenState extends State<ListScreen> {
       VoidCallback? onTap,
       VoidCallback? onLongPress,
       IconData? icon,
+      Widget? trailing,
     }) =>
         GestureDetector(
           onTap: onTap,
@@ -266,6 +276,7 @@ class _ListScreenState extends State<ListScreen> {
             decoration: BoxDecoration(
               color: selected ? p.accent : p.bgChat,
               borderRadius: BorderRadius.circular(18),
+              border: selected ? null : Border.all(color: p.divider.withValues(alpha: 0.6)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -280,46 +291,65 @@ class _ListScreenState extends State<ListScreen> {
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                       color: selected ? Colors.white : p.textSoft,
                     )),
+                if (trailing != null) ...[const SizedBox(width: 4), trailing],
               ],
             ),
           ),
         );
 
+    // Reorderable folders only
+    final folders = model.state.folders;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        child: Row(
-          children: [
-            chip(
-              label: tr('all_chats'),
-              icon: Icons.chat_bubble_outline_rounded,
-              selected: _folderFilter == null,
-              onTap: () => setState(() => _folderFilter = null),
-            ),
-            const SizedBox(width: 6),
-            for (final f in model.state.folders) ...[
-              GestureDetector(
-                onLongPressStart: (d) => _folderCtxAt(f, d.globalPosition),
-                child: chip(
-                  label: f.name,
-                  icon: Icons.folder_outlined,
-                  selected: _folderFilter == f.id,
-                  onTap: () => setState(() => _folderFilter = f.id),
+      child: Row(
+        children: [
+          chip(
+            label: tr('all_chats'),
+            icon: Icons.chat_bubble_outline_rounded,
+            selected: _folderFilter == null,
+            onTap: () => setState(() => _folderFilter = null),
+          ),
+          const SizedBox(width: 6),
+          if (folders.isEmpty)
+            const SizedBox.shrink()
+          else
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: ReorderableListView(
+                  scrollDirection: Axis.horizontal,
+                  buildDefaultDragHandles: true,
+                  onReorder: _reorderFolders,
+                  proxyDecorator: (child, index, anim) => Material(color: Colors.transparent, child: child),
+                  children: [
+                    for (int i = 0; i < folders.length; i++)
+                      Padding(
+                        key: ValueKey(folders[i].id),
+                        padding: const EdgeInsets.only(right: 6),
+                        child: GestureDetector(
+                          onLongPressStart: (d) => _folderCtxAt(folders[i], d.globalPosition),
+                          child: chip(
+                            label: folders[i].name,
+                            icon: Icons.folder_outlined,
+                            selected: _folderFilter == folders[i].id,
+                            onTap: () => setState(() => _folderFilter = folders[i].id),
+                            trailing: Icon(Icons.drag_indicator, size: 12, color: _folderFilter == folders[i].id ? Colors.white70 : p.textFaint),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-            ],
-            chip(
-              label: tr('new_folder'),
-              icon: Icons.create_new_folder_outlined,
-              selected: false,
-              onTap: _newFolder,
             ),
-          ],
-        ),
+          if (folders.isNotEmpty) const SizedBox(width: 2),
+          chip(
+            label: tr('new_folder'),
+            icon: Icons.create_new_folder_outlined,
+            selected: false,
+            onTap: _newFolder,
+          ),
+        ],
       ),
     );
   }

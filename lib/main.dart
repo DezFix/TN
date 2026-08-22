@@ -4,7 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/app_model.dart';
 import 'src/reminders.dart';
+import 'src/theme.dart';
+import 'src/widget_bridge.dart';
 import 'screens/list_screen.dart';
+import 'screens/welcome_screen.dart';
+import 'screens/widget_settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,8 +25,18 @@ class TN extends StatefulWidget {
 const _appVersion = '7.2';
 
 class _TNState extends State<TN> {
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final Future<AppModel> _future = _load();
   bool _whatsNewChecked = false;
+  bool _showWelcome = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetBridge.onOpenSettings = () {
+      _navKey.currentState?.pushNamed('/widget-settings');
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,9 +53,12 @@ class _TNState extends State<TN> {
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
-            final p = model.p;
+            final effectiveTheme = model.state.theme == 'system'
+                ? (MediaQuery.platformBrightnessOf(context) == Brightness.dark ? 'dark' : 'light')
+                : model.state.theme;
+            final p = paletteFor(effectiveTheme);
             final scheme = ColorScheme(
-              brightness: model.state.theme == 'dark' ? Brightness.dark : Brightness.light,
+              brightness: effectiveTheme == 'dark' ? Brightness.dark : Brightness.light,
               primary: p.accent,
               onPrimary: Colors.white,
               secondary: p.accentDk,
@@ -54,6 +71,7 @@ class _TNState extends State<TN> {
             return MaterialApp(
               title: 'TN',
               debugShowCheckedModeBanner: false,
+              navigatorKey: _navKey,
               themeMode: ThemeMode.light,
               theme: ThemeData(
                 useMaterial3: true,
@@ -66,8 +84,14 @@ class _TNState extends State<TN> {
                 dialogTheme: DialogThemeData(backgroundColor: p.modalBg),
                 bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.modalBg),
               ),
+              routes: {
+                '/widget-settings': (_) => WidgetSettingsScreen(model: model),
+              },
               home: Builder(
                 builder: (innerCtx) {
+                  if (_showWelcome) {
+                    return WelcomeScreen(model: model);
+                  }
                   if (!_whatsNewChecked) {
                     _whatsNewChecked = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -89,6 +113,10 @@ class _TNState extends State<TN> {
     await model.load();
     await RemindersService.instance.init();
     model.startScheduler();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);
+    } catch (_) {}
     return model;
   }
 

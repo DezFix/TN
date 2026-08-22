@@ -15,6 +15,7 @@ import '../src/media.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
 import '../src/rss.dart';
+import '../src/share_service.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 
@@ -42,6 +43,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final _searchCtrl = TextEditingController();
   bool _searching = false;
   String _searchQuery = '';
+  final Set<String> _selectedIds = {};
+  bool get _selecting => _selectedIds.isNotEmpty;
   final _imagePicker = ImagePicker();
   final _audioPlayer = AudioPlayer();
   final _recorder = AudioRecorder();
@@ -418,9 +421,27 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (_) => FutureBuilder<String>(
         future: MediaStore().pathOf(entry.media!),
         builder: (ctx, snap) {
-          if (!snap.hasData) return const SizedBox();
+          if (!snap.hasData) return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
           return Scaffold(
             backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              iconTheme: const IconThemeData(color: Colors.white),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.share, color: Colors.white),
+                  tooltip: widget.model.tr('share'),
+                  onPressed: () => _shareEntry(entry),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.download, color: Colors.white),
+                  tooltip: widget.model.tr('download'),
+                  onPressed: () async {
+                    await _downloadEntry(entry);
+                  },
+                ),
+              ],
+            ),
             body: GestureDetector(
               onTap: () => Navigator.pop(ctx),
               child: Center(
@@ -475,8 +496,132 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  void _toggleSelect(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _shareEntry(Entry e) async {
+    try {
+      await ShareService.shareEntry(e);
+    } catch (_) {
+      _toast(widget.model.tr('backup_error'), error: true);
+    }
+  }
+
+  Future<void> _downloadEntry(Entry e) async {
+    final path = await ShareService.downloadImage(e);
+    if (!mounted) return;
+    if (path != null) {
+      _toast(widget.model.tr('downloaded'));
+    } else {
+      _toast(widget.model.tr('download_error'), error: true);
+    }
+  }
+
+  Future<void> _shareSelected() async {
+    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    if (entries.isEmpty) return;
+    try {
+      await ShareService.shareEntries(entries);
+    } catch (_) {
+      _toast(widget.model.tr('backup_error'), error: true);
+    }
+  }
+
+  Future<void> _copySelected() async {
+    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    if (entries.isEmpty) return;
+    final texts = entries.map((e) {
+      if (e.type == 'todo') {
+        return (e.items ?? const <TodoItem>[]).map((i) => '${i.done ? '☑' : '☐'} ${i.text}').join('\n');
+      }
+      return e.text;
+    }).where((t) => t.isNotEmpty).join('\n\n');
+    if (texts.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: texts));
+    _toast(widget.model.tr('copied'));
+    setState(() => _selectedIds.clear());
+  }
+
+  Future<void> _forwardSelected() async {
+    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    if (entries.isEmpty) return;
+    final target = await showForwardDialog(context, widget.model);
+    if (target == null) return;
+    for (final e in entries) {
+      final copy = Entry(
+        id: uid('e'),
+        chatId: target.id,
+        type: e.type,
+        ts: DateTime.now().millisecondsSinceEpoch,
+        text: e.text,
+        tags: List.of(e.tags),
+        media: e.media,
+        mediaName: e.mediaName,
+        mediaSize: e.mediaSize,
+        duration: e.duration,
+        waveform: e.waveform == null ? null : List.of(e.waveform!),
+        items: e.items?.map((i) => TodoItem(id: i.id, text: i.text, done: i.done)).toList(),
+        dueAt: e.dueAt,
+        recurrence: e.recurrence,
+        recurrenceDays: e.recurrenceDays == null ? null : List.of(e.recurrenceDays!),
+      );
+      widget.model.state.entries.add(copy);
+    }
+    await widget.model.save();
+    if (mounted) {
+      setState(() => _selectedIds.clear());
+      _toast(widget.model.tr('forwarded_to', [target.name]));
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    if (entries.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(widget.model.tr('delete_selected'), style: TextStyle(color: p.text, fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text('${entries.length} ${widget.model.tr('selected', ['${entries.length}']).toLowerCase()}', style: TextStyle(color: p.textSoft)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.model.tr('cancel'), style: TextStyle(color: p.textSoft))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    for (final e in entries) {
+      await MediaStore().remove(e.media);
+      await RemindersService.instance.cancelById(e.id.hashCode);
+    }
+    widget.model.state.entries.removeWhere((e) => _selectedIds.contains(e.id));
+    _selectedIds.clear();
+    await widget.model.save();
+    if (mounted) {
+      setState(() {});
+      _toast(widget.model.tr('deleted'));
+    }
+  }
+
   Future<void> _onCtxAction(Entry entry, EntryAction action) async {
     switch (action) {
+      case EntryAction.select:
+        _toggleSelect(entry.id);
+        HapticFeedback.selectionClick();
+        break;
+      case EntryAction.share:
+        await _shareEntry(entry);
+        break;
+      case EntryAction.download:
+        await _downloadEntry(entry);
+        break;
       case EntryAction.copy:
         final text = entry.type == 'todo'
             ? (entry.items ?? const <TodoItem>[])
@@ -485,17 +630,20 @@ class _ChatScreenState extends State<ChatScreen> {
             : entry.text;
         await Clipboard.setData(ClipboardData(text: text));
         _toast(widget.model.tr('copied'));
+        break;
       case EntryAction.edit:
         if (entry.type == 'todo') {
           final items = await showTodoEditorDialog(context, widget.model, entry: entry);
           if (items == null) return;
           entry.items = items;
+          entry.editedAt = DateTime.now().millisecondsSinceEpoch;
           await widget.model.save();
           if (mounted) setState(() {});
         } else {
           _editText.text = entry.text;
           setState(() => _editingId = entry.id);
         }
+        break;
       case EntryAction.forward:
         final target = await showForwardDialog(context, widget.model);
         if (target == null || target.id == widget.chatId) return;
@@ -515,6 +663,7 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.entries.add(copy);
         await widget.model.save();
         _toast(widget.model.tr('forwarded_to', [target.name]));
+        break;
       case EntryAction.delete:
         final ok = await showDeleteEntryDialog(context, widget.model);
         if (ok != true) return;
@@ -522,6 +671,7 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.entries.removeWhere((e) => e.id == entry.id);
         await widget.model.save();
         if (mounted) setState(() {});
+        break;
       case EntryAction.scheduleLater:
         final when = await showReminderPicker(context, widget.model);
         if (when == null) return;
@@ -540,6 +690,7 @@ class _ChatScreenState extends State<ChatScreen> {
           setState(() {});
           _toast(widget.model.tr('cancel_schedule_done'));
         }
+        break;
     }
   }
 
@@ -548,10 +699,17 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
     entry.text = text;
     entry.tags = extractTags(text);
+    entry.editedAt = DateTime.now().millisecondsSinceEpoch;
     _editingId = null;
     _editText.clear();
     await widget.model.save();
     setState(() {});
+  }
+
+  String _timeWithEdited(Entry e) {
+    final base = fmtTime(e.ts);
+    if (e.isEdited) return '$base · ${widget.model.tr('edited')}';
+    return base;
   }
 
   int _nextDueMs(Entry e) {
@@ -583,26 +741,51 @@ class _ChatScreenState extends State<ChatScreen> {
     final model = widget.model;
     final chat = _chat;
 
-    return Scaffold(
-      backgroundColor: p.bg,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _buildTopbar(chat),
-                Expanded(child: _buildMessages(model)),
-                _buildComposer(),
-              ],
-            ),
-            if (_recording) Positioned(left: 0, right: 0, bottom: 0, child: _buildRecordingPanel()),
-          ],
+    return PopScope(
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) {
+          setState(() => _selectedIds.clear());
+        }
+      },
+      child: Scaffold(
+        backgroundColor: p.bg,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  _buildTopbar(chat),
+                  Expanded(child: _buildMessages(model)),
+                  _buildComposer(),
+                ],
+              ),
+              if (_recording) Positioned(left: 0, right: 0, bottom: 0, child: _buildRecordingPanel()),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildTopbar(Chat chat) {
+    if (_selecting) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        color: p.accent.withValues(alpha: .12),
+        child: Row(
+          children: [
+            IconButton(icon: Icon(Icons.close, color: p.accent), onPressed: () => setState(() => _selectedIds.clear())),
+            Text(widget.model.tr('selected', ['${_selectedIds.length}']), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
+            const Spacer(),
+            IconButton(icon: Icon(Icons.share, color: p.accent), tooltip: widget.model.tr('share'), onPressed: _shareSelected),
+            IconButton(icon: Icon(Icons.forward, color: p.accent), tooltip: widget.model.tr('forward'), onPressed: _forwardSelected),
+            IconButton(icon: Icon(Icons.copy, color: p.accent), tooltip: widget.model.tr('copy'), onPressed: _copySelected),
+            IconButton(icon: Icon(Icons.delete_outline, color: p.danger), tooltip: widget.model.tr('delete'), onPressed: _deleteSelected),
+          ],
+        ),
+      );
+    }
     if (_searching) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -759,20 +942,52 @@ class _ChatScreenState extends State<ChatScreen> {
         ));
       }
       final highlight = _highlightId == e.id;
+      final isSelected = _selectedIds.contains(e.id);
       final bubble = Builder(builder: (ctx) {
         _bubbleContexts[e.id] = ctx;
-        return _buildBubble(model, e, highlight: highlight);
+        return _buildBubble(model, e, highlight: highlight || isSelected, selected: isSelected);
       });
-      children.add(GestureDetector(
-        onLongPressStart: (d) async {
-          final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
-          if (action != null) await _onCtxAction(e, action);
-        },
+      Widget row = GestureDetector(
+        onTap: _selecting
+            ? () => _toggleSelect(e.id)
+            : null,
+        onLongPressStart: _selecting
+            ? null
+            : (d) async {
+                final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
+                if (action != null) await _onCtxAction(e, action);
+              },
+        onLongPress: _selecting ? () => _toggleSelect(e.id) : null,
         onSecondaryTapDown: (d) async {
-          final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
-          if (action != null) await _onCtxAction(e, action);
+          if (_selecting) {
+            _toggleSelect(e.id);
+          } else {
+            final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
+            if (action != null) await _onCtxAction(e, action);
+          }
         },
         child: bubble,
+      );
+      if (_selecting) {
+        row = Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Checkbox(
+              value: isSelected,
+              activeColor: p.accent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              onChanged: (_) => _toggleSelect(e.id),
+            ),
+            Expanded(child: row),
+          ],
+        );
+      } else {
+        // quick select on long-press drag alternative: also allow tap with checkbox reveal via trailing? Keep as is
+      }
+      final containerColor = isSelected ? p.accent.withValues(alpha: .08) : null;
+      children.add(Container(
+        color: containerColor,
+        child: row,
       ));
     }
 
@@ -782,7 +997,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildBubble(AppModel model, Entry entry, {required bool highlight}) {
+  Widget _buildBubble(AppModel model, Entry entry, {required bool highlight, bool selected = false}) {
     final Widget content = switch (entry.type) {
       'text' => _buildTextBubble(model, entry),
       'image' => _buildImageBubble(model, entry),
@@ -939,7 +1154,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [for (final t in entry.tags) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)), child: Text('#$t', style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600)))],
               ),
             ),
-          Text(fmtTime(entry.ts),
+          Text(_timeWithEdited(entry),
               style: TextStyle(fontSize: 10.5, color: p.textFaint)),
         ],
       ),
@@ -1015,7 +1230,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.only(right: 8, bottom: 4),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: Text(fmtTime(entry.ts), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+                child: Text(_timeWithEdited(entry), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
               ),
             ),
           ],
@@ -1068,7 +1283,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Text(
             playing
                 ? '$posLabel · ${model.tr('playing')}'
-                : '${entry.duration ?? 0} ${model.tr('sec')} · ${fmtTime(entry.ts)}',
+                : '${entry.duration ?? 0} ${model.tr('sec')} · ${_timeWithEdited(entry)}',
             style: TextStyle(fontSize: 11, color: p.textFaint),
           ),
         ],
@@ -1106,7 +1321,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('${entry.mediaSize ?? ''} · ${fmtTime(entry.ts)}',
+          Text('${entry.mediaSize ?? ''} · ${_timeWithEdited(entry)}',
               style: TextStyle(fontSize: 11, color: p.textFaint)),
         ],
       ),
@@ -1212,7 +1427,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ],
             ),
-          Text(fmtTime(entry.ts), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+          Text(_timeWithEdited(entry), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
         ],
       ),
     );

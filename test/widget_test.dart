@@ -24,7 +24,7 @@ void mockPlatformChannels() {
 
 void main() {
   testWidgets('app boots and shows empty state', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'tn-welcome-done': true});
     mockPlatformChannels();
     await tester.pumpWidget(const TN());
     await tester.pumpAndSettle();

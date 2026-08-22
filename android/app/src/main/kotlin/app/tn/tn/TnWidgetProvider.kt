@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.widget.RemoteViews
 import org.json.JSONObject
 
@@ -17,6 +16,9 @@ class TnWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        // shared_preferences encodes doubles as Base64("This is the prefix for Double.") + value
+        private const val DOUBLE_PREF_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu"
+
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, TnWidgetProvider::class.java))
@@ -35,27 +37,32 @@ class TnWidgetProvider : AppWidgetProvider() {
             )
             rv.setOnClickPendingIntent(R.id.w_root, pi)
             try {
-                val settingsIntent = Intent(context, MainActivity::class.java).apply { putExtra("open_settings", true) }
+                val settingsIntent = Intent(context, MainActivity::class.java).apply {
+                    putExtra("open_settings", true)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
                 val settingsPi = PendingIntent.getActivity(context, 1, settingsIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 rv.setOnClickPendingIntent(R.id.w_settings, settingsPi)
             } catch (_: Exception) {}
 
-            // transparency
+            // transparency: quantized to 10% steps -> preset rounded drawables
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             var alpha = 1.0f
             try {
-                if (prefs.contains("flutter.tn-widget-alpha")) {
-                    try {
-                        alpha = prefs.getFloat("flutter.tn-widget-alpha", 1.0f)
-                    } catch (_: Exception) {
-                        val s = prefs.getString("flutter.tn-widget-alpha", null)
-                        if (s != null) alpha = s.toFloatOrNull() ?: 1.0f
-                    }
+                val raw = prefs.all["flutter.tn-widget-alpha"]
+                alpha = when (raw) {
+                    is Number -> raw.toFloat()
+                    is String -> raw.removePrefix(DOUBLE_PREF_PREFIX).toFloatOrNull() ?: 1.0f
+                    else -> 1.0f
                 }
+                if (!alpha.isFinite() || alpha < 0.05f || alpha > 1.5f) alpha = 1.0f
             } catch (_: Exception) {}
             alpha = alpha.coerceIn(0.2f, 1.0f)
-            val bg = Color.argb((alpha * 255).toInt(), 0x17, 0x21, 0x2B)
-            try { rv.setInt(R.id.w_root, "setBackgroundColor", bg) } catch (_: Exception) {}
+            val pct = (Math.round(alpha * 10) * 10).coerceIn(20, 100)
+            try {
+                val resId = context.resources.getIdentifier("tn_widget_bg_$pct", "drawable", context.packageName)
+                if (resId != 0) rv.setInt(R.id.w_root, "setBackgroundResource", resId)
+            } catch (_: Exception) {}
 
             val lines = latestLines(context)
             val ids = intArrayOf(R.id.w_item0, R.id.w_item1, R.id.w_item2, R.id.w_item3, R.id.w_item4)

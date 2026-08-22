@@ -124,6 +124,7 @@ class Entry {
     this.recurrence,
     this.recurrenceDays,
     this.dueAt,
+    this.editedAt,
   });
 
   final String id;
@@ -142,8 +143,10 @@ class Entry {
   String? recurrence; // null | 'daily' | 'weekly'
   List<int>? recurrenceDays; // 1=Mon..7=Sun for weekly
   int? dueAt; // for tasks-chat todos: deadline millis
+  int? editedAt; // millis when last edited
 
   bool get isScheduled => scheduledAt != null;
+  bool get isEdited => editedAt != null;
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
         id: j['id'] as String,
@@ -162,6 +165,7 @@ class Entry {
         recurrenceDays:
             (j['recurrenceDays'] as List?)?.map((e) => (e as num).toInt()).toList(),
         dueAt: (j['dueAt'] as num?)?.toInt(),
+        editedAt: (j['editedAt'] as num?)?.toInt(),
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -184,6 +188,7 @@ class Entry {
         if (recurrence != null) 'recurrence': recurrence,
         if (recurrenceDays != null) 'recurrenceDays': recurrenceDays,
         if (dueAt != null) 'dueAt': dueAt,
+        if (editedAt != null) 'editedAt': editedAt,
       };
 }
 

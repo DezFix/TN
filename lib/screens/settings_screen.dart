@@ -9,7 +9,7 @@ import '../src/backup.dart';
 import '../src/i18n.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
-import '../src/widget_bridge.dart';
+import 'widget_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.model});
@@ -21,34 +21,21 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String _widgetChat = '';
-  double _widgetAlpha = 1.0;
-  int _cacheMaxGb = 5; // 0 = ∞
+  int _cacheMaxGb = 1024; // 0 = ∞, in MB (1024=1GB)
 
   @override
   void initState() {
     super.initState();
     widget.model.addListener(_onModel);
-    _loadWidgetPrefs();
+    _loadCachePref();
   }
 
-  Future<void> _loadWidgetPrefs() async {
+  Future<void> _loadCachePref() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final chat = prefs.getString('tn-widget-chatId') ?? '';
-      final alpha = prefs.getDouble('tn-widget-alpha') ?? 1.0;
-      final cache = prefs.getInt('tn-cache-max-gb') ?? 5;
-      if (mounted) setState(() { _widgetChat = chat; _widgetAlpha = alpha.clamp(0.2, 1.0); _cacheMaxGb = cache; });
-    } catch (_) {}
-  }
-
-  Future<void> _saveWidgetPrefs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('tn-widget-chatId', _widgetChat);
-      await prefs.setDouble('tn-widget-alpha', _widgetAlpha);
-      await prefs.setInt('tn-cache-max-gb', _cacheMaxGb);
-      await WidgetBridge.refresh();
+      var cache = prefs.getInt('tn-cache-max-gb') ?? 1024;
+      if (![1024, 3072, 5120, 0].contains(cache)) cache = 1024;
+      if (mounted) setState(() => _cacheMaxGb = cache);
     } catch (_) {}
   }
 
@@ -174,24 +161,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const Divider(height: 24, color: Color(0xFF2A3441)),
                 Align(alignment: Alignment.centerLeft, child: Text('Максимальный размер кэша', style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
+                const SizedBox(height: 4),
+                Text('Только картинки каналов, заметки хранятся всегда', style: TextStyle(color: p.textFaint, fontSize: 11)),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    for (final v in [100, 500, 1024, 0])
+                    for (final v in [1024, 3072, 5120, 0])
                       Text(v == 0 ? '∞' : v >= 1024 ? '${v ~/ 1024} GB' : '$v MB', style: TextStyle(color: _cacheMaxGb == v ? p.accent : p.textFaint, fontSize: 13, fontWeight: _cacheMaxGb == v ? FontWeight.w700 : FontWeight.w400)),
                   ],
                 ),
                 Slider(
-                  value: [100, 500, 1024, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
+                  value: [1024, 3072, 5120, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
                   min: 0,
                   max: 3,
                   divisions: 3,
                   activeColor: p.accent,
                   inactiveColor: p.divider,
                   thumbColor: p.accent,
-                  onChanged: (v) => setState(() => _cacheMaxGb = [100, 500, 1024, 0][v.round()]),
-                  onChangeEnd: (v) => _saveCacheMax([100, 500, 1024, 0][v.round()]),
+                  onChanged: (v) => setState(() => _cacheMaxGb = [1024, 3072, 5120, 0][v.round()]),
+                  onChangeEnd: (v) => _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
                 ),
                 Text('Для RSS и медиа', style: TextStyle(fontSize: 11, color: p.textFaint)),
               ],
@@ -200,28 +189,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionLabel(tr('section_widget'), p),
           _card(
             p,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tr('widget_chat'), style: TextStyle(fontSize: 13, color: p.text)),
-                const SizedBox(height: 6),
-                DropdownButton<String>(
-                  value: ['', 'today', ...widget.model.state.chats.map((c) => c.id)].contains(_widgetChat) ? _widgetChat : '',
-                  isExpanded: true,
-                  dropdownColor: p.modalBg,
-                  style: TextStyle(color: p.text, fontSize: 13),
-                  items: [
-                    DropdownMenuItem(value: '', child: Text(tr('widget_all'))),
-                    DropdownMenuItem(value: 'today', child: Text(tr('widget_today'))),
-                    for (final c in widget.model.state.chats) DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)),
-                  ],
-                  onChanged: (v) async { setState(() => _widgetChat = v ?? ''); await _saveWidgetPrefs(); },
-                ),
-                const SizedBox(height: 12),
-                Text(tr('widget_transparency'), style: TextStyle(fontSize: 13, color: p.text)),
-                Slider(value: _widgetAlpha, min: 0.2, max: 1.0, divisions: 8, label: '${(_widgetAlpha * 100).round()}%', activeColor: p.accent, onChanged: (v) => setState(() => _widgetAlpha = v), onChangeEnd: (v) async { _widgetAlpha = v; await _saveWidgetPrefs(); }),
-                Text(tr('widget_transparency_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
-              ],
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
+              ),
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(tr('widget_settings_title'),
+                        style: TextStyle(fontSize: 14.5, color: p.text)),
+                  ),
+                  Icon(Icons.chevron_right, color: p.textFaint),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -276,6 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           opt(widget.model.tr('light'), 'light'),
           opt(widget.model.tr('dark'), 'dark'),
+          opt('System', 'system'),
         ],
       ),
     );
