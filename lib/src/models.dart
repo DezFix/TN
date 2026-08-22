@@ -8,8 +8,8 @@ const appColors = [
 
 const appIcons = <String?>[
   null, '💡', '📌', '💼', '🎯', '📚', '🎨', '🎧', '🍳', '✈️', '🌱', '⚡', '🧠', '❤️', '🏋️', '🎵',
-  '🔥', '💎', '🌟', '⭐', '🌈', '🍀', '🎁', '🏆', '📅', '📊', '🗂️', '💬', '🔔', '🔖', '📌', '🧩',
-  '🎭', '🎬', '🎤', '🎧', '🎹', '🏝️', '🏠', '🚀', '🛠️', '💼', '📈', '📉', '🔬', '🧪',
+  '🔥', '💎', '🌟', '⭐', '🌈', '🍀', '🎁', '🏆', '📅', '📊', '🗂️', '💬', '🔔', '🔖', '🧩',
+  '🎭', '🎬', '🎤', '🎹', '🏝️', '🏠', '🚀', '🛠️', '📈', '📉', '🔬', '🧪',
 ];
 
 class Folder {
@@ -34,6 +34,40 @@ const chatKinds = [
   ('project', '🚀'),
 ];
 
+/// Rule that pulls entries from other chats into this one ("flexible chats"):
+/// e.g. a "Today" chat collecting every task due today.
+class AutoCollect {
+  AutoCollect({
+    this.enabled = false,
+    this.fromAllChats = true,
+    this.sourceFolderId,
+    this.typeFilter = 'all', // 'all' | 'todo' | 'note'
+    this.dueFilter = 'any', // 'any' | 'today'
+  });
+
+  bool enabled;
+  bool fromAllChats;
+  String? sourceFolderId;
+  String typeFilter;
+  String dueFilter;
+
+  factory AutoCollect.fromJson(Map<String, dynamic> j) => AutoCollect(
+        enabled: j['enabled'] as bool? ?? false,
+        fromAllChats: j['fromAllChats'] as bool? ?? true,
+        sourceFolderId: j['sourceFolderId'] as String?,
+        typeFilter: j['typeFilter'] as String? ?? 'all',
+        dueFilter: j['dueFilter'] as String? ?? 'any',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'fromAllChats': fromAllChats,
+        'typeFilter': typeFilter,
+        'dueFilter': dueFilter,
+        if (sourceFolderId != null) 'sourceFolderId': sourceFolderId,
+      };
+}
+
 class Chat {
   Chat({
     required this.id,
@@ -47,6 +81,7 @@ class Chat {
     this.rssUrl,
     this.notificationsEnabled = true,
     this.notificationSound,
+    this.autoCollect,
   });
 
   final String id;
@@ -60,6 +95,7 @@ class Chat {
   String? rssUrl;
   bool notificationsEnabled = true;
   String? notificationSound;
+  AutoCollect? autoCollect;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -73,6 +109,9 @@ class Chat {
         rssUrl: j['rssUrl'] as String?,
         notificationsEnabled: j['notificationsEnabled'] as bool? ?? true,
         notificationSound: j['notificationSound'] as String?,
+        autoCollect: j['autoCollect'] == null
+            ? null
+            : AutoCollect.fromJson(j['autoCollect'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +126,7 @@ class Chat {
         if (notificationSound != null) 'notificationSound': notificationSound,
         if (rssUrl != null) 'rssUrl': rssUrl,
         if (folderId != null) 'folderId': folderId,
+        if (autoCollect != null) 'autoCollect': autoCollect!.toJson(),
       };
 }
 

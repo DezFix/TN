@@ -97,7 +97,7 @@ class TnWidgetProvider : AppWidgetProvider() {
                 val todayEnd = todayStart + 24*60*60*1000L - 1
                 for (i in 0 until entries.length()) {
                     val e = entries.getJSONObject(i)
-                    if (e.has("scheduledAt")) continue
+                    if (!e.isNull("scheduledAt")) continue
                     val chatId = e.optString("chatId", "")
                     // filter by widget chat
                     if (widgetChat.isNotEmpty()) {

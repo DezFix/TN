@@ -22,7 +22,7 @@
             android:layout_width="18dp"
             android:layout_height="18dp"
             android:src="@drawable/ic_dw_check_on"
-            android:contentDescription="today tasks" />
+            android:contentDescription="task widget" />
 
         <TextView
             android:id="@+id/dw_title"
@@ -32,7 +32,7 @@
             android:layout_marginStart="6dp"
             android:singleLine="true"
             android:ellipsize="end"
-            android:text="@string/dw_title"
+            android:text="@string/dw_title_tasks"
             android:textColor="#2AABEE"
             android:textSize="13sp"
             android:textStyle="bold" />

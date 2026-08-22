@@ -19,10 +19,12 @@ class ToggleReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val entryId = intent.getStringExtra(EXTRA_ENTRY_ID) ?: return
+        val itemId = intent.getStringExtra(EXTRA_ITEM_ID)
         val result = goAsync()
         Thread {
             try {
-                val changed = toggleEntry(context, entryId)
+                val changed = if (itemId != null) toggleItem(context, entryId, itemId)
+                else toggleEntry(context, entryId)
                 if (changed) {
                     playDing(context)
                     vibrate(context)
@@ -38,6 +40,7 @@ class ToggleReceiver : BroadcastReceiver() {
 
     companion object {
         const val EXTRA_ENTRY_ID = "entry"
+        const val EXTRA_ITEM_ID = "item"
         const val ACTION_TOGGLE = "app.tn.tn.ACTION_TOGGLE_ENTRY"
 
         private fun toggleEntry(context: Context, entryId: String): Boolean {
@@ -62,6 +65,32 @@ class ToggleReceiver : BroadcastReceiver() {
                     .putLong("flutter.tn-state-stamp", System.currentTimeMillis())
                     .apply()
                 return true
+            }
+            return false
+        }
+
+        /** Toggles a single checklist item; returns true when it became done. */
+        private fun toggleItem(context: Context, entryId: String, itemId: String): Boolean {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return false
+            val data = JSONObject(raw)
+            val entries = data.optJSONArray("entries") ?: return false
+            for (i in 0 until entries.length()) {
+                val e = entries.getJSONObject(i)
+                if (e.optString("id") != entryId) continue
+                val items = e.optJSONArray("items") ?: return false
+                for (j in 0 until items.length()) {
+                    val item = items.getJSONObject(j)
+                    if (item.optString("id") != itemId) continue
+                    val nowDone = !item.optBoolean("done")
+                    item.put("done", nowDone)
+                    prefs.edit()
+                        .putString("flutter.tn-notes-data-v1", data.toString())
+                        .putLong("flutter.tn-state-stamp", System.currentTimeMillis())
+                        .apply()
+                    return nowDone
+                }
+                return false
             }
             return false
         }

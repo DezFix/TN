@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="dw_title">Задачи на день</string>
-    <string name="dw_empty">На сегодня всё 🎉</string>
+    <string name="dw_title_tasks">Задачи</string>
+    <string name="dw_title_notes">Заметки</string>
+    <string name="dw_empty">Здесь пока пусто</string>
     <string name="dw_overdue">%1$s • просрочено</string>
     <string name="dw_meta_chat">%1$s • %2$s</string>
 </resources>
