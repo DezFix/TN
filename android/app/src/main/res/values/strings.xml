@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dw_title">Today\'s tasks</string>
+    <string name="dw_empty">All done for today 🎉</string>
+    <string name="dw_overdue">%1$s • overdue</string>
+    <string name="dw_meta_chat">%1$s • %2$s</string>
+</resources>

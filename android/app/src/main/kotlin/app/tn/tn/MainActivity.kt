@@ -29,6 +29,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "update" -> {
                         TnWidgetProvider.updateAll(applicationContext)
+                        TnDayWidgetProvider.updateAll(applicationContext)
                         result.success(null)
                     }
                     else -> result.notImplemented()

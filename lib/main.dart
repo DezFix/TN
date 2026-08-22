@@ -24,7 +24,7 @@ class TN extends StatefulWidget {
 
 const _appVersion = '7.2';
 
-class _TNState extends State<TN> {
+class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final Future<AppModel> _future = _load();
   bool _whatsNewChecked = false;
@@ -33,9 +33,25 @@ class _TNState extends State<TN> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetBridge.onOpenSettings = () {
       _navKey.currentState?.pushNamed('/widget-settings');
     };
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Tasks checked from the home-screen widget land in storage while the
+    // app is backgrounded — pull them in when we come back.
+    if (state == AppLifecycleState.resumed) {
+      _future.then((m) => m.syncIfExternal());
+    }
   }
 
   @override
@@ -159,7 +175,7 @@ class _TNState extends State<TN> {
               onPressed: () async {
                 await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ko-fi.com/k_k скопировано')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ko-fi.com/k_k • ${model.tr('support')}')));
                 }
               },
               child: Text('❤️ ko-fi', style: TextStyle(color: p.accent)),

@@ -99,6 +99,9 @@ class AppState {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(storageKey, toJson());
+      // Stamp lets the app detect changes made outside this process
+      // (e.g. checking a task from the home-screen widget).
+      await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
     } catch (_) {}
   }
 }

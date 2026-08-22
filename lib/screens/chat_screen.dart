@@ -16,6 +16,7 @@ import '../src/models.dart';
 import '../src/reminders.dart';
 import '../src/rss.dart';
 import '../src/share_service.dart';
+import '../src/sound.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
@@ -825,7 +826,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           children: [
             IconButton(icon: Icon(Icons.arrow_back, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
-            Expanded(child: TextField(controller: _searchCtrl, autofocus: true, onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()), style: TextStyle(color: p.text, fontSize: 14), decoration: InputDecoration(hintText: 'Поиск в чате', hintStyle: TextStyle(color: p.textFaint), border: InputBorder.none, isDense: true))),
+            Expanded(child: TextField(controller: _searchCtrl, autofocus: true, onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()), style: TextStyle(color: p.text, fontSize: 14), decoration: InputDecoration(hintText: widget.model.tr('search'), hintStyle: TextStyle(color: p.textFaint), border: InputBorder.none, isDense: true))),
             IconButton(icon: Icon(Icons.close, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
           ],
         ),
@@ -1442,6 +1443,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   onChanged: (_) async {
                     item.done = !item.done;
                     await model.save();
+                    if (item.done) unawaited(Sounds.taskDone());
                     // recurring tasks: when all done, spawn next occurrence
                     if (item.done && entry.recurrence != null && entry.dueAt != null) {
                       final allDone = allItems.every((i) => i.done);

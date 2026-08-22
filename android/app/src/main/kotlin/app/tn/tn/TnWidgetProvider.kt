@@ -17,7 +17,7 @@ class TnWidgetProvider : AppWidgetProvider() {
 
     companion object {
         // shared_preferences encodes doubles as Base64("This is the prefix for Double.") + value
-        private const val DOUBLE_PREF_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu"
+        const val PREF_DOUBLE_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu"
 
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
@@ -52,7 +52,7 @@ class TnWidgetProvider : AppWidgetProvider() {
                 val raw = prefs.all["flutter.tn-widget-alpha"]
                 alpha = when (raw) {
                     is Number -> raw.toFloat()
-                    is String -> raw.removePrefix(DOUBLE_PREF_PREFIX).toFloatOrNull() ?: 1.0f
+                    is String -> raw.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
                     else -> 1.0f
                 }
                 if (!alpha.isFinite() || alpha < 0.05f || alpha > 1.5f) alpha = 1.0f

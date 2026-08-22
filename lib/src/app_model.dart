@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'i18n.dart';
 import 'models.dart';
@@ -17,6 +18,7 @@ class AppModel extends ChangeNotifier {
   final AppState state;
   late String Function(String, [List<String>?]) tr;
   Timer? _schedTicker;
+  int _stamp = DateTime.now().millisecondsSinceEpoch;
 
   Palette get p => paletteFor(state.theme);
 
@@ -34,14 +36,37 @@ class AppModel extends ChangeNotifier {
       ..entries.addAll(loaded.entries)
       ..reminders.addAll(loaded.reminders);
     _reloadLanguage();
+    _stamp = DateTime.now().millisecondsSinceEpoch;
     notifyListeners();
   }
 
   Future<void> save() async {
     await state.save();
+    _stamp = DateTime.now().millisecondsSinceEpoch;
     // Fire-and-forget: the native widget update must not block saving
     // (in tests the method channel has no handler).
     unawaited(WidgetBridge.refresh());
+  }
+
+  /// Applies changes written by another writer (home-screen widget) while the
+  /// app was in background. Returns true when something was reloaded.
+  Future<bool> syncIfExternal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // The plugin caches values in memory; native widget writes bypass it.
+      await prefs.reload();
+      final ext = prefs.getInt('tn-state-stamp') ?? 0;
+      if (ext <= _stamp) return false;
+      final raw = prefs.getString(storageKey);
+      if (raw == null || raw.isEmpty) return false;
+      state.loadFromJson(raw);
+      _reloadLanguage();
+      _stamp = ext;
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> setTheme(String theme) async {

@@ -49,6 +49,22 @@
                 android:resource="@xml/tn_widget_info"/>
         </receiver>
         <receiver
+            android:name=".TnDayWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tn_day_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".ToggleReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name=".TnMidnightReceiver"
+            android:exported="false"/>
+        <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />
         <receiver
