@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="dw_title_tasks">Tasks</string>
+    <string name="tn_widget_desc">Tasks from all chats</string>
     <string name="dw_title_notes">Notes</string>
     <string name="dw_empty">Nothing here yet</string>
     <string name="dw_overdue">%1$s • overdue</string>

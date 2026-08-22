@@ -28,7 +28,6 @@ class ToggleReceiver : BroadcastReceiver() {
                 if (changed) {
                     playDing(context)
                     vibrate(context)
-                    TnWidgetProvider.updateAll(context)
                     TnDayWidgetProvider.updateAll(context)
                 }
             } catch (_: Exception) {

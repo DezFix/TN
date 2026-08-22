@@ -13,10 +13,8 @@ class WidgetSettingsScreen extends StatefulWidget {
 }
 
 class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
-  String _chat = '';
   double _alpha = 1.0;
-  String _dayMode = 'tasks'; // 'tasks' | 'notes'
-  String _dayChat = '';
+  String _period = 'all'; // 'all' | 'today' | 'week'
 
   @override
   void initState() {
@@ -26,7 +24,6 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final chat = prefs.getString('tn-widget-chatId') ?? '';
     var alpha = 1.0;
     try {
       alpha = prefs.getDouble('tn-widget-alpha') ?? 1.0;
@@ -36,23 +33,18 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         if (s != null) alpha = double.tryParse(s) ?? 1.0;
       } catch (_) {}
     }
-    final dayMode = prefs.getString('tn-daywidget-mode') ?? 'tasks';
-    final dayChat = prefs.getString('tn-daywidget-chatId') ?? '';
+    final period = prefs.getString('tn-daywidget-period') ?? 'all';
     if (!mounted) return;
     setState(() {
-      _chat = chat;
       _alpha = alpha.clamp(0.2, 1.0);
-      _dayMode = dayMode == 'notes' ? 'notes' : 'tasks';
-      _dayChat = dayChat;
+      _period = ['all', 'today', 'week'].contains(period) ? period : 'all';
     });
   }
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('tn-widget-chatId', _chat);
     await prefs.setDouble('tn-widget-alpha', _alpha);
-    await prefs.setString('tn-daywidget-mode', _dayMode);
-    await prefs.setString('tn-daywidget-chatId', _dayChat);
+    await prefs.setString('tn-daywidget-period', _period);
     await WidgetBridge.refresh();
   }
 
@@ -61,9 +53,6 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     final model = widget.model;
     final p = model.p;
     final tr = model.tr;
-    final validValues = ['', ...model.state.chats.map((c) => c.id)];
-    if (!validValues.contains(_chat)) _chat = '';
-    if (!model.state.chats.any((c) => c.id == _dayChat)) _dayChat = '';
 
     return Scaffold(
       backgroundColor: p.bgList,
@@ -79,16 +68,28 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         children: [
           const SizedBox(height: 4),
           Center(child: _preview(p)),
-          _sectionLabel(tr('widget_chat'), p),
+          _sectionLabel(tr('dw_settings_title'), p),
           _card(
             p,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _option(p, value: '', title: tr('widget_all')),
-                for (final c in model.state.chats) ...[
-                  Divider(height: 1, color: p.divider),
-                  _option(p, value: c.id, title: c.name),
-                ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
+                  child: Text(tr('dw_period_hint'),
+                      style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                ),
+                Row(
+                  children: [
+                    for (final (val, key) in [('all', 'dw_period_all'), ('today', 'dw_period_today'), ('week', 'dw_period_week')]) ...[
+                      Expanded(
+                        child: _periodButton(p, val, tr(key)),
+                      ),
+                      if (key != 'dw_period_week') const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -117,46 +118,16 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel(tr('dw_settings_title'), p),
-          _card(
-            p,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
-                  child: Text(tr('ac_hint'),
-                      style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-                ),
-                Row(
-                  children: [
-                    for (final (val, key) in [('tasks', 'dw_mode_tasks'), ('notes', 'dw_mode_notes')]) ...[
-                      Expanded(
-                        child: _modeButton(p, val, tr(key)),
-                      ),
-                      if (key == 'dw_mode_tasks') const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-                Divider(height: 20, color: p.divider),
-                Text(tr('widget_chat'), style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.textFaint)),
-                const SizedBox(height: 4),
-                _dayChatOption(p, '', tr('widget_all')),
-                for (final c in model.state.chats) _dayChatOption(p, c.id, c.name),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
           const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _modeButton(Palette p, String value, String title) {
-    final selected = _dayMode == value;
+  Widget _periodButton(Palette p, String value, String title) {
+    final selected = _period == value;
     return InkWell(
-      onTap: () async { setState(() => _dayMode = value); await _save(); },
+      onTap: () async { setState(() => _period = value); await _save(); },
       borderRadius: BorderRadius.circular(10),
       child: Container(
         height: 40,
@@ -167,6 +138,9 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         ),
         alignment: Alignment.center,
         child: Text(title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -175,26 +149,8 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     );
   }
 
-  Widget _dayChatOption(Palette p, String value, String title) {
-    final selected = _dayChat == value;
-    return InkWell(
-      onTap: () async { setState(() => _dayChat = value); await _save(); },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
-        child: Row(
-          children: [
-            Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                size: 18, color: selected ? p.accent : p.textFaint),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.5, color: p.text))),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _preview(Palette p) {
-    final sampleRows = ['09:30  Идеи: купить кофе', '12:00  Задачи: ☐ Позвонить', '18:45  Дневник: хороший день'];
+    final sampleRows = ['09:30 • работа   купить кофе', '12:00 • сегодня  позвонить маме', '18:45 • идеи     записать мысль'];
     return Container(
       width: 250,
       margin: const EdgeInsets.only(top: 8, bottom: 6),
@@ -209,7 +165,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('TN', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.accent)),
+              Text('Задачи', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.accent)),
               const Icon(Icons.settings, size: 16, color: Color(0xFF8A9BA8)),
             ],
           ),
@@ -220,23 +176,6 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               child: Text(row, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: Color(0xFFEAECEF))),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _option(Palette p, {required String value, required String title}) {
-    final selected = _chat == value;
-    return InkWell(
-      onTap: () async { setState(() => _chat = value); await _save(); },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 2),
-        child: Row(
-          children: [
-            Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off, size: 20, color: selected ? p.accent : p.textFaint),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: p.text))),
-          ],
-        ),
       ),
     );
   }

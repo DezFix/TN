@@ -132,6 +132,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final Map<String, BuildContext> _bubbleContexts = {};
 
+  /// Due chip: today shows only the time, other days prepend the date.
+  String _fmtDue(int ms, String Function(String, [List<String>?]) tr) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    final today = d.year == now.year && d.month == now.month && d.day == now.day;
+    return today ? fmtTime(ms) : '${fmtDay(ms, tr)} ${fmtTime(ms)}';
+  }
+
   // ---------------- actions ----------------
 
   Future<void> _sendText() async {
@@ -415,13 +423,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (when == null) return;
     final whenMs = when.millisecondsSinceEpoch;
+    // In tasks chats even delayed messages are to-dos.
+    final isTasksChat = _chat.kind == 'tasks';
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
-      type: 'text',
+      type: isTasksChat ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      text: text,
-      tags: extractTags(text),
+      text: isTasksChat ? '' : text,
+      tags: isTasksChat ? const <String>[] : extractTags(text),
+      items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
       scheduledAt: whenMs,
       recurrence: recurrence,
       recurrenceDays: days,
@@ -928,24 +939,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessages(AppModel model) {
     var entries = sortedEntriesFor(model.state, widget.chatId);
-    // tasks: sort by due date nearest first (nulls last), otherwise by time
-    if (_chat.kind == 'tasks') {
-      entries = List.of(entries)
-        ..sort((a, b) {
-          if (a.dueAt == null && b.dueAt == null) return a.ts.compareTo(b.ts);
-          if (a.dueAt == null) return 1;
-          if (b.dueAt == null) return -1;
-          final c = a.dueAt!.compareTo(b.dueAt!);
-          return c != 0 ? c : a.ts.compareTo(b.ts);
-        });
-      if (_chat.tasksHideDone) {
-        entries = entries.where((e) {
-          if (e.type != 'todo') return true;
-          final items = e.items ?? const <TodoItem>[];
-          if (items.isEmpty) return true;
-          return items.any((i) => !i.done);
-        }).toList();
-      }
+    if (_chat.kind == 'tasks' && _chat.tasksHideDone) {
+      entries = entries.where((e) {
+        if (e.type != 'todo') return true;
+        final items = e.items ?? const <TodoItem>[];
+        if (items.isEmpty) return true;
+        return items.any((i) => !i.done);
+      }).toList();
     }
     if (_searching && _searchQuery.isNotEmpty) {
       final q = _searchQuery;
@@ -1014,24 +1014,6 @@ class _ChatScreenState extends State<ChatScreen> {
       return Container(
         color: isSelected ? p.accent.withValues(alpha: .08) : null,
         child: row,
-      );
-    }
-
-    // Tasks keep checklist semantics: soonest deadline on top.
-    if (_chat.kind == 'tasks') {
-      final children = <Widget>[];
-      String? lastDay;
-      for (final e in entries) {
-        final day = fmtDay(e.ts, tr);
-        if (day != lastDay) {
-          lastDay = day;
-          children.add(pill(day));
-        }
-        children.add(makeRow(e));
-      }
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-        children: children,
       );
     }
 
@@ -1430,7 +1412,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.schedule, size: 13, color: overdue ? p.danger : p.accent),
                   const SizedBox(width: 4),
-                  Text('${fmtDay(entry.dueAt!, model.tr)} ${fmtTime(entry.dueAt!)}', style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w600)),
+                  Text(_fmtDue(entry.dueAt!, model.tr), style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w600)),
                 ]),
               ),
             ),

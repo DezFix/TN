@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/app_model.dart';
@@ -88,6 +89,13 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
               title: 'TN',
               debugShowCheckedModeBanner: false,
               navigatorKey: _navKey,
+              locale: Locale(model.state.lang),
+              supportedLocales: const [Locale('ru'), Locale('en'), Locale('uk'), Locale('de'), Locale('es'), Locale('fr')],
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
               themeMode: ThemeMode.light,
               theme: ThemeData(
                 useMaterial3: true,

@@ -28,7 +28,6 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "update" -> {
-                        TnWidgetProvider.updateAll(applicationContext)
                         TnDayWidgetProvider.updateAll(applicationContext)
                         result.success(null)
                     }
