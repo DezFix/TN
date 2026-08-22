@@ -155,6 +155,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': 'Задачи на сегодня',
     'widget_transparency': 'Прозрачность фона',
     'widget_transparency_hint': 'Чем меньше процент — тем прозрачнее виджет на рабочем столе',
+    'caption_hint': 'Подпись к фото…',
+    'folders_reorder': 'Изменить порядок',
+    'folders_reorder_hint': 'Удерживайте и перетаскивайте папки',
   },
   'en': {
     'app_title': 'Notes',
@@ -302,6 +305,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': "Today's tasks",
     'widget_transparency': 'Background opacity',
     'widget_transparency_hint': 'The lower the percentage, the more transparent the widget on your home screen',
+    'caption_hint': 'Add a caption…',
+    'folders_reorder': 'Reorder folders',
+    'folders_reorder_hint': 'Hold and drag to reorder folders',
   },
   'uk': {
     'app_title': 'Нотатки',
@@ -449,6 +455,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': 'Завдання на сьогодні',
     'widget_transparency': 'Прозорість фону',
     'widget_transparency_hint': 'Чим менший відсоток — тим прозоріший віджет на робочому столі',
+    'caption_hint': 'Підпис до фото…',
+    'folders_reorder': 'Змінити порядок',
+    'folders_reorder_hint': 'Утримуйте та перетягуйте папки',
   },
   'de': {
     'app_title': 'Notizen',
@@ -596,6 +605,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': 'Heutige Aufgaben',
     'widget_transparency': 'Hintergrund-Deckkraft',
     'widget_transparency_hint': 'Je niedriger der Prozentsatz, desto transparenter das Widget auf dem Startbildschirm',
+    'caption_hint': 'Bildunterschrift…',
+    'folders_reorder': 'Ordner sortieren',
+    'folders_reorder_hint': 'Halten und ziehen zum Sortieren der Ordner',
   },
   'es': {
     'app_title': 'Notas',
@@ -743,6 +755,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': 'Tareas de hoy',
     'widget_transparency': 'Opacidad del fondo',
     'widget_transparency_hint': 'Cuanto menor el porcentaje, más transparente se ve el widget en la pantalla de inicio',
+    'caption_hint': 'Añade un pie de foto…',
+    'folders_reorder': 'Reordenar carpetas',
+    'folders_reorder_hint': 'Mantén pulsado y arrastra para reordenar',
   },
   'fr': {
     'app_title': 'Notes',
@@ -890,6 +905,9 @@ const strings = <String, Map<String, String>>{
     'widget_today': 'Tâches du jour',
     'widget_transparency': 'Opacité du fond',
     'widget_transparency_hint': "Plus le pourcentage est bas, plus le widget est transparent sur l'écran d'accueil",
+    'caption_hint': 'Ajouter une légende…',
+    'folders_reorder': 'Réorganiser les dossiers',
+    'folders_reorder_hint': 'Maintenez et faites glisser pour réorganiser',
   },
 };
 

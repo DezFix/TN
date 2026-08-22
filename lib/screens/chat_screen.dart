@@ -18,6 +18,7 @@ import '../src/rss.dart';
 import '../src/share_service.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
+import 'chat_edit_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -52,6 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _editingId;
   String? _highlightId;
   String? _playingId;
+  String? _pendingImagePath;
   bool _recording = false;
   bool _recLocked = false;
   bool _finishing = false;
@@ -143,6 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: text,
       tags: extractTags(text),
     ));
+    HapticFeedback.lightImpact();
     await widget.model.save();
     setState(() {});
   }
@@ -151,20 +154,45 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final file = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (file == null) return;
-      final name = await MediaStore().saveImage(file.path);
+      HapticFeedback.lightImpact();
+      setState(() => _pendingImagePath = file.path);
+    } catch (_) {
+      _toast(widget.model.tr('photo_error'), error: true);
+    }
+  }
+
+  Future<void> _sendPendingImage() async {
+    final tmp = _pendingImagePath;
+    if (tmp == null) return;
+    try {
+      final name = await MediaStore().saveImage(tmp);
+      final caption = _text.text.trim();
       widget.model.state.entries.add(Entry(
         id: uid('e'),
         chatId: widget.chatId,
         type: 'image',
         ts: DateTime.now().millisecondsSinceEpoch,
+        text: caption,
+        tags: extractTags(caption),
         media: name,
         mediaName: name,
       ));
       await widget.model.save();
-      if (mounted) setState(() {});
+      _text.clear();
+      setState(() => _pendingImagePath = null);
+      HapticFeedback.lightImpact();
+      setState(() {});
     } catch (_) {
       _toast(widget.model.tr('photo_error'), error: true);
     }
+  }
+
+  Future<void> _submitComposer() async {
+    if (_pendingImagePath != null) {
+      await _sendPendingImage();
+      return;
+    }
+    await _sendText();
   }
 
 
@@ -455,7 +483,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _editChat() async {
-    final result = await showChatEditDialog(context, widget.model, chat: _chat);
+    final result = await Navigator.push<Chat>(
+      context,
+      MaterialPageRoute(builder: (_) => ChatEditScreen(model: widget.model, chat: _chat)),
+    );
     if (result == null) return;
     await widget.model.save();
     setState(() {});
@@ -497,6 +528,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _toggleSelect(String id) {
+    HapticFeedback.selectionClick();
     setState(() {
       if (_selectedIds.contains(id)) {
         _selectedIds.remove(id);
@@ -930,17 +962,12 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    final children = <Widget>[];
-    String? lastDay;
-    for (final e in entries) {
-      final day = fmtDay(e.ts, tr);
-      if (day != lastDay) {
-        lastDay = day;
-        children.add(Padding(
+    Widget pill(String label) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
-          child: DayPill(label: day, p: p),
-        ));
-      }
+          child: DayPill(label: label, p: p),
+        );
+
+    Widget makeRow(Entry e) {
       final highlight = _highlightId == e.id;
       final isSelected = _selectedIds.contains(e.id);
       final bubble = Builder(builder: (ctx) {
@@ -948,12 +975,11 @@ class _ChatScreenState extends State<ChatScreen> {
         return _buildBubble(model, e, highlight: highlight || isSelected, selected: isSelected);
       });
       Widget row = GestureDetector(
-        onTap: _selecting
-            ? () => _toggleSelect(e.id)
-            : null,
+        onTap: _selecting ? () => _toggleSelect(e.id) : null,
         onLongPressStart: _selecting
             ? null
             : (d) async {
+                HapticFeedback.lightImpact();
                 final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
                 if (action != null) await _onCtxAction(e, action);
               },
@@ -981,18 +1007,48 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(child: row),
           ],
         );
-      } else {
-        // quick select on long-press drag alternative: also allow tap with checkbox reveal via trailing? Keep as is
       }
-      final containerColor = isSelected ? p.accent.withValues(alpha: .08) : null;
-      children.add(Container(
-        color: containerColor,
+      return Container(
+        color: isSelected ? p.accent.withValues(alpha: .08) : null,
         child: row,
-      ));
+      );
     }
 
+    // Tasks keep checklist semantics: soonest deadline on top.
+    if (_chat.kind == 'tasks') {
+      final children = <Widget>[];
+      String? lastDay;
+      for (final e in entries) {
+        final day = fmtDay(e.ts, tr);
+        if (day != lastDay) {
+          lastDay = day;
+          children.add(pill(day));
+        }
+        children.add(makeRow(e));
+      }
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        children: children,
+      );
+    }
+
+    // Messenger mode, like Telegram: newest at bottom, view pinned to the bottom.
+    // NOTE: sortedEntriesFor returns newest-first already.
+    final children = <Widget>[];
+    String? currentDay;
+    for (final e in entries) {
+      final day = fmtDay(e.ts, tr);
+      if (currentDay != null && day != currentDay) {
+        children.add(pill(currentDay!));
+      }
+      currentDay = day;
+      children.add(makeRow(e));
+    }
+    if (currentDay != null) children.add(pill(currentDay!));
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       children: children,
     );
   }
@@ -1452,20 +1508,25 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
       color: p.bgList,
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          PopupMenuButton<AttachOption>(
-            icon: Icon(Icons.attach_file, color: p.textSoft),
-            color: p.modalBg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            tooltip: 'attach',
-            onSelected: (v) async {
-              switch (v) {
-                case AttachOption.photo:
-                  await _pickImage();
-                  break;
-                case AttachOption.todo:
-                  final items = await showTodoEditorDialog(context, model);
+          if (_pendingImagePath != null) _buildPendingImageBar(model),
+          Row(
+            children: [
+              PopupMenuButton<AttachOption>(
+                icon: Icon(Icons.attach_file, color: p.textSoft),
+                color: p.modalBg,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                tooltip: 'attach',
+                onSelected: (v) async {
+                  switch (v) {
+                    case AttachOption.photo:
+                      await _pickImage();
+                      break;
+                    case AttachOption.todo:
+                      HapticFeedback.lightImpact();
+                      final items = await showTodoEditorDialog(context, model);
                   if (items == null || items.isEmpty) return;
                   int? dueAt;
                   String? recurrence;
@@ -1548,17 +1609,14 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: TextField(
                 controller: _text,
-                onChanged: (_) => setState(() {}),
                 style: TextStyle(color: p.text, fontSize: 14.5),
                 minLines: 1,
                 maxLines: 4,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.send,
-                onSubmitted: (_) {
-                  if (_text.text.trim().isNotEmpty) _sendText();
-                },
+                onSubmitted: (_) => _submitComposer(),
                 decoration: InputDecoration(
-                  hintText: model.tr('message_hint'),
+                  hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
                   hintStyle: TextStyle(color: p.textFaint),
                   border: InputBorder.none,
                   isDense: true,
@@ -1568,28 +1626,60 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          if (_text.text.isNotEmpty)
-            GestureDetector(
-              onLongPressStart: (d) => _scheduleTextAt(d.globalPosition),
-              child: IconButton.filled(
-                icon: const Icon(Icons.send, color: Colors.white),
-                style: IconButton.styleFrom(backgroundColor: p.accent),
-                onPressed: _sendText,
-              ),
-            )
-          else
-            GestureDetector(
-              onLongPressStart: (d) => _beginRecord(),
-              onLongPressMoveUpdate: _onRecDrag,
-              onLongPressEnd: _endRecPress,
-              onLongPressCancel: () => _finishRecord(send: true),
-              child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
-                child: Icon(Icons.mic, color: Colors.white, size: 24),
-              ),
-            ),
+          ListenableBuilder(
+            listenable: _text,
+            builder: (context, _) {
+              final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
+              return hasSomething
+                  ? GestureDetector(
+                      onLongPressStart: (d) => _scheduleTextAt(d.globalPosition),
+                      child: IconButton.filled(
+                        icon: const Icon(Icons.send, color: Colors.white),
+                        style: IconButton.styleFrom(backgroundColor: p.accent),
+                        onPressed: _submitComposer,
+                      ),
+                    )
+                  : GestureDetector(
+                      onLongPressStart: (d) => _beginRecord(),
+                      onLongPressMoveUpdate: _onRecDrag,
+                      onLongPressEnd: _endRecPress,
+                      onLongPressCancel: () => _finishRecord(send: true),
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
+                        child: Icon(Icons.mic, color: Colors.white, size: 24),
+                      ),
+                    );
+            },
+          ),
+        ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingImageBar(AppModel model) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(46, 4, 4, 6),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.file(File(_pendingImagePath!), width: 52, height: 52, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(model.tr('photo'), style: TextStyle(fontSize: 13.5, color: p.textSoft)),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 20, color: p.textFaint),
+            tooltip: model.tr('cancel'),
+            onPressed: () => setState(() => _pendingImagePath = null),
+          ),
         ],
       ),
     );

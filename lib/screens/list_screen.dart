@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/models.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
+import 'chat_edit_screen.dart';
 import 'chat_screen.dart';
+import 'folders_edit_screen.dart';
 import 'settings_screen.dart';
 
 class ListScreen extends StatefulWidget {
@@ -48,7 +51,10 @@ class _ListScreenState extends State<ListScreen> {
   }
 
   Future<void> _newChat() async {
-    final chat = await showChatEditDialog(context, widget.model);
+    final chat = await Navigator.push<Chat>(
+      context,
+      MaterialPageRoute(builder: (_) => ChatEditScreen(model: widget.model)),
+    );
     if (chat == null) return;
     chat.folderId = _folderFilter;
     widget.model.state.chats.add(chat);
@@ -74,7 +80,10 @@ class _ListScreenState extends State<ListScreen> {
         chat.folderId = folderId.isEmpty ? null : folderId;
       case ChatAction.edit:
         if (!mounted) return;
-        final result = await showChatEditDialog(context, model, chat: chat);
+        final result = await Navigator.push<Chat>(
+          context,
+          MaterialPageRoute(builder: (_) => ChatEditScreen(model: model, chat: chat)),
+        );
         if (result == null) return;
       case ChatAction.delete:
         if (!mounted) return;
@@ -98,11 +107,18 @@ class _ListScreenState extends State<ListScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
       items: [
+        PopupMenuItem(value: 'reorder', child: Row(children: [Icon(Icons.swap_vert, size: 18, color: model.p.accent), const SizedBox(width: 10), Text(model.tr('folders_reorder'), style: TextStyle(color: model.p.text))])),
         PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: model.p.accent), const SizedBox(width: 10), Text(model.tr('edit_folder'), style: TextStyle(color: model.p.text))])),
         PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 10), Text(model.tr('delete_folder_title'), style: TextStyle(color: Colors.redAccent))])),
       ],
     );
     if (action == null) return;
+    if (action == 'reorder') {
+      if (!mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)));
+      if (mounted) setState(() {});
+      return;
+    }
     if (action == 'edit') {
       if (!mounted) return;
       final name = await showFolderNameDialog(context, model, initial: folder.name);
@@ -221,7 +237,10 @@ class _ListScreenState extends State<ListScreen> {
       final entries = model.state.entriesFor(chat.id);
       final last = entries.isEmpty ? null : entries.last;
       rows.add(GestureDetector(
-        onLongPressStart: (d) => _chatCtxAt(chat, d.globalPosition),
+        onLongPressStart: (d) {
+          HapticFeedback.lightImpact();
+          _chatCtxAt(chat, d.globalPosition);
+        },
         child: ChatRow(
           chat: chat,
           p: p,
@@ -248,15 +267,6 @@ class _ListScreenState extends State<ListScreen> {
         Expanded(child: ListView(children: rows)),
       ],
     );
-  }
-
-  void _reorderFolders(int oldIndex, int newIndex) {
-    final folders = widget.model.state.folders;
-    if (newIndex > oldIndex) newIndex--;
-    final item = folders.removeAt(oldIndex);
-    folders.insert(newIndex, item);
-    widget.model.save();
-    if (mounted) setState(() {});
   }
 
   Widget _buildFolderTabs(AppModel model, Palette p, String Function(String, [List<String>?]) tr) {
@@ -297,59 +307,51 @@ class _ListScreenState extends State<ListScreen> {
           ),
         );
 
-    // Reorderable folders only
+    // Folder chips: tap = filter, long-press = context menu, reorder via edit screen
     final folders = model.state.folders;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Row(
-        children: [
-          chip(
-            label: tr('all_chats'),
-            icon: Icons.chat_bubble_outline_rounded,
-            selected: _folderFilter == null,
-            onTap: () => setState(() => _folderFilter = null),
-          ),
-          const SizedBox(width: 6),
-          if (folders.isEmpty)
-            const SizedBox.shrink()
-          else
-            Expanded(
-              child: SizedBox(
-                height: 34,
-                child: ReorderableListView(
-                  scrollDirection: Axis.horizontal,
-                  buildDefaultDragHandles: true,
-                  onReorder: _reorderFolders,
-                  proxyDecorator: (child, index, anim) => Material(color: Colors.transparent, child: child),
-                  children: [
-                    for (int i = 0; i < folders.length; i++)
-                      Padding(
-                        key: ValueKey(folders[i].id),
-                        padding: const EdgeInsets.only(right: 6),
-                        child: GestureDetector(
-                          onLongPressStart: (d) => _folderCtxAt(folders[i], d.globalPosition),
-                          child: chip(
-                            label: folders[i].name,
-                            icon: Icons.folder_outlined,
-                            selected: _folderFilter == folders[i].id,
-                            onTap: () => setState(() => _folderFilter = folders[i].id),
-                            trailing: Icon(Icons.drag_indicator, size: 12, color: _folderFilter == folders[i].id ? Colors.white70 : p.textFaint),
-                          ),
-                        ),
-                      ),
-                  ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            chip(
+              label: tr('all_chats'),
+              icon: Icons.chat_bubble_outline_rounded,
+              selected: _folderFilter == null,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _folderFilter = null);
+              },
+            ),
+            for (final f in folders) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onLongPressStart: (d) {
+                  HapticFeedback.lightImpact();
+                  _folderCtxAt(f, d.globalPosition);
+                },
+                child: chip(
+                  label: f.name,
+                  icon: Icons.folder_outlined,
+                  selected: _folderFilter == f.id,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _folderFilter = f.id);
+                  },
                 ),
               ),
+            ],
+            const SizedBox(width: 6),
+            chip(
+              label: tr('new_folder'),
+              icon: Icons.create_new_folder_outlined,
+              selected: false,
+              onTap: _newFolder,
             ),
-          if (folders.isNotEmpty) const SizedBox(width: 2),
-          chip(
-            label: tr('new_folder'),
-            icon: Icons.create_new_folder_outlined,
-            selected: false,
-            onTap: _newFolder,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
