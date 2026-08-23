@@ -30,8 +30,6 @@ const chatKinds = [
   ('note', '📝'),
   ('rss', '📡'),
   ('tasks', '✅'),
-  ('diary', '📔'),
-  ('project', '🚀'),
 ];
 
 /// Rule that pulls entries from other chats into this one ("flexible chats"):
