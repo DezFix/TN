@@ -132,12 +132,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final Map<String, BuildContext> _bubbleContexts = {};
 
-  /// Due chip: today shows only the time, other days prepend the date.
+  /// Due chip: today shows only the time, other days a compact numeric date.
   String _fmtDue(int ms, String Function(String, [List<String>?]) tr) {
     final d = DateTime.fromMillisecondsSinceEpoch(ms);
     final now = DateTime.now();
     final today = d.year == now.year && d.month == now.month && d.day == now.day;
-    return today ? fmtTime(ms) : '${fmtDay(ms, tr)} ${fmtTime(ms)}';
+    String two(int v) => v.toString().padLeft(2, '0');
+    final date = d.year == now.year
+        ? '${d.day}.${two(d.month)}'
+        : '${d.day}.${two(d.month)}.${d.year % 100}';
+    return today ? fmtTime(ms) : '$date ${fmtTime(ms)}';
   }
 
   // ---------------- actions ----------------
