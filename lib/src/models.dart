@@ -163,7 +163,6 @@ class Entry {
     this.mediaSize,
     this.duration,
     this.items,
-    this.scheduledAt,
     this.waveform,
     this.recurrence,
     this.recurrenceDays,
@@ -182,14 +181,14 @@ class Entry {
   String? mediaSize;
   int? duration;
   List<TodoItem>? items;
-  int? scheduledAt; // epoch millis; set while message is delayed
+  // Delayed send was removed in v7.6: legacy `scheduledAt` values from old
+  // backups are intentionally ignored on load and never written back.
   List<int>? waveform; // 0..100 amplitude bars for voice messages
   String? recurrence; // null | 'daily' | 'weekly'
   List<int>? recurrenceDays; // 1=Mon..7=Sun for weekly
   int? dueAt; // for tasks-chat todos: deadline millis
   int? editedAt; // millis when last edited
 
-  bool get isScheduled => scheduledAt != null;
   bool get isEdited => editedAt != null;
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
@@ -203,7 +202,6 @@ class Entry {
         mediaName: j['mediaName'] as String?,
         mediaSize: j['mediaSize'] as String?,
         duration: (j['duration'] as num?)?.toInt(),
-        scheduledAt: (j['scheduledAt'] as num?)?.toInt(),
         waveform: (j['waveform'] as List?)?.map((e) => (e as num).toInt()).toList(),
         recurrence: j['recurrence'] as String?,
         recurrenceDays:
@@ -227,7 +225,6 @@ class Entry {
         'mediaSize': mediaSize,
         'duration': duration,
         'items': items?.map((i) => i.toJson()).toList(),
-        if (scheduledAt != null) 'scheduledAt': scheduledAt,
         if (waveform != null) 'waveform': waveform,
         if (recurrence != null) 'recurrence': recurrence,
         if (recurrenceDays != null) 'recurrenceDays': recurrenceDays,

@@ -362,102 +362,6 @@ class _ChatScreenState extends State<ChatScreen> {
     await _audioPlayer.play(DeviceFileSource(path));
   }
 
-  Future<void> _scheduleTextAt(Offset globalPos) async {
-    final text = _text.text.trim();
-    if (text.isEmpty) return;
-    final model = widget.model;
-    final option = await showSendMenuPopup(context, model, globalPos);
-    if (option == null || !mounted) return;
-
-    DateTime? when;
-    String? recurrence;
-    List<int>? days;
-
-    switch (option) {
-      case SendOption.later:
-        when = await showReminderPicker(context, model);
-      case SendOption.daily:
-        if (!mounted) return;
-        final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-        if (time == null) return;
-        final now = DateTime.now();
-        var next = DateTime(now.year, now.month, now.day, time.hour, time.minute);
-        if (!next.isAfter(now)) next = next.add(const Duration(days: 1));
-        when = next;
-        recurrence = 'daily';
-      case SendOption.weekly:
-        final picked = await showWeekdayPickerDialog(context, model, const []);
-        if (picked == null || picked.isEmpty || !mounted) return;
-        final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-        if (time == null) return;
-        final now = DateTime.now();
-        var cand = DateTime(now.year, now.month, now.day, time.hour, time.minute);
-        do {
-          cand = cand.add(const Duration(days: 1));
-        } while (!picked.contains(cand.weekday));
-        when = cand;
-        recurrence = 'weekly';
-        days = picked;
-      case SendOption.custom:
-        final res = await showCustomScheduleDialog(context, model);
-        if (res == null) return;
-        when = res['when'] as DateTime?;
-        recurrence = res['recurrence'] as String?;
-        days = res['days'] as List<int>?;
-        final isTask = res['isTask'] as bool? ?? false;
-        if (when == null) return;
-        if (isTask) {
-          // create as task instead of text
-          final entryTask = Entry(id: uid('e'), chatId: widget.chatId, type: 'todo', ts: DateTime.now().millisecondsSinceEpoch, items: [TodoItem(id: uid('t'), text: text)], dueAt: when.millisecondsSinceEpoch, recurrence: recurrence, recurrenceDays: days);
-          _text.clear();
-          model.state.entries.add(entryTask);
-          await model.save();
-          if (entryTask.dueAt != null) {
-            await RemindersService.instance.requestPermissions();
-            await RemindersService.instance.schedule(Reminder(id: entryTask.id, chatId: widget.chatId, when: entryTask.dueAt!), model.tr('remind_title', [_chat.name]), entryNotifBody(entryTask, model.tr));
-          }
-          if (mounted) setState(() {});
-          return;
-        }
-    }
-
-    if (when == null) return;
-    final whenMs = when.millisecondsSinceEpoch;
-    // In tasks chats even delayed messages are to-dos.
-    final isTasksChat = _chat.kind == 'tasks';
-    final entry = Entry(
-      id: uid('e'),
-      chatId: widget.chatId,
-      type: isTasksChat ? 'todo' : 'text',
-      ts: DateTime.now().millisecondsSinceEpoch,
-      text: isTasksChat ? '' : text,
-      tags: isTasksChat ? const <String>[] : extractTags(text),
-      items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
-      scheduledAt: whenMs,
-      recurrence: recurrence,
-      recurrenceDays: days,
-    );
-    _text.clear();
-    model.state.entries.add(entry);
-    await model.save();
-    // Fallback notification in case the app is closed at send time.
-    await RemindersService.instance.requestPermissions();
-    await RemindersService.instance.schedule(
-      Reminder(id: entry.id, chatId: widget.chatId, when: whenMs),
-      widget.model.tr('sched_notif_title'),
-      entryNotifBody(entry, widget.model.tr),
-    );
-    if (mounted) {
-      setState(() {});
-      _toast(widget.model.tr(
-        'scheduled_at',
-        ['${fmtDay(whenMs, widget.model.tr)} ${fmtTime(whenMs)}'],
-      ));
-    }
-  }
-
-
-
   void _showImage(Entry entry) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => FutureBuilder<String>(
@@ -717,25 +621,6 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.entries.removeWhere((e) => e.id == entry.id);
         await widget.model.save();
         if (mounted) setState(() {});
-        break;
-      case EntryAction.scheduleLater:
-        final when = await showReminderPicker(context, widget.model);
-        if (when == null) return;
-        entry.scheduledAt = when.millisecondsSinceEpoch;
-        await widget.model.save();
-        await RemindersService.instance.requestPermissions();
-        await RemindersService.instance.schedule(Reminder(id: entry.id, chatId: entry.chatId, when: when.millisecondsSinceEpoch), widget.model.tr('sched_notif_title'), widget.model.tr('sched_notif_body', [_chat.name]));
-        if (mounted) setState(() {});
-        break;
-      case EntryAction.cancelSchedule:
-        await RemindersService.instance.cancelById(entry.id.hashCode);
-        await MediaStore().remove(entry.media);
-        widget.model.state.entries.removeWhere((e) => e.id == entry.id);
-        await widget.model.save();
-        if (mounted) {
-          setState(() {});
-          _toast(widget.model.tr('cancel_schedule_done'));
-        }
         break;
     }
   }
@@ -1064,38 +949,7 @@ class _ChatScreenState extends State<ChatScreen> {
           bottomRight: Radius.circular(3),
         ),
       ),
-      child: entry.isScheduled
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: p.accent.withValues(alpha: .15),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        entry.recurrence == null ? Icons.schedule : Icons.repeat,
-                        size: 13,
-                        color: p.accent,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        model.tr('scheduled_at', [
-                          '${fmtDay(entry.scheduledAt!, model.tr)} ${fmtTime(entry.scheduledAt!)}',
-                        ]),
-                        style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                Opacity(opacity: .75, child: content),
-              ],
-            )
-          : content,
+      child: content,
     );
   }
 
@@ -1519,7 +1373,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   int? dueAt;
                   String? recurrence;
                   List<int>? recurrenceDays;
-                  if (_chat.kind == 'tasks') {
+                  {
                     if (!mounted) return;
                     final when = await showReminderPicker(context, model);
                     if (when != null) dueAt = when.millisecondsSinceEpoch;
@@ -1619,13 +1473,10 @@ class _ChatScreenState extends State<ChatScreen> {
             builder: (context, _) {
               final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
               return hasSomething
-                  ? GestureDetector(
-                      onLongPressStart: (d) => _scheduleTextAt(d.globalPosition),
-                      child: IconButton.filled(
-                        icon: const Icon(Icons.send, color: Colors.white),
-                        style: IconButton.styleFrom(backgroundColor: p.accent),
-                        onPressed: _submitComposer,
-                      ),
+                  ? IconButton.filled(
+                      icon: const Icon(Icons.send, color: Colors.white),
+                      style: IconButton.styleFrom(backgroundColor: p.accent),
+                      onPressed: _submitComposer,
                     )
                   : GestureDetector(
                       onLongPressStart: (d) => _beginRecord(),

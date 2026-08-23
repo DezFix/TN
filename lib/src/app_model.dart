@@ -1,11 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'i18n.dart';
 import 'models.dart';
-import 'reminders.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'widget_bridge.dart';
@@ -17,7 +14,6 @@ class AppModel extends ChangeNotifier {
 
   final AppState state;
   late String Function(String, [List<String>?]) tr;
-  Timer? _schedTicker;
   int _stamp = DateTime.now().millisecondsSinceEpoch;
 
   Palette get p => paletteFor(state.theme);
@@ -45,7 +41,7 @@ class AppModel extends ChangeNotifier {
     _stamp = DateTime.now().millisecondsSinceEpoch;
     // Fire-and-forget: the native widget update must not block saving
     // (in tests the method channel has no handler).
-    unawaited(WidgetBridge.refresh());
+    WidgetBridge.refresh().catchError((_) {});
   }
 
   /// Applies changes written by another writer (home-screen widget) while the
@@ -83,103 +79,6 @@ class AppModel extends ChangeNotifier {
   }
 
   void refresh() => notifyListeners();
-
-  // ---------------- scheduled messages ----------------
-
-  void startScheduler() {
-    _schedTicker?.cancel();
-    releaseDueScheduled(notify: false);
-    _schedTicker = Timer.periodic(const Duration(seconds: 20), (_) {
-      releaseDueScheduled();
-    });
-  }
-
-  void stopScheduler() {
-    _schedTicker?.cancel();
-    _schedTicker = null;
-  }
-
-  List<Entry> dueScheduledEntries({int? nowMs}) {
-    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
-    return state.entries
-        .where((e) => e.scheduledAt != null && e.scheduledAt! <= now)
-        .toList();
-  }
-
-  Future<void> releaseDueScheduled({bool notify = true}) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final due = dueScheduledEntries(nowMs: now);
-    if (due.isEmpty) return;
-    for (final e in due) {
-      if (e.recurrence != null) {
-        // Recurring: spawn a real message copy, move template to next slot.
-        state.entries.add(Entry(
-          id: uid('e'),
-          chatId: e.chatId,
-          type: e.type,
-          ts: e.scheduledAt!,
-          text: e.text,
-          tags: List.of(e.tags),
-          media: e.media,
-          mediaName: e.mediaName,
-          mediaSize: e.mediaSize,
-          duration: e.duration,
-          items: e.items
-              ?.map((i) => TodoItem(id: i.id, text: i.text, done: i.done))
-              .toList(),
-          waveform: e.waveform == null ? null : List.of(e.waveform!),
-        ));
-        final next = nextOccurrenceMs(e);
-        e.scheduledAt = next;
-        await RemindersService.instance.schedule(
-          Reminder(id: e.id, chatId: e.chatId, when: next),
-          tr('sched_notif_title'),
-          _notifBody(e),
-        );
-        continue;
-      }
-      e.scheduledAt = null;
-      // If released long after the target time, the fallback notification
-      // has most likely already fired — don't duplicate it.
-      if (now - e.ts < 90 * 1000) {
-        await RemindersService.instance.cancelById(e.id.hashCode);
-        await RemindersService.instance.showNow(
-          id: e.id.hashCode,
-          title: tr('sched_notif_title'),
-          body: _notifBody(e),
-        );
-      }
-    }
-    await state.save();
-    if (notify) notifyListeners();
-  }
-
-  String _chatName(String chatId) {
-    final chat = state.chatById(chatId);
-    return chat?.name ?? '';
-  }
-
-  String _notifBody(Entry e) {
-    final t = entryNotifBody(e, tr);
-    return t.isEmpty ? tr('sched_notif_body', [_chatName(e.chatId)]) : t;
-  }
-}
-
-/// Next fire time for a recurring entry. Daily: same time tomorrow.
-/// Weekly: first selected weekday after the current occurrence.
-int nextOccurrenceMs(Entry e) {
-  final cur = DateTime.fromMillisecondsSinceEpoch(e.scheduledAt ?? e.ts);
-  var candidate = cur.add(const Duration(days: 1));
-  if (e.recurrence == 'weekly') {
-    final days = e.recurrenceDays ?? const <int>[];
-    var guard = 0;
-    while (!days.contains(candidate.weekday) && guard < 8) {
-      candidate = candidate.add(const Duration(days: 1));
-      guard++;
-    }
-  }
-  return DateTime(candidate.year, candidate.month, candidate.day, cur.hour, cur.minute)
-      .millisecondsSinceEpoch;
 }
 
 String fmtTime(int ts) {

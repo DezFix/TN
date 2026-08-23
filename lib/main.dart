@@ -142,7 +142,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     final model = AppModel();
     await model.load();
     await RemindersService.instance.init();
-    model.startScheduler();
     try {
       final prefs = await SharedPreferences.getInstance();
       _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);

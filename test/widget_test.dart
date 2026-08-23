@@ -29,7 +29,6 @@ void main() {
     await tester.pumpWidget(const TN());
     await tester.pumpAndSettle();
     expect(find.byType(ListScreen), findsOneWidget);
-    tester.widget<ListScreen>(find.byType(ListScreen)).model.stopScheduler();
   });
 
   testWidgets('list shows chats; search finds entries', (tester) async {
@@ -94,8 +93,7 @@ void main() {
     expect(find.text('позвонить'), findsOneWidget);
   });
 
-  testWidgets('chat screen: scheduled entry shows clock badge and waveform bubble',
-      (tester) async {
+  testWidgets('chat screen: waveform bubble renders', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final state = AppState();
     state.chats.add(Chat(id: 'c1', name: 'Идеи', color: '#2AABEE'));
@@ -105,8 +103,7 @@ void main() {
         chatId: 'c1',
         type: 'text',
         ts: now,
-        text: 'напоминание о деле',
-        scheduledAt: now + 3600000));
+        text: 'напоминание о деле'));
     state.entries.add(Entry(
         id: 'e2',
         chatId: 'c1',
@@ -121,7 +118,6 @@ void main() {
     ));
 
     expect(find.text('напоминание о деле'), findsOneWidget);
-    expect(find.byIcon(Icons.schedule), findsOneWidget);
     expect(find.byIcon(Icons.play_circle), findsOneWidget);
   });
 }
