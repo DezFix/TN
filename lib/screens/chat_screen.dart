@@ -993,23 +993,29 @@ class _ChatScreenState extends State<ChatScreen> {
         },
         child: bubble,
       );
-      if (_selecting) {
-        row = Row(
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        color: isSelected ? p.accent.withValues(alpha: .08) : Colors.transparent,
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Checkbox(
-              value: isSelected,
-              activeColor: p.accent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              onChanged: (_) => _toggleSelect(e.id),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerLeft,
+              child: _selecting
+                  ? Checkbox(
+                      value: isSelected,
+                      activeColor: p.accent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      onChanged: (_) => _toggleSelect(e.id),
+                    )
+                  : const SizedBox.shrink(),
             ),
             Expanded(child: row),
           ],
-        );
-      }
-      return Container(
-        color: isSelected ? p.accent.withValues(alpha: .08) : null,
-        child: row,
+        ),
       );
     }
 

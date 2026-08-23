@@ -101,6 +101,12 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                 useMaterial3: true,
                 colorScheme: scheme,
                 scaffoldBackgroundColor: p.bgList,
+                pageTransitionsTheme: const PageTransitionsTheme(
+                  builders: {
+                    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                  },
+                ),
                 snackBarTheme: SnackBarThemeData(
                   backgroundColor: p.bgChat,
                   contentTextStyle: TextStyle(color: p.text),

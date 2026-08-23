@@ -236,9 +236,25 @@ class _ListScreenState extends State<ListScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: _selecting
-                  ? _buildSelectionBar(model, p, tr)
-                  : Row(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SlideTransition(
+                    position: Tween(begin: const Offset(0, -0.2), end: Offset.zero).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: _selecting
+                    ? KeyedSubtree(
+                        key: const ValueKey('sel'),
+                        child: _buildSelectionBar(model, p, tr),
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('search'),
+                        child: Row(
                 children: [
                   Expanded(
                     child: TextField(
@@ -266,19 +282,27 @@ class _ListScreenState extends State<ListScreen> {
                     onPressed: _openSettings,
                   ),
                 ],
-              ),
+                      ),
+                      ),
             ),
+                ),
             Expanded(child: body),
           ],
         ),
       ),
-      floatingActionButton: (_q.isEmpty && !_selecting)
-          ? FloatingActionButton(
-              backgroundColor: p.accent,
-              onPressed: _newChat,
-              child: const Icon(Icons.edit, color: Colors.white),
-            )
-          : null,
+      floatingActionButton: AnimatedScale(
+        scale: (_q.isEmpty && !_selecting) ? 1 : 0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: IgnorePointer(
+          ignoring: _q.isNotEmpty || _selecting,
+          child: FloatingActionButton(
+            backgroundColor: p.accent,
+            onPressed: _newChat,
+            child: const Icon(Icons.edit, color: Colors.white),
+          ),
+        ),
+      ),
     );
   }
 
@@ -316,23 +340,22 @@ class _ListScreenState extends State<ListScreen> {
     final rows = <Widget>[];
     if (archived.isNotEmpty) {
       rows.add(_buildArchiveHeader(model, p, tr, archived.length));
-    }
-    if (_showArchive && archived.isNotEmpty) {
-      for (final chat in archived) {
-        final entries = model.state.entriesFor(chat.id);
-        final last = entries.isEmpty ? null : entries.last;
-        rows.add(_buildChatRow(chat, p, tr,
-            preview: last == null ? tr('no_entries') : entryPreview(last, tr),
-            time: last == null ? '' : fmtTime(last.ts)));
-      }
-      rows.add(const SizedBox(height: 8));
+      rows.add(AnimatedSize(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        child: !_showArchive
+            ? const SizedBox(width: double.infinity)
+            : Column(
+                children: [
+                  for (final chat in archived)
+                    _chatListRow(model, p, tr, chat),
+                  const SizedBox(height: 8),
+                ],
+              ),
+      ));
     }
     for (final chat in visible) {
-      final entries = model.state.entriesFor(chat.id);
-      final last = entries.isEmpty ? null : entries.last;
-      rows.add(_buildChatRow(chat, p, tr,
-          preview: last == null ? tr('no_entries') : entryPreview(last, tr),
-          time: last == null ? '' : fmtTime(last.ts)));
+      rows.add(_chatListRow(model, p, tr, chat));
     }
     if (rows.isEmpty) {
       rows.add(Padding(
@@ -356,6 +379,15 @@ class _ListScreenState extends State<ListScreen> {
         ),
       ],
     );
+  }
+
+  Widget _chatListRow(AppModel model, Palette p,
+      String Function(String, [List<String>?]) tr, Chat chat) {
+    final entries = model.state.entriesFor(chat.id);
+    final last = entries.isEmpty ? null : entries.last;
+    return _buildChatRow(chat, p, tr,
+        preview: last == null ? tr('no_entries') : entryPreview(last, tr),
+        time: last == null ? '' : fmtTime(last.ts));
   }
 
   Widget _buildArchiveHeader(AppModel model, Palette p,
