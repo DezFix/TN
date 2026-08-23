@@ -979,14 +979,10 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       Widget row = GestureDetector(
         onTap: _selecting ? () => _toggleSelect(e.id) : null,
-        onLongPressStart: _selecting
-            ? null
-            : (d) async {
-                HapticFeedback.lightImpact();
-                final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
-                if (action != null) await _onCtxAction(e, action);
-              },
-        onLongPress: _selecting ? () => _toggleSelect(e.id) : null,
+        onLongPressStart: (d) {
+          HapticFeedback.mediumImpact();
+          _toggleSelect(e.id);
+        },
         onSecondaryTapDown: (d) async {
           if (_selecting) {
             _toggleSelect(e.id);

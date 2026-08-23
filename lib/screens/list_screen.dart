@@ -406,51 +406,53 @@ class _ListScreenState extends State<ListScreen> {
     return GestureDetector(
       onTap: () => _onRowTap(chat),
       onLongPressStart: (_) => _onRowLongPress(chat),
-      child: Stack(
-        children: [
-          Container(
-            color:
-                selected ? p.accent.withValues(alpha: 0.14) : Colors.transparent,
-            child: ChatRow(
+      child: Container(
+        color:
+            selected ? p.accent.withValues(alpha: 0.14) : Colors.transparent,
+        child: Stack(
+          children: [
+            ChatRow(
               chat: chat,
               p: p,
               preview: preview,
               time: time,
               onTap: () => _onRowTap(chat),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: _selecting ? 1 : 0,
-                duration: const Duration(milliseconds: 150),
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: selected ? p.accent : Colors.transparent,
-                        border: Border.all(
-                          color: selected ? p.accent : p.textFaint,
-                          width: 2,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _selecting ? 1 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected
+                              ? p.accent
+                              : (p.name == 'dark' ? p.bgList : Colors.white),
+                          border: Border.all(
+                            color: selected ? p.accent : p.textFaint,
+                            width: 2,
+                          ),
                         ),
+                        child: selected
+                            ? const Icon(Icons.check,
+                                size: 22, color: Colors.white)
+                            : null,
                       ),
-                      child: selected
-                          ? const Icon(Icons.check,
-                              size: 16, color: Colors.white)
-                          : null,
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
