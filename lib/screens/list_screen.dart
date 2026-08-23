@@ -22,8 +22,15 @@ class ListScreen extends StatefulWidget {
 
 class _ListScreenState extends State<ListScreen> {
   final _search = TextEditingController();
+  final _listCtrl = ScrollController();
   String _q = '';
   String? _folderFilter; // null = all chats
+  final Set<String> _sel = {};
+  bool _showArchive = false;
+  double _topOver = 0;
+  double _botOver = 0;
+
+  bool get _selecting => _sel.isNotEmpty;
 
   @override
   void initState() {
@@ -35,6 +42,7 @@ class _ListScreenState extends State<ListScreen> {
   void dispose() {
     widget.model.removeListener(_onModel);
     _search.dispose();
+    _listCtrl.dispose();
     super.dispose();
   }
 
@@ -64,37 +72,101 @@ class _ListScreenState extends State<ListScreen> {
     await _openChat(chat);
   }
 
-  Future<void> _chatCtxAt(Chat chat, Offset globalPos) async {
+  void _onRowTap(Chat chat) {
+    if (_selecting) {
+      setState(() {
+        if (!_sel.remove(chat.id)) _sel.add(chat.id);
+      });
+    } else {
+      _openChat(chat);
+    }
+  }
+
+  void _onRowLongPress(Chat chat) {
+    HapticFeedback.mediumImpact();
+    if (_selecting) {
+      setState(() {
+        if (!_sel.remove(chat.id)) _sel.add(chat.id);
+      });
+    } else {
+      setState(() => _sel.add(chat.id));
+    }
+  }
+
+  Future<void> _bulkPin() async {
     final model = widget.model;
-    final action = await showChatCtxPopup(context, model, chat, globalPos);
-    if (action == null) return;
-    switch (action) {
-      case ChatAction.pin:
-        chat.pinned = true;
-      case ChatAction.unpin:
-        chat.pinned = false;
-      case ChatAction.moveToFolder:
-        if (!mounted) return;
-        final folderId = await showMoveToFolderPopup(context, model, globalPos);
-        if (folderId == null) return;
-        chat.folderId = folderId.isEmpty ? null : folderId;
-      case ChatAction.edit:
-        if (!mounted) return;
-        final result = await Navigator.push<Chat>(
-          context,
-          MaterialPageRoute(builder: (_) => ChatEditScreen(model: model, chat: chat)),
-        );
-        if (result == null) return;
-      case ChatAction.delete:
-        if (!mounted) return;
-        final ok = await showDeleteChatDialog(context, model);
-        if (ok != true) return;
-        model.state.chats.removeWhere((c) => c.id == chat.id);
-        model.state.entries.removeWhere((e) => e.chatId == chat.id);
-        model.state.reminders.removeWhere((r) => r.chatId == chat.id);
+    final anyUnpinned = model.state.chats.any((c) => _sel.contains(c.id) && !c.pinned);
+    for (final c in model.state.chats) {
+      if (_sel.contains(c.id)) c.pinned = anyUnpinned;
     }
     await model.save();
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _sel.clear());
+  }
+
+  Future<void> _bulkFolder(Offset pos) async {
+    final model = widget.model;
+    if (!mounted) return;
+    final folderId = await showMoveToFolderPopup(context, model, pos);
+    if (folderId == null) return;
+    for (final c in model.state.chats) {
+      if (_sel.contains(c.id)) c.folderId = folderId.isEmpty ? null : folderId;
+    }
+    await model.save();
+    if (mounted) setState(() => _sel.clear());
+  }
+
+  Future<void> _bulkArchive(bool toArchive) async {
+    final model = widget.model;
+    for (final c in model.state.chats) {
+      if (_sel.contains(c.id)) {
+        c.archived = toArchive;
+        if (toArchive) c.pinned = false;
+      }
+    }
+    await model.save();
+    if (!mounted) return;
+    setState(() {
+      _sel.clear();
+      if (toArchive) _showArchive = true;
+    });
+  }
+
+  Future<void> _bulkDelete() async {
+    final model = widget.model;
+    if (!mounted) return;
+    final ok = await showDeleteChatDialog(context, model);
+    if (ok != true) return;
+    model.state.chats.removeWhere((c) => _sel.contains(c.id));
+    model.state.entries.removeWhere((e) => _sel.contains(e.chatId));
+    model.state.reminders.removeWhere((r) => _sel.contains(r.chatId));
+    await model.save();
+    if (mounted) setState(() => _sel.clear());
+  }
+
+  bool _onScrollNotification(Notification n) {
+    if (n is OverscrollNotification) {
+      final m = n.metrics;
+      if (m.pixels <= 0 && n.overscroll < 0) {
+        _topOver += n.overscroll;
+        if (!_showArchive && _topOver < -70) {
+          HapticFeedback.lightImpact();
+          setState(() => _showArchive = true);
+          if (_listCtrl.hasClients) {
+            _listCtrl.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          }
+        }
+      } else if (m.pixels >= m.maxScrollExtent && n.overscroll > 0) {
+        _botOver += n.overscroll;
+        if (_showArchive && _botOver > 70) {
+          HapticFeedback.lightImpact();
+          setState(() => _showArchive = false);
+        }
+      }
+    } else if (n is ScrollEndNotification) {
+      _topOver = 0;
+      _botOver = 0;
+    }
+    return false;
   }
 
   Future<void> _folderCtxAt(Folder folder, Offset globalPos) async {
@@ -164,7 +236,9 @@ class _ListScreenState extends State<ListScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
+              child: _selecting
+                  ? _buildSelectionBar(model, p, tr)
+                  : Row(
                 children: [
                   Expanded(
                     child: TextField(
@@ -198,7 +272,7 @@ class _ListScreenState extends State<ListScreen> {
           ],
         ),
       ),
-      floatingActionButton: _q.isEmpty
+      floatingActionButton: (_q.isEmpty && !_selecting)
           ? FloatingActionButton(
               backgroundColor: p.accent,
               onPressed: _newChat,
@@ -220,7 +294,14 @@ class _ListScreenState extends State<ListScreen> {
       );
     }
 
-    final visible = model.state.chats
+    final active = model.state.chats.where((c) => !c.archived).toList();
+    final archived = model.state.chats.where((c) => c.archived).toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+    final visible = active
         .where((c) => _folderFilter == null || c.folderId == _folderFilter)
         .toList()
       ..sort((a, b) {
@@ -233,22 +314,25 @@ class _ListScreenState extends State<ListScreen> {
       });
 
     final rows = <Widget>[];
+    if (archived.isNotEmpty) {
+      rows.add(_buildArchiveHeader(model, p, tr, archived.length));
+    }
+    if (_showArchive && archived.isNotEmpty) {
+      for (final chat in archived) {
+        final entries = model.state.entriesFor(chat.id);
+        final last = entries.isEmpty ? null : entries.last;
+        rows.add(_buildChatRow(chat, p, tr,
+            preview: last == null ? tr('no_entries') : entryPreview(last, tr),
+            time: last == null ? '' : fmtTime(last.ts)));
+      }
+      rows.add(const SizedBox(height: 8));
+    }
     for (final chat in visible) {
       final entries = model.state.entriesFor(chat.id);
       final last = entries.isEmpty ? null : entries.last;
-      rows.add(GestureDetector(
-        onLongPressStart: (d) {
-          HapticFeedback.lightImpact();
-          _chatCtxAt(chat, d.globalPosition);
-        },
-        child: ChatRow(
-          chat: chat,
-          p: p,
+      rows.add(_buildChatRow(chat, p, tr,
           preview: last == null ? tr('no_entries') : entryPreview(last, tr),
-          time: last == null ? '' : fmtTime(last.ts),
-          onTap: () => _openChat(chat),
-        ),
-      ));
+          time: last == null ? '' : fmtTime(last.ts)));
     }
     if (rows.isEmpty) {
       rows.add(Padding(
@@ -264,7 +348,151 @@ class _ListScreenState extends State<ListScreen> {
     return Column(
       children: [
         _buildFolderTabs(model, p, tr),
-        Expanded(child: ListView(children: rows)),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScrollNotification,
+            child: ListView(controller: _listCtrl, children: rows),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildArchiveHeader(AppModel model, Palette p,
+      String Function(String, [List<String>?]) tr, int count) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _showArchive = !_showArchive);
+        if (_showArchive && _listCtrl.hasClients) {
+          _listCtrl.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: p.bgChat,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(_showArchive ? Icons.archive : Icons.archive_outlined,
+                size: 20, color: p.accent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('${tr('archive')} · $count',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: p.text)),
+            ),
+            Icon(
+                _showArchive
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                size: 20,
+                color: p.textFaint),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatRow(Chat chat, Palette p,
+      String Function(String, [List<String>?]) tr,
+      {required String preview, required String time}) {
+    final selected = _sel.contains(chat.id);
+    return GestureDetector(
+      onTap: () => _onRowTap(chat),
+      onLongPressStart: (_) => _onRowLongPress(chat),
+      child: Stack(
+        children: [
+          Container(
+            color:
+                selected ? p.accent.withValues(alpha: 0.14) : Colors.transparent,
+            child: ChatRow(
+              chat: chat,
+              p: p,
+              preview: preview,
+              time: time,
+              onTap: () => _onRowTap(chat),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _selecting ? 1 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected ? p.accent : Colors.transparent,
+                        border: Border.all(
+                          color: selected ? p.accent : p.textFaint,
+                          width: 2,
+                        ),
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check,
+                              size: 16, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionBar(AppModel model, Palette p,
+      String Function(String, [List<String>?]) tr) {
+    final allArchived =
+        model.state.chats.any((c) => _sel.contains(c.id) && !c.archived) ==
+            false;
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(Icons.close, color: p.textSoft),
+          onPressed: () => setState(() => _sel.clear()),
+        ),
+        Expanded(
+          child: Text(tr('selected', ['${_sel.length}']),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.text)),
+        ),
+        IconButton(
+          icon: Icon(Icons.push_pin_outlined, color: p.textSoft),
+          tooltip: tr('pin'),
+          onPressed: _bulkPin,
+        ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _bulkFolder(d.globalPosition),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Icon(Icons.drive_file_move_outline, size: 24, color: p.textSoft),
+          ),
+        ),
+        IconButton(
+          icon: Icon(allArchived ? Icons.unarchive : Icons.archive_outlined,
+              color: p.textSoft),
+          tooltip: tr(allArchived ? 'from_archive' : 'to_archive'),
+          onPressed: () => _bulkArchive(!allArchived),
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+          onPressed: _bulkDelete,
+        ),
       ],
     );
   }

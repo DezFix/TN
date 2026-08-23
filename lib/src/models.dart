@@ -75,6 +75,7 @@ class Chat {
     required this.color,
     this.icon,
     this.pinned = false,
+    this.archived = false,
     this.folderId,
     this.kind = 'note',
     this.tasksHideDone = false,
@@ -89,6 +90,7 @@ class Chat {
   String color;
   String? icon;
   bool pinned = false;
+  bool archived = false;
   String? folderId;
   String kind = 'note';
   bool tasksHideDone = false;
@@ -103,6 +105,7 @@ class Chat {
         color: j['color'] as String? ?? appColors[0],
         icon: j['icon'] as String?,
         pinned: j['pinned'] as bool? ?? false,
+        archived: j['archived'] as bool? ?? false,
         folderId: j['folderId'] as String?,
         kind: j['kind'] as String? ?? 'note',
         tasksHideDone: j['tasksHideDone'] as bool? ?? false,
@@ -120,6 +123,7 @@ class Chat {
         'color': color,
         'icon': icon,
         'pinned': pinned,
+        'archived': archived,
         'kind': kind,
         'tasksHideDone': tasksHideDone,
         'notificationsEnabled': notificationsEnabled,

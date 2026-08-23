@@ -96,7 +96,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              themeMode: ThemeMode.light,
+              themeMode: effectiveTheme == 'dark' ? ThemeMode.dark : ThemeMode.light,
               theme: ThemeData(
                 useMaterial3: true,
                 colorScheme: scheme,

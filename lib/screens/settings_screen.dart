@@ -6,9 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
 import '../src/backup.dart';
+import '../src/dialogs.dart';
 import '../src/i18n.dart';
+import '../src/models.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
+import 'folders_edit_screen.dart';
 import 'widget_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -183,6 +186,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChangeEnd: (v) => _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
                 ),
                 Text('Для RSS и медиа', style: TextStyle(fontSize: 11, color: p.textFaint)),
+              ],
+            ),
+          ),
+          _sectionLabel(tr('folders'), p),
+          _card(
+            p,
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: () async {
+                    final name = await showFolderNameDialog(context, model);
+                    if (name == null) return;
+                    model.state.folders.add(Folder(id: uid('f'), name: name));
+                    await model.save();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('folder_created', [name]))));
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.create_new_folder_outlined, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('new_folder'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 20, color: Color(0xFF2A3441)),
+                InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_vert, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('folders_reorder'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
