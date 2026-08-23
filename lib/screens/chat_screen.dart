@@ -161,6 +161,86 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
+  /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
+  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays})>
+      _pickTaskSchedule() async {
+    final model = widget.model;
+    final p = model.p;
+    int? dueAt;
+    String? recurrence;
+    List<int>? recurrenceDays;
+    if (!mounted) return (dueAt: null, recurrence: null, recurrenceDays: null);
+    final when = await showReminderPicker(context, model);
+    if (when != null) dueAt = when.millisecondsSinceEpoch;
+    if (dueAt != null && mounted) {
+      final rec = await showDialog<SendOption>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          backgroundColor: p.modalBg,
+          title: Text('Повтор?', style: TextStyle(color: p.text, fontSize: 14)),
+          children: [
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.later), child: Text('Один раз', style: TextStyle(color: p.text))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.daily), child: Text('Каждый день', style: TextStyle(color: p.text))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('По дням недели', style: TextStyle(color: p.text))),
+          ],
+        ),
+      );
+      if (rec == SendOption.daily) {
+        recurrence = 'daily';
+      } else if (rec == SendOption.weekly && mounted) {
+        final days = await showWeekdayPickerDialog(context, model, const []);
+        if (days != null && days.isNotEmpty) {
+          recurrence = 'weekly';
+          recurrenceDays = days;
+          final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
+          var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
+          if (!days.contains(cand.weekday)) {
+            do {
+              cand = cand.add(const Duration(days: 1));
+            } while (!days.contains(cand.weekday));
+            dueAt = cand.millisecondsSinceEpoch;
+          }
+        }
+      }
+    }
+    return (dueAt: dueAt, recurrence: recurrence, recurrenceDays: recurrenceDays);
+  }
+
+  Future<void> _scheduleEntryReminder(Entry entry) async {
+    if (entry.dueAt == null) return;
+    await RemindersService.instance.requestPermissions();
+    await RemindersService.instance.schedule(
+      Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
+      widget.model.tr('remind_title', [_chat.name]),
+      widget.model.tr('remind_body'),
+    );
+  }
+
+  /// Long-press send in tasks chats: create the task with an explicit
+  /// due date/time instead of sending it undated.
+  Future<void> _sendTextWithDate() async {
+    final text = _text.text.trim();
+    if (text.isEmpty || _pendingImagePath != null) return;
+    HapticFeedback.mediumImpact();
+    final sched = await _pickTaskSchedule();
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: 'todo',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      items: [TodoItem(id: uid('t'), text: text)],
+      tags: extractTags(text),
+      dueAt: sched.dueAt,
+      recurrence: sched.recurrence,
+      recurrenceDays: sched.recurrenceDays,
+    );
+    widget.model.state.entries.add(entry);
+    _text.clear();
+    await widget.model.save();
+    await _scheduleEntryReminder(entry);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _pickImage() async {
     try {
       final file = await _imagePicker.pickImage(source: ImageSource.gallery);
@@ -1370,69 +1450,20 @@ class _ChatScreenState extends State<ChatScreen> {
                       HapticFeedback.lightImpact();
                       final items = await showTodoEditorDialog(context, model);
                   if (items == null || items.isEmpty) return;
-                  int? dueAt;
-                  String? recurrence;
-                  List<int>? recurrenceDays;
-                  {
-                    if (!mounted) return;
-                    final when = await showReminderPicker(context, model);
-                    if (when != null) dueAt = when.millisecondsSinceEpoch;
-                    if (dueAt != null) {
-                      if (!mounted) return;
-                      final rec = await showDialog<SendOption>(
-                        context: context,
-                        builder: (ctx) => SimpleDialog(
-                          backgroundColor: p.modalBg,
-                          title: Text('Повтор?', style: TextStyle(color: p.text, fontSize: 14)),
-                          children: [
-                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.later), child: Text('Один раз', style: TextStyle(color: p.text))),
-                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.daily), child: Text('Каждый день', style: TextStyle(color: p.text))),
-                            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('По дням недели', style: TextStyle(color: p.text))),
-                          ],
-                        ),
-                      );
-                      if (rec == SendOption.daily) {
-                        recurrence = 'daily';
-                      } else if (rec == SendOption.weekly) {
-                        if (!mounted) return;
-                        final days = await showWeekdayPickerDialog(context, model, const []);
-                        if (days != null && days.isNotEmpty) {
-                          recurrence = 'weekly';
-                          recurrenceDays = days;
-                          // adjust due to next selected weekday
-                          final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
-                          var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
-                          // if cand weekday not in days, move to next
-                          if (!days.contains(cand.weekday)) {
-                            do {
-                              cand = cand.add(const Duration(days: 1));
-                            } while (!days.contains(cand.weekday));
-                            dueAt = cand.millisecondsSinceEpoch;
-                          }
-                        }
-                      }
-                    }
-                  }
+                  final sched = await _pickTaskSchedule();
                   final entry = Entry(
                     id: uid('e'),
                     chatId: widget.chatId,
                     type: 'todo',
                     ts: DateTime.now().millisecondsSinceEpoch,
                     items: items,
-                    dueAt: dueAt,
-                    recurrence: recurrence,
-                    recurrenceDays: recurrenceDays,
+                    dueAt: sched.dueAt,
+                    recurrence: sched.recurrence,
+                    recurrenceDays: sched.recurrenceDays,
                   );
                   model.state.entries.add(entry);
                   await model.save();
-                  if (dueAt != null) {
-                    await RemindersService.instance.requestPermissions();
-                    await RemindersService.instance.schedule(
-                      Reminder(id: entry.id, chatId: widget.chatId, when: dueAt),
-                      model.tr('remind_title', [_chat.name]),
-                      model.tr('remind_body'),
-                    );
-                  }
+                  await _scheduleEntryReminder(entry);
                   if (mounted) setState(() {});
                   break;
               }
@@ -1473,10 +1504,15 @@ class _ChatScreenState extends State<ChatScreen> {
             builder: (context, _) {
               final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
               return hasSomething
-                  ? IconButton.filled(
-                      icon: const Icon(Icons.send, color: Colors.white),
-                      style: IconButton.styleFrom(backgroundColor: p.accent),
-                      onPressed: _submitComposer,
+                  ? GestureDetector(
+                      onLongPressStart: _chat.kind == 'tasks'
+                          ? (d) => _sendTextWithDate()
+                          : null,
+                      child: IconButton.filled(
+                        icon: const Icon(Icons.send, color: Colors.white),
+                        style: IconButton.styleFrom(backgroundColor: p.accent),
+                        onPressed: _submitComposer,
+                      ),
                     )
                   : GestureDetector(
                       onLongPressStart: (d) => _beginRecord(),
