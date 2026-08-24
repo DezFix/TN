@@ -48,19 +48,35 @@ class RemindersService {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
-      await android?.requestExactAlarmsPermission();
+      // Only opens the system "Alarms & reminders" page when needed.
+      if (await android?.canScheduleExactNotifications() == false) {
+        await android?.requestExactAlarmsPermission();
+      }
     } catch (_) {}
   }
 
-  Future<void> schedule(Reminder r, String title, String body) async {
+  /// True when the OS lets us schedule exact alarms; otherwise we degrade to
+  /// inexact instead of letting zonedSchedule throw and lose the reminder.
+  Future<bool> exactAlarmsAllowed() async {
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.canScheduleExactNotifications() ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> schedule(Reminder r, String title, String body) async {
     if (!_ready) await init();
     try {
       final when = tz.TZDateTime.from(
         DateTime.fromMillisecondsSinceEpoch(r.when),
         tz.local,
       );
+      final exact = await exactAlarmsAllowed();
       await _plugin.zonedSchedule(
-        id: r.id.hashCode,
+        id: stableHash(r.id),
         title: title,
         body: body,
         scheduledDate: when,
@@ -81,14 +97,23 @@ class RemindersService {
             ticker: '$title: $body',
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
       );
-    } catch (_) {}
+      return true;
+    } catch (e) {
+      assert(() {
+        debugPrint('TN: reminder ${r.id} schedule failed: $e');
+        return true;
+      }());
+      return false;
+    }
   }
 
   Future<void> cancel(Reminder r) async {
     try {
-      await _plugin.cancel(id: r.id.hashCode);
+      await _plugin.cancel(id: stableHash(r.id));
     } catch (_) {}
   }
 

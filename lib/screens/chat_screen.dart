@@ -667,7 +667,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (ok != true) return;
     for (final e in entries) {
       await MediaStore().remove(e.media);
-      await RemindersService.instance.cancelById(e.id.hashCode);
+      await RemindersService.instance.cancelById(stableHash(e.id));
     }
     widget.model.state.entries.removeWhere((e) => _selectedIds.contains(e.id));
     _selectedIds.clear();

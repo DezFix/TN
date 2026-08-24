@@ -271,6 +271,18 @@ List<String> extractTags(String text) {
 
 String uid(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}-${(0xFFFF & DateTime.now().millisecond).toRadixString(16)}';
 
+/// Stable 31-bit FNV-1a hash. Unlike String.hashCode (randomized per process
+/// in Dart), this is identical across app restarts — required for native
+/// notification/alarm ids that must survive relaunches.
+int stableHash(String s) {
+  var h = 0x811C9DC5;
+  for (final c in s.codeUnits) {
+    h ^= c;
+    h = (h * 0x01000193) & 0x7FFFFFFF;
+  }
+  return h == 0 ? 1 : h;
+}
+
 /// Next occurrence of a recurrence rule strictly after [after].
 ///
 /// [fromMs] is the anchor (usually the entry's current dueAt) — its clock

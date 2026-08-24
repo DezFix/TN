@@ -35,7 +35,36 @@ class AppModel extends ChangeNotifier {
     _reloadLanguage();
     _stamp = DateTime.now().millisecondsSinceEpoch;
     rolloverRecurring();
+    await rescheduleAlarms();
     notifyListeners();
+  }
+
+  /// Rebuilds every pending alarm from the state — the source of truth.
+  /// Heals lost reminders after plugin hiccups, permission grants, app
+  /// updates or anything else that could have silently dropped them.
+  Future<void> rescheduleAlarms() async {
+    try {
+      await RemindersService.instance.cancelAll();
+    } catch (_) {}
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final r in state.reminders) {
+      if (r.when <= now) continue;
+      final chat = state.chatById(r.chatId);
+      await RemindersService.instance.schedule(
+        r,
+        tr('remind_title', [chat?.name ?? 'TN']),
+        tr('remind_body'),
+      );
+    }
+    for (final e in state.entries) {
+      if (e.type != 'todo' || e.dueAt == null || e.dueAt! <= now) continue;
+      final chat = state.chatById(e.chatId);
+      await RemindersService.instance.schedule(
+        Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
+        tr('remind_title', [chat?.name ?? 'TN']),
+        entryNotifBody(e, tr),
+      );
+    }
   }
 
   /// Recurring tasks reset themselves (see rolloverRecurringTasks); after
@@ -48,7 +77,7 @@ class AppModel extends ChangeNotifier {
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat?.name ?? 'TN']),
         entryNotifBody(e, tr),
-      ).catchError((_) {});
+      ).catchError((_) => false);
     }
     return rolled.length;
   }
