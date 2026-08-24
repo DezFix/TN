@@ -153,6 +153,21 @@ class TnDayWidgetProvider : AppWidgetProvider() {
 
             rv.setTextViewText(R.id.dw_title, context.getString(R.string.dw_title_tasks))
 
+            // Adjustable font size (scale, default 1.0) written by the in-app
+            // widget settings screen.
+            var fontScale = 1.0f
+            try {
+                when (val rawFont = prefs.all["flutter.tn-widget-font"]) {
+                    is Number -> fontScale = rawFont.toFloat()
+                    is String -> fontScale = rawFont.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
+                }
+                if (!fontScale.isFinite() || fontScale < 0.5f || fontScale > 2.0f) fontScale = 1.0f
+                fontScale = fontScale.coerceIn(0.8f, 1.6f)
+            } catch (_: Exception) {
+            }
+            rv.setFloat(R.id.dw_title, "setTextSize", 13f * fontScale)
+            rv.setFloat(R.id.dw_empty, "setTextSize", 13f * fontScale)
+
             val rows = try { loadRows(context) } catch (_: Exception) { emptyList<Row>() }
             rv.removeAllViews(R.id.dw_list)
             rv.setViewVisibility(R.id.dw_empty, if (rows.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE)
@@ -160,6 +175,8 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 val row = RemoteViews(context.packageName, R.layout.tn_day_row)
                 row.setTextViewText(R.id.dr_title, r.title)
                 row.setTextViewText(R.id.dr_meta, r.meta)
+                row.setFloat(R.id.dr_title, "setTextSize", 13f * fontScale)
+                row.setFloat(R.id.dr_meta, "setTextSize", 11f * fontScale)
                 row.setInt(
                     R.id.dr_meta, "setTextColor",
                     if (r.overdue) Color.rgb(255, 107, 107) else Color.rgb(138, 155, 168)

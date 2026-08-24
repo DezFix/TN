@@ -70,21 +70,38 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
-            final effectiveTheme = model.state.theme == 'system'
-                ? (MediaQuery.platformBrightnessOf(context) == Brightness.dark ? 'dark' : 'light')
-                : model.state.theme;
-            final p = paletteFor(effectiveTheme);
-            final scheme = ColorScheme(
-              brightness: effectiveTheme == 'dark' ? Brightness.dark : Brightness.light,
-              primary: p.accent,
-              onPrimary: Colors.white,
-              secondary: p.accentDk,
-              onSecondary: Colors.white,
-              error: p.danger,
-              onError: Colors.white,
-              surface: p.bgList,
-              onSurface: p.text,
-            );
+            // 'system' is resolved by MaterialApp itself via themeMode;
+            // reading platform brightness above MaterialApp was unreliable.
+            final themeName = model.state.theme;
+            final pl = paletteFor('light');
+            final pd = paletteFor('dark');
+            ThemeData buildTheme(Palette p, Brightness b) => ThemeData(
+                  useMaterial3: true,
+                  colorScheme: ColorScheme(
+                    brightness: b,
+                    primary: p.accent,
+                    onPrimary: Colors.white,
+                    secondary: p.accentDk,
+                    onSecondary: Colors.white,
+                    error: p.danger,
+                    onError: Colors.white,
+                    surface: p.bgList,
+                    onSurface: p.text,
+                  ),
+                  scaffoldBackgroundColor: p.bgList,
+                  pageTransitionsTheme: const PageTransitionsTheme(
+                    builders: {
+                      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                    },
+                  ),
+                  snackBarTheme: SnackBarThemeData(
+                    backgroundColor: p.bgChat,
+                    contentTextStyle: TextStyle(color: p.text),
+                  ),
+                  dialogTheme: DialogThemeData(backgroundColor: p.modalBg),
+                  bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.modalBg),
+                );
             return MaterialApp(
               title: 'TN',
               debugShowCheckedModeBanner: false,
@@ -96,24 +113,13 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              themeMode: effectiveTheme == 'dark' ? ThemeMode.dark : ThemeMode.light,
-              theme: ThemeData(
-                useMaterial3: true,
-                colorScheme: scheme,
-                scaffoldBackgroundColor: p.bgList,
-                pageTransitionsTheme: const PageTransitionsTheme(
-                  builders: {
-                    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-                    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                  },
-                ),
-                snackBarTheme: SnackBarThemeData(
-                  backgroundColor: p.bgChat,
-                  contentTextStyle: TextStyle(color: p.text),
-                ),
-                dialogTheme: DialogThemeData(backgroundColor: p.modalBg),
-                bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.modalBg),
-              ),
+              themeMode: switch (themeName) {
+                'dark' => ThemeMode.dark,
+                'system' => ThemeMode.system,
+                _ => ThemeMode.light,
+              },
+              theme: buildTheme(pl, Brightness.light),
+              darkTheme: buildTheme(pd, Brightness.dark),
               routes: {
                 '/widget-settings': (_) => WidgetSettingsScreen(model: model),
               },

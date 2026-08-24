@@ -555,6 +555,92 @@ Future<String?> showFolderNameDialog(
   );
 }
 
+/// Create or edit a folder: name + accent color. Returns the folder, or
+/// null when cancelled. Pass [folder] to edit an existing one.
+Future<Folder?> showFolderEditDialog(
+  BuildContext context,
+  AppModel model, {
+  Folder? folder,
+}) {
+  final p = model.p;
+  final tr = model.tr;
+  final ctrl = TextEditingController(text: folder?.name ?? '');
+  var selectedColor = folder?.color;
+  return showDialog<Folder>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(tr(folder == null ? 'new_folder' : 'edit_folder'),
+            style: TextStyle(color: p.text)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                style: TextStyle(color: p.text),
+                decoration: InputDecoration(
+                  hintText: tr('folder_name_hint'),
+                  hintStyle: TextStyle(color: p.textFaint),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(tr('color'),
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.textFaint)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final color in appColors)
+                    GestureDetector(
+                      onTap: () => setState(() => selectedColor = color),
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: colorFromHex(color),
+                          shape: BoxShape.circle,
+                          border: selectedColor == color
+                              ? Border.all(color: p.text, width: 2)
+                              : null,
+                        ),
+                        child: selectedColor == color
+                            ? Icon(Icons.check, color: Colors.white, size: 16)
+                            : null,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('cancel'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            onPressed: () {
+              final name = ctrl.text.trim();
+              if (name.isEmpty) return;
+              final result = folder ?? Folder(id: uid('f'), name: name);
+              result
+                ..name = name
+                ..color = selectedColor;
+              Navigator.pop(ctx, result);
+            },
+            child: Text(tr(folder == null ? 'create' : 'save')),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 enum ChatAction { pin, unpin, moveToFolder, edit, delete }
 
 Future<ChatAction?> showChatCtxPopup(BuildContext context, AppModel model, Chat chat, Offset globalPos) {

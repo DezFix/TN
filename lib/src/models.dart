@@ -13,17 +13,23 @@ const appIcons = <String?>[
 ];
 
 class Folder {
-  Folder({required this.id, required this.name});
+  Folder({required this.id, required this.name, this.color});
 
   final String id;
   String name;
+  String? color; // hex like '#2AABEE', null = default
 
   factory Folder.fromJson(Map<String, dynamic> j) => Folder(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
+        color: j['color'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (color != null) 'color': color,
+      };
 }
 
 const chatKinds = [

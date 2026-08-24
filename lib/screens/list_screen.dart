@@ -8,7 +8,6 @@ import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
 import 'chat_screen.dart';
-import 'folders_edit_screen.dart';
 import 'settings_screen.dart';
 
 class ListScreen extends StatefulWidget {
@@ -169,48 +168,10 @@ class _ListScreenState extends State<ListScreen> {
     return false;
   }
 
-  Future<void> _folderCtxAt(Folder folder, Offset globalPos) async {
-    final model = widget.model;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final action = await showMenu<String>(
-      context: context,
-      color: model.p.modalBg,
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
-      items: [
-        PopupMenuItem(value: 'reorder', child: Row(children: [Icon(Icons.swap_vert, size: 18, color: model.p.accent), const SizedBox(width: 10), Text(model.tr('folders_reorder'), style: TextStyle(color: model.p.text))])),
-        PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: model.p.accent), const SizedBox(width: 10), Text(model.tr('edit_folder'), style: TextStyle(color: model.p.text))])),
-        PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), const SizedBox(width: 10), Text(model.tr('delete_folder_title'), style: TextStyle(color: Colors.redAccent))])),
-      ],
-    );
-    if (action == null) return;
-    if (action == 'reorder') {
-      if (!mounted) return;
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)));
-      if (mounted) setState(() {});
-      return;
-    }
-    if (action == 'edit') {
-      if (!mounted) return;
-      final name = await showFolderNameDialog(context, model, initial: folder.name);
-      if (name == null) return;
-      folder.name = name;
-    } else {
-      model.state.folders.removeWhere((f) => f.id == folder.id);
-      for (final c in model.state.chats) {
-        if (c.folderId == folder.id) c.folderId = null;
-      }
-      if (_folderFilter == folder.id) _folderFilter = null;
-    }
-    await model.save();
-    if (mounted) setState(() {});
-  }
-
   Future<void> _newFolder() async {
-    final name = await showFolderNameDialog(context, widget.model);
-    if (name == null) return;
-    widget.model.state.folders.add(Folder(id: uid('f'), name: name));
+    final result = await showFolderEditDialog(context, widget.model);
+    if (result == null) return;
+    widget.model.state.folders.add(result);
     await widget.model.save();
     if (mounted) setState(() {});
   }
@@ -536,13 +497,12 @@ class _ListScreenState extends State<ListScreen> {
       required String label,
       required bool selected,
       VoidCallback? onTap,
-      VoidCallback? onLongPress,
+      Color? iconColor,
       IconData? icon,
       Widget? trailing,
     }) =>
         GestureDetector(
           onTap: onTap,
-          onLongPress: onLongPress,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
@@ -554,7 +514,7 @@ class _ListScreenState extends State<ListScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 15, color: selected ? Colors.white : p.textSoft),
+                  Icon(icon, size: 15, color: selected ? Colors.white : (iconColor ?? p.textSoft)),
                   const SizedBox(width: 5),
                 ],
                 Text(label,
@@ -589,20 +549,15 @@ class _ListScreenState extends State<ListScreen> {
             ),
             for (final f in folders) ...[
               const SizedBox(width: 6),
-              GestureDetector(
-                onLongPressStart: (d) {
-                  HapticFeedback.lightImpact();
-                  _folderCtxAt(f, d.globalPosition);
+              chip(
+                label: f.name,
+                icon: Icons.folder_outlined,
+                iconColor: f.color != null ? colorFromHex(f.color!) : null,
+                selected: _folderFilter == f.id,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _folderFilter = f.id);
                 },
-                child: chip(
-                  label: f.name,
-                  icon: Icons.folder_outlined,
-                  selected: _folderFilter == f.id,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _folderFilter = f.id);
-                  },
-                ),
               ),
             ],
             const SizedBox(width: 6),
