@@ -23,7 +23,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.5';
+const _appVersion = '7.6';
 
 class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
