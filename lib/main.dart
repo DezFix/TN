@@ -35,7 +35,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '8.0';
+const _appVersion = '8.1';
 
 bool _quitting = false;
 

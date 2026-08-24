@@ -168,79 +168,14 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
   Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays, int? monthDay})>
       _pickTaskSchedule() async {
-    final model = widget.model;
-    final p = model.p;
-    int? dueAt;
-    String? recurrence;
-    List<int>? recurrenceDays;
-    int? monthDay;
     if (!mounted) return (dueAt: null, recurrence: null, recurrenceDays: null, monthDay: null);
-    final when = await showReminderPicker(context, model);
-    if (when != null) dueAt = when.millisecondsSinceEpoch;
-    if (dueAt != null && mounted) {
-      final rec = await showDialog<SendOption>(
-        context: context,
-        builder: (ctx) => SimpleDialog(
-          backgroundColor: p.modalBg,
-          title: Text('Повтор', style: TextStyle(color: p.text, fontSize: 14)),
-          children: [
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.later), child: Text('Один раз', style: TextStyle(color: p.text))),
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.daily), child: Text('Каждый день', style: TextStyle(color: p.text))),
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekdays), child: Text('По будням (пн–пт)', style: TextStyle(color: p.text))),
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('Дни недели…', style: TextStyle(color: p.text))),
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.monthly), child: Text('Каждый месяц…', style: TextStyle(color: p.text))),
-          ],
-        ),
-      );
-      if (rec == SendOption.daily) {
-        recurrence = 'daily';
-      } else if (rec == SendOption.weekdays) {
-        recurrence = 'weekly';
-        recurrenceDays = const [1, 2, 3, 4, 5];
-      } else if (rec == SendOption.weekly && mounted) {
-        final days = await showWeekdayPickerDialog(context, model, const []);
-        if (days != null && days.isNotEmpty) {
-          recurrence = 'weekly';
-          recurrenceDays = days;
-        }
-      } else if (rec == SendOption.monthly && mounted) {
-        final md = await showMonthDayPickerDialog(context, model);
-        if (md != null) {
-          recurrence = 'monthly';
-          monthDay = md;
-        }
-      }
-      // Align the first occurrence with the chosen rule.
-      if (recurrence != null && mounted) {
-        final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
-        var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
-        if (recurrence == 'weekly') {
-          final days = recurrenceDays!;
-          while (!days.contains(cand.weekday)) {
-            cand = cand.add(const Duration(days: 1));
-          }
-        } else if (recurrence == 'monthly' && cand.day != monthDay) {
-          int clampDom(int y, int m) {
-            final last = DateTime(y, m + 1, 0).day;
-            return monthDay! > last ? last : monthDay!;
-          }
-
-          var c = DateTime(cand.year, cand.month, clampDom(cand.year, cand.month), cand.hour, cand.minute);
-          if (!c.isAfter(cand)) {
-            var y = cand.year;
-            var m = cand.month + 1;
-            if (m > 12) {
-              m = 1;
-              y++;
-            }
-            c = DateTime(y, m, clampDom(y, m), cand.hour, cand.minute);
-          }
-          cand = c;
-        }
-        dueAt = cand.millisecondsSinceEpoch;
-      }
-    }
-    return (dueAt: dueAt, recurrence: recurrence, recurrenceDays: recurrenceDays, monthDay: monthDay);
+    final res = await showScheduleSheet(context, widget.model);
+    return (
+      dueAt: res?.dueAt,
+      recurrence: res?.recurrence,
+      recurrenceDays: res?.recurrenceDays,
+      monthDay: res?.monthDay,
+    );
   }
 
   Future<void> _scheduleEntryReminder(Entry entry) async {
@@ -682,11 +617,22 @@ class _ChatScreenState extends State<ChatScreen> {
     switch (action) {
       case EntryAction.schedTime:
         if (!mounted) return;
-        final when = await showReminderPicker(context, widget.model);
-        if (when == null) return;
-        entry.dueAt = when.millisecondsSinceEpoch;
+        final res = await showScheduleSheet(
+          context,
+          widget.model,
+          initialDueAt: entry.dueAt,
+          initialRecurrence: entry.recurrence,
+          initialRecurrenceDays: entry.recurrenceDays,
+          initialMonthDay: entry.monthDay,
+        );
+        if (res == null || res.dueAt == null) return;
+        entry.dueAt = res.dueAt;
+        entry.recurrence = res.recurrence;
+        entry.recurrenceDays =
+            res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
+        entry.monthDay = res.monthDay;
         await widget.model.save();
-        await _scheduleEntryReminder(entry);
+        await widget.model.rescheduleAlarms();
         if (mounted) {
           setState(() {});
           _toast(widget.model.tr('change_time_done'));

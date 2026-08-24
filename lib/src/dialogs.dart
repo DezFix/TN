@@ -706,6 +706,258 @@ Future<int?> showMonthDayPickerDialog(
   );
 }
 
+class SchedulePick {
+  final int? dueAt;
+  final String? recurrence;
+  final List<int>? recurrenceDays;
+  final int? monthDay;
+  const SchedulePick({this.dueAt, this.recurrence, this.recurrenceDays, this.monthDay});
+}
+
+/// Aligns the first occurrence of a recurring rule with the chosen days.
+DateTime alignFirstOccurrence(DateTime cur, String? rec, List<int>? days, int? monthDay) {
+  var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
+  if (rec == 'weekly' && days != null && days.isNotEmpty) {
+    while (!days.contains(cand.weekday)) {
+      cand = cand.add(const Duration(days: 1));
+    }
+  } else if (rec == 'monthly' && monthDay != null && cand.day != monthDay) {
+    int clampDom(int y, int m) {
+      final last = DateTime(y, m + 1, 0).day;
+      return monthDay > last ? last : monthDay;
+    }
+
+    var c = DateTime(cand.year, cand.month, clampDom(cand.year, cand.month), cand.hour, cand.minute);
+    if (!c.isAfter(cand)) {
+      var y = cand.year;
+      var m = cand.month + 1;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+      c = DateTime(y, m, clampDom(y, m), cand.hour, cand.minute);
+    }
+    cand = c;
+  }
+  return cand;
+}
+
+/// Unified scheduling sheet: date + time + recurrence presets together.
+/// Used for long-press send / attach-todo AND for editing an existing
+/// entry's schedule ("change time"), so presets are never lost.
+Future<SchedulePick?> showScheduleSheet(
+  BuildContext context,
+  AppModel model, {
+  int? initialDueAt,
+  String? initialRecurrence,
+  List<int>? initialRecurrenceDays,
+  int? initialMonthDay,
+}) {
+  final p = model.p;
+  final tr = model.tr;
+  DateTime dt = initialDueAt != null
+      ? DateTime.fromMillisecondsSinceEpoch(initialDueAt)
+      : DateTime.now().add(const Duration(hours: 1));
+  String? rec = initialRecurrence;
+  List<int> days = List.of(initialRecurrenceDays ?? const <int>[]);
+  int md = initialMonthDay ?? dt.day;
+
+  bool sel(String v) {
+    switch (v) {
+      case 'once':
+        return rec == null;
+      case 'daily':
+        return rec == 'daily';
+      case 'weekdays':
+        return rec == 'weekly' &&
+            days.length == 5 &&
+            days.every((d) => d >= 1 && d <= 5);
+      case 'pickdays':
+        return rec == 'weekly' && !(days.length == 5 && days.every((d) => d >= 1 && d <= 5));
+      case 'monthly':
+        return rec == 'monthly';
+    }
+    return false;
+  }
+
+  String two(int v) => v.toString().padLeft(2, '0');
+
+  Future<void> editDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: dt,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (d == null) return;
+    dt = DateTime(d.year, d.month, d.day, dt.hour, dt.minute);
+  }
+
+  Future<void> editTime() async {
+    final t = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(dt));
+    if (t == null) return;
+    dt = DateTime(dt.year, dt.month, dt.day, t.hour, t.minute);
+  }
+
+  return showModalBottomSheet<SchedulePick>(
+    context: context,
+    backgroundColor: p.modalBg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: p.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(tr('sched_sheet_title'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (v, key) in [
+                  ('once', 'sched_once'),
+                  ('daily', 'sched_daily'),
+                  ('weekdays', 'sched_weekdays'),
+                  ('pickdays', 'sched_pick_days'),
+                  ('monthly', 'sched_monthly'),
+                ])
+                  ChoiceChip(
+                    label: Text(tr(key)),
+                    selected: sel(v),
+                    onSelected: (_) async {
+                      switch (v) {
+                        case 'once':
+                          setSheet(() => rec = null);
+                          break;
+                        case 'daily':
+                          setSheet(() => rec = 'daily');
+                          break;
+                        case 'weekdays':
+                          setSheet(() {
+                            rec = 'weekly';
+                            days = [1, 2, 3, 4, 5];
+                          });
+                          break;
+                        case 'pickdays':
+                          final d = await showWeekdayPickerDialog(ctx, model, days);
+                          if (d != null && d.isNotEmpty) {
+                            setSheet(() {
+                              rec = 'weekly';
+                              days = d;
+                            });
+                          }
+                          break;
+                        case 'monthly':
+                          final m = await showMonthDayPickerDialog(ctx, model, initial: md);
+                          if (m != null) {
+                            setSheet(() {
+                              rec = 'monthly';
+                              md = m;
+                            });
+                          }
+                          break;
+                      }
+                    },
+                    selectedColor: p.accent,
+                    backgroundColor: p.bgChat,
+                    labelStyle: TextStyle(
+                        color: sel(v) ? Colors.white : p.textSoft,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5),
+                    checkmarkColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(color: sel(v) ? p.accent : p.divider)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: Icon(Icons.event_outlined, size: 18, color: p.accent),
+                    label: Text('${two(dt.day)}.${two(dt.month)}.${dt.year}',
+                        style: TextStyle(color: p.text)),
+                    onPressed: () async {
+                      await editDate();
+                      setSheet(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: Icon(Icons.schedule_outlined, size: 18, color: p.accent),
+                    label: Text('${two(dt.hour)}:${two(dt.minute)}',
+                        style: TextStyle(color: p.text)),
+                    onPressed: () async {
+                      await editTime();
+                      setSheet(() {});
+                    },
+                  ),
+                ),
+              ],
+            ),
+            if (rec != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                rec == 'daily'
+                    ? tr('sched_daily')
+                    : rec == 'weekly'
+                        ? '${tr('sched_weekdays_short')}: ${days.map((d) => tr('weekdays_short').split(' ')[d - 1]).join(', ')}'
+                        : '${tr('sched_monthly')} $md',
+                style: TextStyle(fontSize: 11.5, color: p.textFaint),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(tr('close'), style: TextStyle(color: p.textSoft)),
+                ),
+                const SizedBox(width: 6),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: p.accent),
+                  onPressed: () {
+                    final aligned = alignFirstOccurrence(dt, rec, days, md);
+                    Navigator.pop(
+                      ctx,
+                      SchedulePick(
+                        dueAt: aligned.millisecondsSinceEpoch,
+                        recurrence: rec,
+                        recurrenceDays: rec == 'weekly' ? List.of(days) : null,
+                        monthDay: rec == 'monthly' ? md : null,
+                      ),
+                    );
+                  },
+                  child: Text(tr('todo_done')),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Future<String?> showFolderNameDialog(
   BuildContext context,
   AppModel model, {
