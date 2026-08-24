@@ -37,7 +37,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '8.2';
+const _buildVersion = '1.12.3';
 
 bool _quitting = false;
 
@@ -262,11 +262,26 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     await SyncService.instance.syncOnStart();
   }
 
+  /// Numeric compare of "vX.Y.Z" tags against the installed [_buildVersion].
+  static bool _isNewerTag(String tag, String current) {
+    List<int> parse(String s) => s
+        .replaceFirst(RegExp('^v'), '')
+        .split('.')
+        .map((e) => int.tryParse(e.replaceAll(RegExp('[^0-9].*'), '')) ?? 0)
+        .toList();
+    final a = parse(tag), b = parse(current);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0;
+      final y = i < b.length ? b[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
+
   Future<void> _maybeShowWhatsNew(BuildContext context, AppModel model) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      // Preferred source: the latest GitHub release notes.
+      Map<String, dynamic>? rel;
       try {
         final r = await http
             .get(
@@ -278,86 +293,77 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
             )
             .timeout(const Duration(seconds: 8));
         if (r.statusCode == 200) {
-          final j = jsonDecode(r.body) as Map<String, dynamic>;
-          final tag = j['tag_name'] as String?;
-          final name = (j['name'] as String?) ?? '';
-          final body = (j['body'] as String?) ?? '';
-          final seenTag = prefs.getString('tn-seen-release');
-          if (tag != null &&
-              tag.isNotEmpty &&
-              tag != seenTag &&
-              body.trim().isNotEmpty &&
-              context.mounted) {
-            await _showReleaseDialog(context, model,
-                title: name.isNotEmpty ? name : 'TN $tag', markdown: body);
-            await prefs.setString('tn-seen-release', tag);
-            await prefs.setString('tn-last-version', _appVersion);
-            return;
-          }
+          rel = jsonDecode(r.body) as Map<String, dynamic>;
         }
       } catch (_) {}
 
-      // Offline fallback: bundled notes.
-      final seen = prefs.getString('tn-last-version');
-      if (seen == _appVersion) return;
-      if (!context.mounted) return;
-      final p = model.p;
-      final fix = model.tr('whatsnew_fix');
-      final upd = model.tr('whatsnew_update');
-      final hasSplit = fix != 'whatsnew_fix' && upd != 'whatsnew_update';
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: p.modalBg,
-          title: Text('TN $_appVersion',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
-          content: SingleChildScrollView(
-            child: hasSplit
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Fix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text(fix, style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
-                      const SizedBox(height: 12),
-                      Text('Update', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text(upd, style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
-                    ],
-                  )
-                : Text(model.tr('whatsnew_body'),
-                    style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
-                var opened = false;
-                try {
-                  opened = await launchUrl(Uri.parse('https://ko-fi.com/k_k'),
-                      mode: LaunchMode.externalApplication);
-                } catch (_) {}
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(opened
-                        ? model.tr('support')
-                        : 'ko-fi.com/k_k • ${model.tr('support')}'),
-                  ));
-                }
-              },
-              child: Text('❤ ko-fi', style: TextStyle(color: p.accent)),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: p.accent),
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(model.tr('close')),
-            ),
-          ],
-        ),
-      );
-      await prefs.setString('tn-last-version', _appVersion);
+      // Single changelog source: GitHub. Offline - show nothing.
+      if (rel == null) return;
+      final tag = (rel['tag_name'] as String?) ?? '';
+      final name = (rel['name'] as String?) ?? '';
+      final body = (rel['body'] as String?) ?? '';
+      if (tag.isEmpty || body.trim().isEmpty) return;
+
+      final updateAvailable = _isNewerTag(tag, _buildVersion);
+
+      // Fresh release notes -> show them (with an Update button when the
+      // release is newer than this build).
+      if (prefs.getString('tn-seen-release') != tag && context.mounted) {
+        await _showReleaseDialog(context, model,
+            title: name.isNotEmpty ? name : 'TN $tag',
+            markdown: body,
+            updateUrl: updateAvailable
+                ? ((rel['html_url'] as String?) ??
+                    'https://github.com/DezFix/TN/releases/latest')
+                : null);
+        await prefs.setString('tn-seen-release', tag);
+        return;
+      }
+
+      // Already-seen notes but a newer version exists (e.g. released after
+      // this build was flashed) -> nudge to update once per version.
+      if (updateAvailable &&
+          prefs.getString('tn-update-prompted') != tag &&
+          context.mounted) {
+        await _showUpdateDialog(context, model, tag,
+            url: (rel['html_url'] as String?) ??
+                'https://github.com/DezFix/TN/releases/latest');
+        await prefs.setString('tn-update-prompted', tag);
+      }
     } catch (_) {}
+  }
+
+  Future<void> _showUpdateDialog(BuildContext context, AppModel model,
+      String tag, {required String url}) async {
+    final p = model.p;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(model.tr('update_available'),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+        content: Text(model.tr('update_hint', [tag]),
+            style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(model.tr('later'), style: TextStyle(color: p.textSoft)),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            icon: const Icon(Icons.download, size: 18),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await launchUrl(Uri.parse(url),
+                    mode: LaunchMode.externalApplication);
+              } catch (_) {}
+            },
+            label: Text(model.tr('update_now')),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showReleaseDialog(
@@ -365,6 +371,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     AppModel model, {
     required String title,
     required String markdown,
+    String? updateUrl,
   }) async {
     final p = model.p;
     await showDialog<void>(
@@ -409,11 +416,25 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
             },
             child: Text('❤ ko-fi', style: TextStyle(color: p.accent)),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: p.accent),
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(model.tr('close')),
-          ),
+          if (updateUrl != null)
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: p.accent),
+              icon: const Icon(Icons.download, size: 18),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await launchUrl(Uri.parse(updateUrl),
+                      mode: LaunchMode.externalApplication);
+                } catch (_) {}
+              },
+              label: Text(model.tr('update_now')),
+            ),
+          if (updateUrl == null)
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: p.accent),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(model.tr('close')),
+            ),
         ],
       ),
     );

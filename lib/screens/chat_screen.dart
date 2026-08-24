@@ -800,6 +800,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildTopbar(Chat chat) {
     if (_selecting) {
+      final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+      final one = matches.length == 1 ? matches.first : null;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         color: p.accent.withValues(alpha: .12),
@@ -809,38 +811,47 @@ class _ChatScreenState extends State<ChatScreen> {
             Text(widget.model.tr('selected', ['${_selectedIds.length}']), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
             const Spacer(),
             PopupMenuButton<String>(
-              icon: Icon(Icons.edit_note, color: p.accent),
-              tooltip: widget.model.tr('edit'),
+              icon: Icon(Icons.more_vert, color: p.accent),
+              tooltip: 'menu',
+              color: p.modalBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               onSelected: (v) async {
-                final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
-                if (matches.length != 1) {
-                  _toast(widget.model.tr('select_one'));
-                  return;
-                }
-                final entry = matches.first;
-                // Leave selection mode first — otherwise the checkboxes and
-                // highlight stay around the inline editor.
-                if (mounted) setState(() => _selectedIds.clear());
-                if (v == 'time') {
-                  await _onCtxAction(entry, EntryAction.schedTime);
-                } else if (v == 'edit') {
-                  await _onCtxAction(entry, EntryAction.edit);
+                if (v == 'time' && one != null) {
+                  // Leave selection mode first — otherwise the checkboxes
+                  // and highlight stay around the editor.
+                  if (mounted) setState(() => _selectedIds.clear());
+                  await _onCtxAction(one, EntryAction.schedTime);
+                } else if (v == 'edit' && one != null) {
+                  if (mounted) setState(() => _selectedIds.clear());
+                  await _onCtxAction(one, EntryAction.edit);
+                } else if (v == 'copy') {
+                  await _copySelected();
+                } else if (v == 'forward') {
+                  await _forwardSelected();
+                } else if (v == 'share') {
+                  await _shareSelected();
+                } else if (v == 'delete') {
+                  await _deleteSelected();
                 }
               },
-              itemBuilder: (_) {
-                final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
-                final one = matches.length == 1 ? matches.first : null;
-                return [
-                  PopupMenuItem(value: 'time', height: 40, child: Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: p.text))),
-                  if (one != null && (one.type == 'text' || one.type == 'todo'))
-                    PopupMenuItem(value: 'edit', height: 40, child: Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: p.text))),
-                ];
-              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                    value: 'time',
+                    enabled: one != null,
+                    height: 42,
+                    child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: one != null ? p.accent : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: one != null ? p.text : p.textFaint))])),
+                PopupMenuItem(
+                    value: 'edit',
+                    enabled: one != null && (one.type == 'text' || one.type == 'todo'),
+                    height: 42,
+                    child: Row(children: [Icon(Icons.edit, size: 18, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.textSoft : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.text : p.textFaint))])),
+                const PopupMenuDivider(),
+                PopupMenuItem(value: 'copy', height: 42, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('copy'), style: TextStyle(fontSize: 14, color: p.text))])),
+                PopupMenuItem(value: 'forward', height: 42, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('forward'), style: TextStyle(fontSize: 14, color: p.text))])),
+                PopupMenuItem(value: 'share', height: 42, child: Row(children: [Icon(Icons.share, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('share'), style: TextStyle(fontSize: 14, color: p.text))])),
+                PopupMenuItem(value: 'delete', height: 42, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(fontSize: 14, color: p.danger))])),
+              ],
             ),
-            IconButton(icon: Icon(Icons.share, color: p.accent), tooltip: widget.model.tr('share'), onPressed: _shareSelected),
-            IconButton(icon: Icon(Icons.forward, color: p.accent), tooltip: widget.model.tr('forward'), onPressed: _forwardSelected),
-            IconButton(icon: Icon(Icons.copy, color: p.accent), tooltip: widget.model.tr('copy'), onPressed: _copySelected),
-            IconButton(icon: Icon(Icons.delete_outline, color: p.danger), tooltip: widget.model.tr('delete'), onPressed: _deleteSelected),
           ],
         ),
       );
