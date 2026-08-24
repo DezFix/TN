@@ -77,5 +77,16 @@ String fakeTr(String key, [List<String>? args]) =>
           now: now + hour);
       expect(a.single.key == b.single.key, isFalse);
     });
+
+    test('same deadline via reminder AND todo entry delivers once', () {
+      final due = collectDue(
+        reminders: [Reminder(id: 't1', chatId: 'c1', when: now)],
+        entries: [todoEntry('t1', now)],
+        chatNameOf: (_) => 'X',
+        tr: fakeTr,
+        now: now,
+      );
+      expect(due.length, 1);
+    });
   });
 }

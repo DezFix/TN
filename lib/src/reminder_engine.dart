@@ -14,12 +14,16 @@ import 'sound.dart';
 /// One reminder that is due right now, already formatted for delivery.
 @visibleForTesting
 class DueItem {
-  DueItem({required this.key, required this.chatId, required this.title, required this.body});
+  DueItem({required this.key, required this.chatId, required this.when, required this.title, required this.body});
 
   /// Unique per (reminder id, target time) so a rescheduled reminder fires
   /// again but the same deadline never fires twice.
   final String key;
   final String chatId;
+
+  /// Target time — used to dedupe the same deadline reached through both a
+  /// custom reminder and its todo entry.
+  final int when;
   final String title;
   final String body;
 }
@@ -39,11 +43,20 @@ List<DueItem> collectDue({
 }) {
   final floor = now - _missedWindowMs;
   final out = <DueItem>[];
+  final seen = <String>{};
+  void add(DueItem d) {
+    // One delivery per (chat, deadline): the same due moment often exists
+    // both as a custom reminder and as the todo entry's dueAt.
+    if (!seen.add('${d.chatId}|${d.when}')) return;
+    out.add(d);
+  }
+
   for (final r in reminders) {
     if (r.when > now || r.when < floor) continue;
-    out.add(DueItem(
+    add(DueItem(
       key: '${r.id}|${r.when}',
       chatId: r.chatId,
+      when: r.when,
       title: tr('remind_title', [chatNameOf(r.chatId)]),
       body: tr('remind_body'),
     ));
@@ -51,9 +64,10 @@ List<DueItem> collectDue({
   for (final e in entries) {
     if (e.type != 'todo' || e.dueAt == null) continue;
     if (e.dueAt! > now || e.dueAt! < floor) continue;
-    out.add(DueItem(
+    add(DueItem(
       key: '${e.id}|${e.dueAt}',
       chatId: e.chatId,
+      when: e.dueAt!,
       title: tr('remind_title', [chatNameOf(e.chatId)]),
       body: entryNotifBody(e, tr),
     ));
@@ -123,6 +137,8 @@ class ReminderEngine {
     if (focused && model != null) {
       final ctx = _navKey?.currentContext;
       if (ctx == null || !ctx.mounted) return _toastFallback(d);
+      // Single soft sound — the banner itself is the notification.
+      unawaited(Sounds.taskDone());
       showInAppBanner(ctx, model.p, title: d.title, body: d.body,
           onTap: () => Navigator.of(ctx).push(MaterialPageRoute(
               builder: (_) => ChatScreen(model: model, chatId: d.chatId))));
@@ -131,12 +147,13 @@ class ReminderEngine {
     }
   }
 
+  /// Window not visible — system toast carries the alert with its own
+  /// default sound, so we never add ours on top of it.
   Future<void> _toastFallback(DueItem d) async {
-    unawaited(RemindersService.instance.showNow(
+    await RemindersService.instance.showNow(
       id: stableHash(d.key),
       title: d.title,
       body: d.body,
-    ));
-    unawaited(Sounds.taskDone());
+    );
   }
 }

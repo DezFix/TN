@@ -25,6 +25,10 @@ class GoogleDriveClient {
   String? _access;
   int _expiry = 0;
 
+  /// Machine-readable reason of the last failed connect() — used to show a
+  /// helpful hint (wrong client type, account not in Test users, etc).
+  String lastError = '';
+
   bool get isConnected => _refresh != null;
 
   static Future<GoogleDriveClient?> loadSaved() async {
@@ -94,11 +98,19 @@ class GoogleDriveClient {
     late final StreamSubscription<HttpRequest> sub;
     sub = server.listen((req) async {
       try {
+        final err = req.uri.queryParameters['error'];
         req.response.headers.contentType = ContentType.html;
-        req.response.write(
-            '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
-            '<h2>TN</h2><p>OK — you can close this tab and return to the app.</p>'
-            '</body></html>');
+        if (err != null) {
+          lastError = 'google:$err';
+          req.response.write(
+              '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
+              '<h2>TN</h2><p>Authorization failed: $err</p></body></html>');
+        } else {
+          req.response.write(
+              '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
+              '<h2>TN</h2><p>OK — you can close this tab and return to the app.</p>'
+              '</body></html>');
+        }
         await req.response.close();
       } catch (_) {}
       if (!codeCompleter.isCompleted) {
@@ -126,7 +138,16 @@ class GoogleDriveClient {
             },
           )
           .timeout(const Duration(seconds: 30));
-      if (resp.statusCode != 200) return false;
+      if (resp.statusCode != 200) {
+        // Google answers 400 with {"error": "redirect_uri_mismatch"} etc —
+        // surface it so the UI can hint at the fix.
+        try {
+          lastError = 'google:${(jsonDecode(resp.body) as Map<String, dynamic>)['error']}';
+        } catch (_) {
+          lastError = 'http_${resp.statusCode}';
+        }
+        return false;
+      }
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
       final refresh = json['refresh_token'] as String?;
       final access = json['access_token'] as String?;
@@ -234,6 +255,17 @@ class GoogleDriveClient {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<void> delete(String fileId) async {
+    final token = await _token();
+    if (token == null) return;
+    try {
+      await http.delete(
+        Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 30));
+    } catch (_) {}
   }
 
   Future<List<int>?> download(String fileId) async {

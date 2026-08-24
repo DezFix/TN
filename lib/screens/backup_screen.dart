@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../src/backup.dart';
 import '../src/cloud.dart';
 import '../src/gdrive.dart';
 import '../src/i18n.dart';
+import '../src/sync.dart';
 import '../src/theme.dart';
 
 class BackupScreen extends StatefulWidget {
@@ -207,6 +209,7 @@ class _BackupScreenState extends State<BackupScreen> {
     final ok = await client.connect();
     if (!mounted) return;
     if (ok) {
+      unawaited(SyncService.instance.reloadAccount());
       setState(() {
         _gd = client;
         _gdBusy = false;
@@ -214,7 +217,15 @@ class _BackupScreenState extends State<BackupScreen> {
       _toast(tr('backup_connected'));
     } else {
       setState(() => _gdBusy = false);
-      _toast(tr('gd_failed'), error: true);
+      final err = client.lastError.toLowerCase();
+      _toast(
+        (err.contains('invalid_client') ||
+                err.contains('redirect') ||
+                err.contains('access_denied'))
+            ? '${tr('gd_failed')} ${tr('gd_hint_desktop')}'
+            : tr('gd_failed'),
+        error: true,
+      );
     }
   }
 

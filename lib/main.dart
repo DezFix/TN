@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 import 'src/app_model.dart';
 import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
+import 'src/sync.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
 import 'screens/list_screen.dart';
@@ -30,7 +31,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.7';
+const _appVersion = '7.9';
 
 bool _quitting = false;
 
@@ -219,7 +220,18 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       // Telegram-style delivery: in-app banner / toast, no native scheduling.
       ReminderEngine.instance.start(model, _navKey);
     }
+    if (!_isTestEnv) {
+      unawaited(_initSync(model));
+    }
     return model;
+  }
+
+  /// Google Drive sync: restore newer cloud state on boot, then push local
+  /// changes (debounced) so phone and PC stay in step.
+  Future<void> _initSync(AppModel model) async {
+    await SyncService.instance.bind(model);
+    model.addListener(SyncService.instance.notifyChanged);
+    await SyncService.instance.syncOnStart();
   }
 
   Future<void> _maybeShowWhatsNew(BuildContext context, AppModel model) async {
