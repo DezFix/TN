@@ -288,7 +288,8 @@ Future<EntryAction?> showEntryCtxSheet(BuildContext context, AppModel model, Ent
   );
 }
 
-Future<Chat?> showForwardDialog(BuildContext context, AppModel model) {
+Future<Chat?> showForwardDialog(BuildContext context, AppModel model,
+    {bool allowNewChat = false}) {
   final p = model.p;
   final tr = model.tr;
   return showDialog<Chat>(
@@ -310,6 +311,33 @@ Future<Chat?> showForwardDialog(BuildContext context, AppModel model) {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: p.text)),
+                ),
+              ],
+            ),
+          ),
+        if (allowNewChat)
+          SimpleDialogOption(
+            onPressed: () async {
+              final name = await showFolderNameDialog(ctx, model, titleKey: 'new_chat');
+              if (name == null || name.trim().isEmpty) return;
+              final color = appColors[model.state.chats.length % appColors.length];
+              final chat = Chat(
+                id: uid('c'),
+                name: name.trim(),
+                color: color,
+                kind: 'note',
+              );
+              model.state.chats.add(chat);
+              await model.save();
+              if (ctx.mounted) Navigator.pop(ctx, chat);
+            },
+            child: Row(
+              children: [
+                Icon(Icons.add_circle_outline, size: 30, color: p.accent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(tr('new_chat'),
+                      style: TextStyle(color: p.accent, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -962,6 +990,7 @@ Future<String?> showFolderNameDialog(
   BuildContext context,
   AppModel model, {
   String? initial,
+  String? titleKey,
 }) {
   final p = model.p;
   final tr = model.tr;
@@ -970,7 +999,7 @@ Future<String?> showFolderNameDialog(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: p.modalBg,
-      title: Text(tr(initial == null ? 'new_folder' : 'edit_folder'),
+      title: Text(tr(titleKey ?? (initial == null ? 'new_folder' : 'edit_folder')),
           style: TextStyle(color: p.text)),
       content: TextField(
         controller: ctrl,

@@ -719,6 +719,43 @@ class _ChatScreenState extends State<ChatScreen> {
     return base;
   }
 
+  /// Tappable timestamp under every message: opens the unified schedule
+  /// sheet (date + time + repeat presets).
+  Widget _timeLabel(Entry e) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () => _editEntrySchedule(e),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        child: Text(_timeWithEdited(e),
+            style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+      ),
+    );
+  }
+
+  Future<void> _editEntrySchedule(Entry entry) async {
+    final res = await showScheduleSheet(
+      context,
+      widget.model,
+      initialDueAt: entry.dueAt,
+      initialRecurrence: entry.recurrence,
+      initialRecurrenceDays: entry.recurrenceDays,
+      initialMonthDay: entry.monthDay,
+    );
+    if (res == null || res.dueAt == null) return;
+    entry.dueAt = res.dueAt;
+    entry.recurrence = res.recurrence;
+    entry.recurrenceDays =
+        res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
+    entry.monthDay = res.monthDay;
+    await widget.model.save();
+    await widget.model.rescheduleAlarms();
+    if (mounted) {
+      setState(() {});
+      _toast(widget.model.tr('change_time_done'));
+    }
+  }
+
   void _toast(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
@@ -1142,8 +1179,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [for (final t in entry.tags) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)), child: Text('#$t', style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600)))],
               ),
             ),
-          Text(_timeWithEdited(entry),
-              style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+          _timeLabel(entry),
         ],
       ),
     );
@@ -1218,7 +1254,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.only(right: 8, bottom: 4),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: Text(_timeWithEdited(entry), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+                child: _timeLabel(entry),
               ),
             ),
           ],
@@ -1271,9 +1307,10 @@ class _ChatScreenState extends State<ChatScreen> {
           Text(
             playing
                 ? '$posLabel · ${model.tr('playing')}'
-                : '${entry.duration ?? 0} ${model.tr('sec')} · ${_timeWithEdited(entry)}',
+                : '${entry.duration ?? 0} ${model.tr('sec')} ·',
             style: TextStyle(fontSize: 11, color: p.textFaint),
           ),
+          if (!playing) _timeLabel(entry),
         ],
       ),
     );
@@ -1309,8 +1346,12 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('${entry.mediaSize ?? ''} · ${_timeWithEdited(entry)}',
-              style: TextStyle(fontSize: 11, color: p.textFaint)),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            if ((entry.mediaSize ?? '').isNotEmpty)
+              Text('${entry.mediaSize ?? ''} ·',
+                  style: TextStyle(fontSize: 11, color: p.textFaint)),
+            _timeLabel(entry),
+          ]),
         ],
       ),
     );
@@ -1341,21 +1382,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           if (entry.dueAt != null)
             GestureDetector(
-              onTap: _chat.kind == 'tasks'
-                  ? () async {
-                      // ignore: use_build_context_synchronously
-                      final when = await showReminderPicker(context, model);
-                      if (when == null) return;
-                      entry.dueAt = when.millisecondsSinceEpoch;
-                      await model.save();
-                      await RemindersService.instance.schedule(
-                        Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
-                        model.tr('remind_title', [_chat.name]),
-                        entryNotifBody(entry, model.tr),
-                      );
-                      if (mounted) setState(() {});
-                    }
-                  : null,
+              onTap: () => _editEntrySchedule(entry),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1405,7 +1432,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
-          Text(_timeWithEdited(entry), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+          _timeLabel(entry),
         ],
       ),
     );
@@ -1638,32 +1665,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       await _pickImage();
                       break;
                     case AttachOption.todo:
-                      HapticFeedback.lightImpact();
-                      final items = await showTodoEditorDialog(context, model);
-                  if (items == null || items.isEmpty) return;
-                  final sched = await _pickTaskSchedule();
-                  final entry = Entry(
-                    id: uid('e'),
-                    chatId: widget.chatId,
-                    type: 'todo',
-                    ts: DateTime.now().millisecondsSinceEpoch,
-                    items: items,
-                    dueAt: sched.dueAt,
-                    recurrence: sched.recurrence,
-                    recurrenceDays: sched.recurrenceDays == null ? null : List.of(sched.recurrenceDays!),
-                    monthDay: sched.monthDay,
-                  );
-                  model.state.entries.add(entry);
-                  await model.save();
-                  await _scheduleEntryReminder(entry);
-                  if (mounted) setState(() {});
-                  break;
-              }
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(value: AttachOption.photo, child: Row(children: [Icon(Icons.photo_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_photo'), style: TextStyle(color: p.text))])),
-              PopupMenuItem(value: AttachOption.todo, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_todo'), style: TextStyle(color: p.text))])),
-            ],
+                      break;
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(value: AttachOption.photo, child: Row(children: [Icon(Icons.photo_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_photo'), style: TextStyle(color: p.text))])),
+                ],
           ),
           Expanded(
             child: Container(

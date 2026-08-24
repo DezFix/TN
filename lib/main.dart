@@ -16,9 +16,11 @@ import 'src/app_model.dart';
 import 'src/backup.dart';
 import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
+import 'src/share_in.dart';
 import 'src/sync.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
+import 'screens/chat_screen.dart';
 import 'screens/list_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/widget_settings_screen.dart';
@@ -35,7 +37,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '8.1';
+const _appVersion = '8.2';
 
 bool _quitting = false;
 
@@ -97,6 +99,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final Future<AppModel> _future = _load();
   bool _whatsNewChecked = false;
+  bool _shareInWired = false;
   bool _showWelcome = false;
 
   @override
@@ -195,6 +198,22 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     _whatsNewChecked = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _maybeShowWhatsNew(innerCtx, model);
+                    });
+                  }
+                  if (!_shareInWired) {
+                    _shareInWired = true;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      ShareIn.init(model,
+                          getContext: () => _navKey.currentContext!,
+                          openChat: (chatId, entryId) {
+                            _navKey.currentState?.push(MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                  model: model,
+                                  chatId: chatId,
+                                  scrollToEntryId: entryId,
+                                  highlightEntryId: entryId),
+                            ));
+                          });
                     });
                   }
                   return ListScreen(model: model);
