@@ -433,7 +433,7 @@ Future<DateTime?> showReminderPicker(BuildContext context, AppModel model) async
   return DateTime(date.year, date.month, date.day, time.hour, time.minute);
 }
 
-enum SendOption { later, daily, weekly, custom }
+enum SendOption { later, daily, weekdays, weekly, monthly }
 
 enum AttachOption { photo, todo }
 
@@ -512,6 +512,61 @@ Future<List<int>?> showWeekdayPickerDialog(
             onPressed: () => Navigator.pop(ctx, selected.toList()..sort()),
             child: Text(tr('todo_done')),
           ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Day-of-month picker for monthly recurring tasks. Returns 1..31.
+Future<int?> showMonthDayPickerDialog(
+    BuildContext context, AppModel model,
+    {int? initial}) {
+  final p = model.p;
+  var selected = initial ?? DateTime.now().day;
+  return showDialog<int>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text('Каждый месяц, числа', style: TextStyle(color: p.text)),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: GridView.count(
+            crossAxisCount: 7,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+            childAspectRatio: 1,
+            shrinkWrap: true,
+            children: [
+              for (var d = 1; d <= 31; d++)
+                InkWell(
+                  onTap: () => Navigator.pop(ctx, d),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color:
+                          d == selected ? p.accent.withValues(alpha: .25) : null,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color:
+                              d == selected ? p.accent : p.textFaint.withValues(alpha: .4)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text('$d',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight:
+                                d == selected ? FontWeight.w700 : FontWeight.w400,
+                            color: p.text)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(model.tr('close'))),
         ],
       ),
     ),

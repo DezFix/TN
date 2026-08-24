@@ -25,7 +25,10 @@ class ToggleReceiver : BroadcastReceiver() {
             try {
                 val changed = if (itemId != null) toggleItem(context, entryId, itemId)
                 else toggleEntry(context, entryId)
-                if (changed) {
+                // Recurring task completed from the widget: roll it over when
+                // its period has passed (mirrors AppModel.rolloverRecurring).
+                val rolled = Recurrence.rollover(context)
+                if (changed || rolled) {
                     playDing(context)
                     vibrate(context)
                     TnDayWidgetProvider.updateAll(context)

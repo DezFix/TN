@@ -170,6 +170,7 @@ class Entry {
     this.waveform,
     this.recurrence,
     this.recurrenceDays,
+    this.monthDay,
     this.dueAt,
     this.editedAt,
   });
@@ -188,8 +189,11 @@ class Entry {
   // Delayed send was removed in v7.6: legacy `scheduledAt` values from old
   // backups are intentionally ignored on load and never written back.
   List<int>? waveform; // 0..100 amplitude bars for voice messages
-  String? recurrence; // null | 'daily' | 'weekly'
+  /// Recurrence rule for todo entries:
+  /// null | 'daily' | 'weekly' (see [recurrenceDays]) | 'monthly' (see [monthDay]).
+  String? recurrence;
   List<int>? recurrenceDays; // 1=Mon..7=Sun for weekly
+  int? monthDay; // 1..31 for monthly, clamped to month length
   int? dueAt; // for tasks-chat todos: deadline millis
   int? editedAt; // millis when last edited
 
@@ -210,6 +214,7 @@ class Entry {
         recurrence: j['recurrence'] as String?,
         recurrenceDays:
             (j['recurrenceDays'] as List?)?.map((e) => (e as num).toInt()).toList(),
+        monthDay: (j['monthDay'] as num?)?.toInt(),
         dueAt: (j['dueAt'] as num?)?.toInt(),
         editedAt: (j['editedAt'] as num?)?.toInt(),
         items: (j['items'] as List?)
@@ -232,6 +237,7 @@ class Entry {
         if (waveform != null) 'waveform': waveform,
         if (recurrence != null) 'recurrence': recurrence,
         if (recurrenceDays != null) 'recurrenceDays': recurrenceDays,
+        if (monthDay != null) 'monthDay': monthDay,
         if (dueAt != null) 'dueAt': dueAt,
         if (editedAt != null) 'editedAt': editedAt,
       };
@@ -264,3 +270,97 @@ List<String> extractTags(String text) {
 }
 
 String uid(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}-${(0xFFFF & DateTime.now().millisecond).toRadixString(16)}';
+
+/// Next occurrence of a recurrence rule strictly after [after].
+///
+/// [fromMs] is the anchor (usually the entry's current dueAt) — its clock
+/// time is preserved across occurrences. Weekdays are ISO: 1=Mon..7=Sun.
+/// Returns epoch millis.
+int nextOccurrence({
+  required String recurrence,
+  List<int>? days,
+  int? monthDay,
+  required int fromMs,
+  required DateTime after,
+}) {
+  final from = DateTime.fromMillisecondsSinceEpoch(fromMs);
+  var cand = DateTime(from.year, from.month, from.day, from.hour, from.minute);
+
+  switch (recurrence) {
+    case 'daily':
+      do {
+        cand = cand.add(const Duration(days: 1));
+      } while (!cand.isAfter(after));
+      break;
+    case 'weekly':
+      final set = (days == null || days.isEmpty)
+          ? <int>{from.weekday}
+          : Set<int>.of(days);
+      do {
+        cand = cand.add(const Duration(days: 1));
+      } while (!set.contains(cand.weekday) || !cand.isAfter(after));
+      break;
+    case 'monthly':
+      final dom = (monthDay == null || monthDay < 1) ? from.day : monthDay;
+      var y = from.year;
+      var m = from.month;
+      while (true) {
+        m++;
+        if (m > 12) {
+          m = 1;
+          y++;
+        }
+        final last = DateTime(y, m + 1, 0).day; // day count of month m
+        final c = DateTime(y, m, dom > last ? last : dom, from.hour, from.minute);
+        if (c.isAfter(after)) return c.millisecondsSinceEpoch;
+      }
+    default:
+      // Unknown rule: behave like one-shot, push a day forward past [after].
+      do {
+        cand = cand.add(const Duration(days: 1));
+      } while (!cand.isAfter(after));
+  }
+  return cand.millisecondsSinceEpoch;
+}
+
+/// Pure recurrence reset pass over [entries] (no side effects beyond the
+/// entries themselves). A recurring task whose items are all done stays
+/// checked until its *next* occurrence arrives; then items go back to
+/// undone and dueAt jumps forward, catching up over missed periods.
+/// Returns the entries that were reset.
+List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
+  final rolled = <Entry>[];
+  for (final e in entries) {
+    final rec = e.recurrence;
+    if (rec == null || e.dueAt == null) continue;
+    final items = e.items;
+    if (items == null || items.isEmpty || !items.every((i) => i.done)) {
+      continue;
+    }
+    var next = nextOccurrence(
+      recurrence: rec,
+      days: e.recurrenceDays,
+      monthDay: e.monthDay,
+      fromMs: e.dueAt!,
+      after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
+    );
+    // Still inside the current period — keep showing it as done.
+    if (now.isBefore(DateTime.fromMillisecondsSinceEpoch(next))) continue;
+    // Catch up over missed periods so the new deadline is in the future.
+    while (!DateTime.fromMillisecondsSinceEpoch(next).isAfter(now)) {
+      next = nextOccurrence(
+        recurrence: rec,
+        days: e.recurrenceDays,
+        monthDay: e.monthDay,
+        fromMs: next,
+        after: DateTime.fromMillisecondsSinceEpoch(next),
+      );
+    }
+    e.dueAt = next;
+    for (final i in items) {
+      i.done = false;
+    }
+    rolled.add(e);
+  }
+  return rolled;
+}

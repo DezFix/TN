@@ -166,14 +166,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
-  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays})>
+  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays, int? monthDay})>
       _pickTaskSchedule() async {
     final model = widget.model;
     final p = model.p;
     int? dueAt;
     String? recurrence;
     List<int>? recurrenceDays;
-    if (!mounted) return (dueAt: null, recurrence: null, recurrenceDays: null);
+    int? monthDay;
+    if (!mounted) return (dueAt: null, recurrence: null, recurrenceDays: null, monthDay: null);
     final when = await showReminderPicker(context, model);
     if (when != null) dueAt = when.millisecondsSinceEpoch;
     if (dueAt != null && mounted) {
@@ -181,33 +182,65 @@ class _ChatScreenState extends State<ChatScreen> {
         context: context,
         builder: (ctx) => SimpleDialog(
           backgroundColor: p.modalBg,
-          title: Text('Повтор?', style: TextStyle(color: p.text, fontSize: 14)),
+          title: Text('Повтор', style: TextStyle(color: p.text, fontSize: 14)),
           children: [
             SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.later), child: Text('Один раз', style: TextStyle(color: p.text))),
             SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.daily), child: Text('Каждый день', style: TextStyle(color: p.text))),
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('По дням недели', style: TextStyle(color: p.text))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekdays), child: Text('По будням (пн–пт)', style: TextStyle(color: p.text))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.weekly), child: Text('Дни недели…', style: TextStyle(color: p.text))),
+            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, SendOption.monthly), child: Text('Каждый месяц…', style: TextStyle(color: p.text))),
           ],
         ),
       );
       if (rec == SendOption.daily) {
         recurrence = 'daily';
+      } else if (rec == SendOption.weekdays) {
+        recurrence = 'weekly';
+        recurrenceDays = const [1, 2, 3, 4, 5];
       } else if (rec == SendOption.weekly && mounted) {
         final days = await showWeekdayPickerDialog(context, model, const []);
         if (days != null && days.isNotEmpty) {
           recurrence = 'weekly';
           recurrenceDays = days;
-          final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
-          var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
-          if (!days.contains(cand.weekday)) {
-            do {
-              cand = cand.add(const Duration(days: 1));
-            } while (!days.contains(cand.weekday));
-            dueAt = cand.millisecondsSinceEpoch;
-          }
+        }
+      } else if (rec == SendOption.monthly && mounted) {
+        final md = await showMonthDayPickerDialog(context, model);
+        if (md != null) {
+          recurrence = 'monthly';
+          monthDay = md;
         }
       }
+      // Align the first occurrence with the chosen rule.
+      if (recurrence != null && mounted) {
+        final cur = DateTime.fromMillisecondsSinceEpoch(dueAt!);
+        var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
+        if (recurrence == 'weekly') {
+          final days = recurrenceDays!;
+          while (!days.contains(cand.weekday)) {
+            cand = cand.add(const Duration(days: 1));
+          }
+        } else if (recurrence == 'monthly' && cand.day != monthDay) {
+          int clampDom(int y, int m) {
+            final last = DateTime(y, m + 1, 0).day;
+            return monthDay! > last ? last : monthDay!;
+          }
+
+          var c = DateTime(cand.year, cand.month, clampDom(cand.year, cand.month), cand.hour, cand.minute);
+          if (!c.isAfter(cand)) {
+            var y = cand.year;
+            var m = cand.month + 1;
+            if (m > 12) {
+              m = 1;
+              y++;
+            }
+            c = DateTime(y, m, clampDom(y, m), cand.hour, cand.minute);
+          }
+          cand = c;
+        }
+        dueAt = cand.millisecondsSinceEpoch;
+      }
     }
-    return (dueAt: dueAt, recurrence: recurrence, recurrenceDays: recurrenceDays);
+    return (dueAt: dueAt, recurrence: recurrence, recurrenceDays: recurrenceDays, monthDay: monthDay);
   }
 
   Future<void> _scheduleEntryReminder(Entry entry) async {
@@ -236,7 +269,8 @@ class _ChatScreenState extends State<ChatScreen> {
       tags: extractTags(text),
       dueAt: sched.dueAt,
       recurrence: sched.recurrence,
-      recurrenceDays: sched.recurrenceDays,
+      recurrenceDays: sched.recurrenceDays == null ? null : List.of(sched.recurrenceDays!),
+      monthDay: sched.monthDay,
     );
     widget.model.state.entries.add(entry);
     _text.clear();
@@ -725,20 +759,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final base = fmtTime(e.ts);
     if (e.isEdited) return '$base · ${widget.model.tr('edited')}';
     return base;
-  }
-
-  int _nextDueMs(Entry e) {
-    final cur = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
-    var cand = cur.add(const Duration(days: 1));
-    if (e.recurrence == 'weekly') {
-      final days = e.recurrenceDays ?? const <int>[];
-      var guard = 0;
-      while (!days.contains(cand.weekday) && guard < 8) {
-        cand = cand.add(const Duration(days: 1));
-        guard++;
-      }
-    }
-    return DateTime(cand.year, cand.month, cand.day, cur.hour, cur.minute).millisecondsSinceEpoch;
   }
 
   void _toast(String msg, {bool error = false}) {
@@ -1368,30 +1388,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     item.done = !item.done;
                     await model.save();
                     if (item.done) unawaited(Sounds.taskDone());
-                    // recurring tasks: when all done, spawn next occurrence
-                    if (item.done && entry.recurrence != null && entry.dueAt != null) {
-                      final allDone = allItems.every((i) => i.done);
-                      if (allDone) {
-                        final nextDue = _nextDueMs(entry);
-                        final next = Entry(
-                          id: uid('e'),
-                          chatId: entry.chatId,
-                          type: 'todo',
-                          ts: DateTime.now().millisecondsSinceEpoch,
-                          items: allItems.map((i) => TodoItem(id: uid('t'), text: i.text, done: false)).toList(),
-                          dueAt: nextDue,
-                          recurrence: entry.recurrence,
-                          recurrenceDays: entry.recurrenceDays == null ? null : List.of(entry.recurrenceDays!),
-                        );
-                        model.state.entries.add(next);
-                        await model.save();
-                        await RemindersService.instance.requestPermissions();
-                        await RemindersService.instance.schedule(
-                          Reminder(id: next.id, chatId: next.chatId, when: nextDue),
-                          model.tr('remind_title', [_chat.name]),
-                          entryNotifBody(next, model.tr),
-                        );
-                      }
+                    // Recurring tasks reset via model.rolloverRecurring() —
+                    // called here and on every app load / widget toggle.
+                    if (model.rolloverRecurring() > 0) {
+                      await model.save();
                     }
                     if (mounted) setState(() {});
                   },
@@ -1463,7 +1463,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     items: items,
                     dueAt: sched.dueAt,
                     recurrence: sched.recurrence,
-                    recurrenceDays: sched.recurrenceDays,
+                    recurrenceDays: sched.recurrenceDays == null ? null : List.of(sched.recurrenceDays!),
+                    monthDay: sched.monthDay,
                   );
                   model.state.entries.add(entry);
                   await model.save();

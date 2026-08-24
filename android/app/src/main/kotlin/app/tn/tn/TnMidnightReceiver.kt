@@ -15,6 +15,9 @@ import java.util.Calendar
 class TnMidnightReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Midnight: recurring tasks whose period ended reset here even if the
+        // app is never opened (see Recurrence.rollover).
+        Recurrence.rollover(context)
         TnDayWidgetProvider.updateAll(context)
         scheduleNext(context)
     }

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'i18n.dart';
 import 'models.dart';
+import 'reminders.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'widget_bridge.dart';
@@ -33,7 +34,23 @@ class AppModel extends ChangeNotifier {
       ..reminders.addAll(loaded.reminders);
     _reloadLanguage();
     _stamp = DateTime.now().millisecondsSinceEpoch;
+    rolloverRecurring();
     notifyListeners();
+  }
+
+  /// Recurring tasks reset themselves (see rolloverRecurringTasks); after
+  /// the reset we re-arm notifications for the new deadlines.
+  int rolloverRecurring() {
+    final rolled = rolloverRecurringTasks(state.entries, DateTime.now());
+    for (final e in rolled) {
+      final chat = state.chatById(e.chatId);
+      RemindersService.instance.schedule(
+        Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
+        tr('remind_title', [chat?.name ?? 'TN']),
+        entryNotifBody(e, tr),
+      ).catchError((_) {});
+    }
+    return rolled.length;
   }
 
   Future<void> save() async {
@@ -58,6 +75,10 @@ class AppModel extends ChangeNotifier {
       state.loadFromJson(raw);
       _reloadLanguage();
       _stamp = ext;
+      final rolled = rolloverRecurring();
+      if (rolled > 0) {
+        await save();
+      }
       notifyListeners();
       return true;
     } catch (_) {
