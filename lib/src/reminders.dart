@@ -47,16 +47,18 @@ class RemindersService {
         await _initTz();
         final ok = await _plugin
             .initialize(
-              settings: Platform.isWindows
+              // Branch on Android (not on !Windows): widget tests run on a
+              // Windows host but report TargetPlatform.android.
+              settings: Platform.isAndroid
                   ? const InitializationSettings(
+                      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+                    )
+                  : const InitializationSettings(
                       windows: WindowsInitializationSettings(
                         appName: 'TN',
                         appUserModelId: 'app.tn.tn',
                         guid: 'F4A9E2D1-7C3B-4E8A-9D2F-1B6C5A0E9D43',
                       ),
-                    )
-                  : const InitializationSettings(
-                      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
                     ),
             )
             .timeout(const Duration(seconds: 4));
@@ -156,6 +158,10 @@ class RemindersService {
   }
 
   Future<bool> schedule(Reminder r, String title, String body) async {
+    // Desktop: native scheduled toasts proved unreliable (AUMID/shortcut
+    // registration, timezone shifts) — ReminderEngine delivers reminders
+    // itself with banners and instant toasts instead.
+    if (!Platform.isAndroid) return true;
     if (!_ready) await init();
     try {
       // Absolute instant via UTC — a broken/unknown local timezone can no
@@ -200,8 +206,7 @@ class RemindersService {
     }
   }
 
-  Future<void> cancel(Reminder r) async {
-    try {
+  Future<void> cancel(Reminder r) async {    try {
       await _plugin.cancel(id: stableHash(r.id));
     } catch (_) {}
   }
@@ -244,26 +249,6 @@ class RemindersService {
     try {
       await _plugin.cancelAllPendingNotifications();
     } catch (_) {}
-  }
-
-  /// Schedules a test reminder 15 seconds from now — lets the user verify
-  /// the whole pipeline (init → schedule → toast) without waiting for a
-  /// real task deadline.
-  Future<bool> sendTestReminder() async {
-    final when = DateTime.now().add(const Duration(seconds: 15));
-    return schedule(
-      Reminder(id: 'test-reminder', chatId: 'diag', when: when.millisecondsSinceEpoch),
-      'TN',
-      'Тестовое напоминание — если видите это, уведомления работают',
-    );
-  }
-
-  /// One-line health summary for the settings diagnostics card.
-  Future<String> diagLine() async {
-    if (!_ready) await init();
-    final platform = Platform.isWindows ? 'Windows' : 'Android';
-    if (!_ready) return '$platform: init FAILED — $_lastError';
-    return '$platform: ready — $_lastError';
   }
 }
 

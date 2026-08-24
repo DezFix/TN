@@ -1,9 +1,15 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async' show unawaited;
+import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:system_tray/system_tray.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'src/app_model.dart';
+import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
@@ -23,7 +29,63 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.6';
+const _appVersion = '7.7';
+
+bool _quitting = false;
+
+/// True under `flutter test` — window/tray channels never answer there.
+final bool _isTestEnv = Platform.environment.containsKey('FLUTTER_TEST');
+
+/// Windows: phone-shaped window, close button hides to tray instead of
+/// quitting — reminders keep arriving while TN sits in the tray.
+Future<void> _initWindowAndTray() async {
+  await windowManager.ensureInitialized();
+  const options = WindowOptions(
+    size: Size(412, 892),
+    minimumSize: Size(320, 560),
+    title: 'TN',
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.normal,
+  );
+  await windowManager.waitUntilReadyToShow(options, () async {
+    windowManager.addListener(_TrayWindowListener());
+    await windowManager.setPreventClose(true);
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
+  final tray = SystemTray();
+  await tray.initSystemTray(title: 'TN', iconPath: 'assets/app_icon.ico', toolTip: 'TN');
+  final menu = Menu();
+  await menu.buildFrom([
+    MenuItemLabel(label: 'Открыть TN', onClicked: (_) => windowManager.show()),
+    MenuSeparator(),
+    MenuItemLabel(label: 'Выход', onClicked: (_) async {
+      _quitting = true;
+      await tray.destroy();
+      await windowManager.destroy();
+    }),
+  ]);
+  await tray.setContextMenu(menu);
+  tray.registerSystemTrayEventHandler((eventName) {
+    if (eventName == kSystemTrayEventClick) {
+      windowManager.isVisible().then((v) => v ? windowManager.hide() : windowManager.show());
+    } else if (eventName == kSystemTrayEventRightClick) {
+      tray.popUpContextMenu();
+    }
+  });
+}
+
+class _TrayWindowListener extends WindowListener {
+  @override
+  Future<void> onWindowClose() async {
+    // The X button hides to the tray; real exit only via tray menu.
+    if (_quitting) return;
+    await windowManager.hide();
+  }
+}
 
 class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
@@ -150,6 +212,12 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);
     } catch (_) {}
+    if (Platform.isWindows && !_isTestEnv) {
+      // Fire-and-forget: window/tray setup must never block app boot.
+      unawaited(_initWindowAndTray());
+      // Telegram-style delivery: in-app banner / toast, no native scheduling.
+      ReminderEngine.instance.start(model, _navKey);
+    }
     return model;
   }
 

@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,7 +8,6 @@ import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
 import '../src/models.dart';
-import '../src/reminders.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
@@ -24,25 +25,12 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   int _cacheMaxGb = 1024; // 0 = ∞, in MB (1024=1GB)
-  bool? _notifReady;
-  String _notifError = '';
 
   @override
   void initState() {
     super.initState();
     widget.model.addListener(_onModel);
     _loadCachePref();
-    _loadNotifDiag();
-  }
-
-  Future<void> _loadNotifDiag() async {
-    final r = RemindersService.instance;
-    await r.init();
-    if (!mounted) return;
-    setState(() {
-      _notifReady = r.ready;
-      _notifError = r.lastError;
-    });
   }
 
   Future<void> _loadCachePref() async {
@@ -157,55 +145,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          _sectionLabel(tr('notif_title'), p),
-          _card(
-            p,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(
-                    _notifReady == null
-                        ? Icons.notifications_outlined
-                        : _notifReady!
-                            ? Icons.notifications_active
-                            : Icons.notifications_off,
-                    size: 20,
-                    color: _notifReady == false ? p.danger : p.accent,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _notifReady == null
-                          ? '…'
-                          : _notifReady!
-                              ? tr('notif_ready')
-                              : '${tr('notif_failed')}$_notifError',
-                      style: TextStyle(
-                          fontSize: 14.5,
-                          color: _notifReady == false ? p.danger : p.text),
-                    ),
-                  ),
-                ]),
-                const Divider(height: 20, color: Color(0xFF2A3441)),
-                TextButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final ok =
-                        await RemindersService.instance.sendTestReminder();
-                    messenger.showSnackBar(SnackBar(
-                      content: Text(ok
-                          ? tr('notif_test_done')
-                          : tr('notif_test_fail')),
-                    ));
-                  },
-                  icon: Icon(Icons.bolt, size: 18, color: p.accent),
-                  label: Text(tr('notif_test'),
-                      style: TextStyle(color: p.accent, fontSize: 13.5)),
-                ),
-              ],
-            ),
-          ),
           _sectionLabel('RSS каналы', p),
           _card(
             p,
@@ -301,26 +240,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel(tr('section_widget'), p),
-          _card(
-            p,
-            child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
-              ),
-              borderRadius: BorderRadius.circular(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(tr('widget_settings_title'),
-                        style: TextStyle(fontSize: 14.5, color: p.text)),
-                  ),
-                  Icon(Icons.chevron_right, color: p.textFaint),
-                ],
+          // Home-screen widgets are an Android feature — hide on desktop.
+          if (!Platform.isWindows) ...[
+            _sectionLabel(tr('section_widget'), p),
+            _card(
+              p,
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
+                ),
+                borderRadius: BorderRadius.circular(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(tr('widget_settings_title'),
+                          style: TextStyle(fontSize: 14.5, color: p.text)),
+                    ),
+                    Icon(Icons.chevron_right, color: p.textFaint),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 24),
         ],
       ),
