@@ -1,4 +1,4 @@
-name: Build releases
+﻿name: Build releases
 
 on:
   push:
@@ -19,6 +19,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.4
 
       - run: flutter pub get
       - run: flutter test
@@ -46,6 +47,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.41.4
 
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
