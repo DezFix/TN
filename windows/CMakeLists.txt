@@ -2,6 +2,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(tn LANGUAGES CXX)
 
+# audioplayers_windows still uses /await experimental coroutines; newer MSVC
+# hard-errors on them unless this suppression is defined.
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "tn")
