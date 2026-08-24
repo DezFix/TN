@@ -16,7 +16,7 @@ class WelcomeScreen extends StatefulWidget {
 class _WelcomeScreenState extends State<WelcomeScreen>
     with WidgetsBindingObserver {
   String _lang = 'ru';
-  String _theme = 'system';
+  String _theme = 'dark';
   bool _notifOk = false;
   bool _alarmsOk = false;
 
@@ -26,7 +26,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     WidgetsBinding.instance.addObserver(this);
     _lang = widget.model.state.lang;
     _theme = widget.model.state.theme;
-    if (_theme != 'light' && _theme != 'dark' && _theme != 'system') _theme = 'system';
+    if (_theme != 'light' && _theme != 'dark') _theme = 'dark';
     _checkPerms();
   }
 
@@ -151,9 +151,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final t in ['light', 'dark', 'system'])
+                  for (final t in ['light', 'dark'])
                     ChoiceChip(
-                      label: Text(t == 'system' ? 'System' : tr(t)),
+                      label: Text(tr(t)),
                       selected: _theme == t,
                       onSelected: (_) => setState(() => _theme = t),
                       selectedColor: p.accent,

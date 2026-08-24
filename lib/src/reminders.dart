@@ -21,7 +21,7 @@ class RemindersService {
     try {
       if (!_ready) {
         await _initTz();
-        await _plugin
+        final ok = await _plugin
             .initialize(
               settings: Platform.isWindows
                   ? const InitializationSettings(
@@ -36,7 +36,14 @@ class RemindersService {
                     ),
             )
             .timeout(const Duration(seconds: 4));
-        _ready = true;
+        // Native registration can legitimately fail (e.g. the Start Menu
+        // AUMID shortcut could not be created on Windows) — never pretend
+        // we are ready or every later schedule call will silently throw.
+        _ready = ok ?? false;
+        assert(() {
+          if (!_ready) debugPrint('TN: notification plugin init failed');
+          return true;
+        }());
       }
     } catch (_) {}
   }

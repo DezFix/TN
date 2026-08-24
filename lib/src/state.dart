@@ -116,7 +116,8 @@ class AppState {
       ..addAll((data['reminders'] as List? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(Reminder.fromJson));
-    if (data['theme'] == 'dark') theme = 'dark';
+    // 'system' theme option was removed; legacy value maps to dark.
+    theme = data['theme'] == 'light' ? 'light' : 'dark';
     if (data['lang'] is String) lang = data['lang'] as String;
   }
 

@@ -129,24 +129,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionLabel(tr('section_backup'), p),
           _card(
             p,
-            child: Column(
-              children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(children: [
-                      Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
-                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
-                    ]),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(tr('backup_soon'), style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-              ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
+                  Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                ]),
+              ),
             ),
           ),
           _sectionLabel('RSS каналы', p),
@@ -316,7 +310,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           opt(widget.model.tr('light'), 'light'),
           opt(widget.model.tr('dark'), 'dark'),
-          opt('System', 'system'),
         ],
       ),
     );

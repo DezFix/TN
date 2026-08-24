@@ -23,7 +23,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.3';
+const _appVersion = '7.4';
 
 class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
@@ -70,8 +70,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
-            // 'system' is resolved by MaterialApp itself via themeMode;
-            // reading platform brightness above MaterialApp was unreliable.
+            // 'system' theme was removed — only explicit light/dark remain.
             final themeName = model.state.theme;
             final pl = paletteFor('light');
             final pd = paletteFor('dark');
@@ -113,11 +112,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              themeMode: switch (themeName) {
-                'dark' => ThemeMode.dark,
-                'system' => ThemeMode.system,
-                _ => ThemeMode.light,
-              },
+              themeMode: themeName == 'dark' ? ThemeMode.dark : ThemeMode.light,
               theme: buildTheme(pl, Brightness.light),
               darkTheme: buildTheme(pd, Brightness.dark),
               routes: {

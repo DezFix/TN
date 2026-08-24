@@ -825,6 +825,27 @@ class _ChatScreenState extends State<ChatScreen> {
             IconButton(icon: Icon(Icons.close, color: p.accent), onPressed: () => setState(() => _selectedIds.clear())),
             Text(widget.model.tr('selected', ['${_selectedIds.length}']), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
             const Spacer(),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.edit_note, color: p.accent),
+              tooltip: widget.model.tr('edit'),
+              onSelected: (v) async {
+                final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+                if (matches.length != 1) {
+                  _toast(widget.model.tr('select_one'));
+                  return;
+                }
+                final entry = matches.first;
+                if (v == 'time') {
+                  await _onCtxAction(entry, EntryAction.schedTime);
+                } else if (v == 'edit') {
+                  await _onCtxAction(entry, EntryAction.edit);
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'time', height: 40, child: Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: p.text))),
+                PopupMenuItem(value: 'edit', height: 40, child: Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: p.text))),
+              ],
+            ),
             IconButton(icon: Icon(Icons.share, color: p.accent), tooltip: widget.model.tr('share'), onPressed: _shareSelected),
             IconButton(icon: Icon(Icons.forward, color: p.accent), tooltip: widget.model.tr('forward'), onPressed: _forwardSelected),
             IconButton(icon: Icon(Icons.copy, color: p.accent), tooltip: widget.model.tr('copy'), onPressed: _copySelected),
