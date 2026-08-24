@@ -122,10 +122,15 @@ class BackupService {
   static String lastExportName() => _fileName();
 
   static Future<Directory> _downloadsDir() async {
+    if (Platform.isAndroid) {
+      try {
+        final dl = Directory('/storage/emulated/0/Download');
+        if (await dl.exists()) return dl;
+      } catch (_) {}
+    }
     try {
-      // Android often /storage/emulated/0/Download
-      final dl = Directory('/storage/emulated/0/Download');
-      if (await dl.exists()) return dl;
+      final dl = await getDownloadsDirectory();
+      if (dl != null) return dl;
     } catch (_) {}
     return getApplicationDocumentsDirectory();
   }

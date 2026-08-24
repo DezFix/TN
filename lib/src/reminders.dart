@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,9 +23,17 @@ class RemindersService {
         await _initTz();
         await _plugin
             .initialize(
-              settings: const InitializationSettings(
-                android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-              ),
+              settings: Platform.isWindows
+                  ? const InitializationSettings(
+                      windows: WindowsInitializationSettings(
+                        appName: 'TN',
+                        appUserModelId: 'app.tn.tn',
+                        guid: 'F4A9E2D1-7C3B-4E8A-9D2F-1B6C5A0E9D43',
+                      ),
+                    )
+                  : const InitializationSettings(
+                      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+                    ),
             )
             .timeout(const Duration(seconds: 4));
         _ready = true;
@@ -44,6 +54,7 @@ class RemindersService {
   }
 
   Future<void> requestPermissions() async {
+    if (!Platform.isAndroid) return; // Windows needs no runtime permission
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -58,6 +69,7 @@ class RemindersService {
   }
 
   Future<bool> canScheduleExactNotifications() async {
+    if (!Platform.isAndroid) return true;
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     return await android?.canScheduleExactNotifications() ?? false;
@@ -73,6 +85,7 @@ class RemindersService {
   }
 
   Future<bool> requestNotificationsPermission() async {
+    if (!Platform.isAndroid) return true;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -85,6 +98,7 @@ class RemindersService {
   /// True when the OS lets us schedule exact alarms; otherwise we degrade to
   /// inexact instead of letting zonedSchedule throw and lose the reminder.
   Future<bool> exactAlarmsAllowed() async {
+    if (!Platform.isAndroid) return true;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -97,6 +111,7 @@ class RemindersService {
   /// True when the user (or the OS below Android 13) allows showing
   /// notifications at all.
   Future<bool> notificationsAllowed() async {
+    if (!Platform.isAndroid) return true;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
