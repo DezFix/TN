@@ -368,11 +368,37 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
         after: DateTime.fromMillisecondsSinceEpoch(next),
       );
     }
-    e.dueAt = next;
-    for (final i in items) {
-      i.done = false;
+  e.dueAt = next;
+      for (final i in items) {
+        i.done = false;
+      }
+      rolled.add(e);
     }
-    rolled.add(e);
+    return rolled;
   }
-  return rolled;
-}
+
+  /// Called right after a recurring task was completed while OVERDUE (its
+  /// period already ended): snaps the deadline forward to the next
+  /// occurrence after [now] so the entry stays checked until that new
+  /// deadline passes and only then rolls over. Without this, completing an
+  /// overdue daily task would instantly uncheck it again ("can't tick it").
+  /// Returns true when the entry changed.
+  bool snapCompletedRecurring(Entry e, DateTime now) {
+    final rec = e.recurrence;
+    if (rec == null || e.dueAt == null) return false;
+    final items = e.items;
+    if (items == null || items.isEmpty || !items.every((i) => i.done)) {
+      return false;
+    }
+    if (DateTime.fromMillisecondsSinceEpoch(e.dueAt!).isAfter(now)) {
+      return false; // not overdue — normal flow, nothing to snap
+    }
+    e.dueAt = nextOccurrence(
+      recurrence: rec,
+      days: e.recurrenceDays,
+      monthDay: e.monthDay,
+      fromMs: e.dueAt!,
+      after: now,
+    );
+    return true;
+  }

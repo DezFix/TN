@@ -62,6 +62,7 @@ class ToggleReceiver : BroadcastReceiver() {
                 for (j in 0 until items.length()) {
                     items.getJSONObject(j).put("done", !allDone)
                 }
+                if (!allDone) snapCompletedRecurring(e)
                 prefs.edit()
                     .putString("flutter.tn-notes-data-v1", data.toString())
                     .putLong("flutter.tn-state-stamp", System.currentTimeMillis())
@@ -86,6 +87,7 @@ class ToggleReceiver : BroadcastReceiver() {
                     if (item.optString("id") != itemId) continue
                     val nowDone = !item.optBoolean("done")
                     item.put("done", nowDone)
+                    if (nowDone) snapCompletedRecurring(e)
                     prefs.edit()
                         .putString("flutter.tn-notes-data-v1", data.toString())
                         .putLong("flutter.tn-state-stamp", System.currentTimeMillis())
@@ -95,6 +97,33 @@ class ToggleReceiver : BroadcastReceiver() {
                 return false
             }
             return false
+        }
+
+        /**
+         * Completing an OVERDUE recurring task snaps its deadline forward to
+         * the next occurrence after now, so the checkmark sticks until the new
+         * period ends — otherwise Recurrence.rollover would instantly uncheck
+         * it again ("can't tick overdue tasks from the widget").
+         * Mirrors models.dart snapCompletedRecurring.
+         */
+        private fun snapCompletedRecurring(e: JSONObject) {
+            try {
+                val rec = e.optString("recurrence", "")
+                if (rec.isEmpty() || !e.has("dueAt")) return
+                val items = e.optJSONArray("items") ?: return
+                if (items.length() == 0) return
+                for (j in 0 until items.length()) {
+                    if (!items.getJSONObject(j).optBoolean("done")) return
+                }
+                val now = System.currentTimeMillis()
+                if (e.getLong("dueAt") > now) return
+                val daysArr: IntArray? = e.optJSONArray("recurrenceDays")?.let { arr ->
+                    IntArray(arr.length()) { arr.getInt(it) }
+                }
+                val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
+                e.put("dueAt", Recurrence.nextAfter(rec, daysArr, mDay, now))
+            } catch (_: Exception) {
+            }
         }
 
         private fun playDing(context: Context) {

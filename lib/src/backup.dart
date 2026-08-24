@@ -35,6 +35,8 @@ class BackupService {
     return file.path;
   }
 
+  static Future<List<int>> buildZip(AppState state) => _buildZip(state);
+
   static Future<List<int>> _buildZip(AppState state) async {
     final archive = Archive();
     final jsonBytes = utf8.encode(state.toJson());
@@ -77,17 +79,23 @@ class BackupService {
   }
 
   static Future<void> importFrom(File file, AppState state) async {
-    if (file.path.toLowerCase().endsWith('.zip')) {
-      await _importZip(file, state);
+    final bytes = await file.readAsBytes();
+    await importFromBytes(bytes, file.path, state);
+  }
+
+  /// Accepts raw bytes of a .zip (or legacy .json) backup — used by cloud
+  /// restore where there is no local file yet.
+  static Future<void> importFromBytes(
+      List<int> bytes, String sourceName, AppState state) async {
+    if (sourceName.toLowerCase().endsWith('.zip')) {
+      await _importZipBytes(bytes, state);
     } else {
-      final raw = await file.readAsString();
-      state.loadFromJson(raw);
+      state.loadFromJson(utf8.decode(bytes));
       await state.save();
     }
   }
 
-  static Future<void> _importZip(File file, AppState state) async {
-    final bytes = await file.readAsBytes();
+  static Future<void> _importZipBytes(List<int> bytes, AppState state) async {
     final archive = ZipDecoder().decodeBytes(bytes);
     ArchiveFile? data;
     for (final f in archive) {
@@ -109,6 +117,9 @@ class BackupService {
     }
     await state.save();
   }
+
+  /// Filename the next export will use (also used for cloud uploads).
+  static String lastExportName() => _fileName();
 
   static Future<Directory> _downloadsDir() async {
     try {

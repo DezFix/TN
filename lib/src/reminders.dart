@@ -49,10 +49,37 @@ class RemindersService {
           AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
       // Only opens the system "Alarms & reminders" page when needed.
-      if (await android?.canScheduleExactNotifications() == false) {
-        await android?.requestExactAlarmsPermission();
+      if (await canScheduleExactNotifications()) {
+        // already granted
+      } else {
+        await requestExactAlarmsPermissionPage();
       }
     } catch (_) {}
+  }
+
+  Future<bool> canScheduleExactNotifications() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.canScheduleExactNotifications() ?? false;
+  }
+
+  /// Opens the system "Alarms & reminders" page; returns when user comes back.
+  Future<void> requestExactAlarmsPermissionPage() async {
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await android?.requestExactAlarmsPermission();
+    } catch (_) {}
+  }
+
+  Future<bool> requestNotificationsPermission() async {
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.requestNotificationsPermission() ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// True when the OS lets us schedule exact alarms; otherwise we degrade to
@@ -64,6 +91,18 @@ class RemindersService {
       return await android?.canScheduleExactNotifications() ?? false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// True when the user (or the OS below Android 13) allows showing
+  /// notifications at all.
+  Future<bool> notificationsAllowed() async {
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.areNotificationsEnabled() ?? true;
+    } catch (_) {
+      return true;
     }
   }
 

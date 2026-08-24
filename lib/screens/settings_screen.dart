@@ -1,16 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
-import '../src/backup.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
 import '../src/models.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
+import 'backup_screen.dart';
 import 'folders_edit_screen.dart';
 import 'widget_settings_screen.dart';
 
@@ -133,12 +131,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             p,
             child: Column(
               children: [
-                Row(children: [
-                  Expanded(child: FilledButton.icon(icon: const Icon(Icons.upload, size: 18), style: FilledButton.styleFrom(backgroundColor: p.accent), label: Text(tr('backup_export')), onPressed: () async { try { final path = await BackupService.export(model.state); if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_exported', [path.split('/').last.split('\\').last])))); } catch (_) { if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); } })),
-                  const SizedBox(width: 8),
-                  Expanded(child: OutlinedButton.icon(icon: Icon(Icons.download, size: 18, color: p.text), label: Text(tr('backup_import'), style: TextStyle(color: p.text)), onPressed: () async { final files = await BackupService.listBackups(); if (!context.mounted) return; if (files.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); return; } final picked = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(backgroundColor: p.modalBg, title: Text(tr('backup_import'), style: TextStyle(color: p.text)), children: [for (final f in files.take(20)) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, f.path), child: Text(f.path.split('/').last, style: TextStyle(color: p.text, fontSize: 13))), SimpleDialogOption(onPressed: () => Navigator.pop(ctx), child: Text(tr('close'), style: TextStyle(color: p.textSoft)))]));                   if (picked == null) return; try { final file = File(picked); await BackupService.importFrom(file, model.state); model.tr = makeTranslator(model.state.lang); model.refresh(); if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_imported')))); setState(() {}); } catch (_) { if (!context.mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('backup_error')))); } })),
-                ]),
-                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
+                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(tr('backup_soon'), style: TextStyle(fontSize: 11.5, color: p.textFaint)),
               ],
             ),

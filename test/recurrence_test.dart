@@ -119,4 +119,75 @@ void main() {
       expect(e.items!.every((i) => i.done), isFalse);
     });
   });
+
+  group('snapCompletedRecurring', () {
+    Entry task({String? rec, List<int>? days, int? monthDay, required int dueAt, bool done = false}) =>
+        Entry(
+          id: 'e1',
+          chatId: 'c1',
+          type: 'todo',
+          ts: 0,
+          items: [
+            TodoItem(id: 't1', text: 'дело', done: done),
+            TodoItem(id: 't2', text: 'второе', done: done),
+          ],
+          dueAt: dueAt,
+          recurrence: rec,
+          recurrenceDays: days,
+          monthDay: monthDay,
+        );
+
+    test('overdue completed daily task snaps past now and stays checked', () {
+      final e = task(rec: 'daily', dueAt: ms(2026, 8, 20), done: true);
+      final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12));
+      expect(snapped, isTrue);
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 25));
+      expect(e.items!.every((i) => i.done), isTrue);
+    });
+
+    test('weekly overdue snaps to next selected weekday', () {
+      final e = task(rec: 'weekly', days: const [3], dueAt: ms(2026, 8, 19), done: true); // Wed
+      final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12)); // Mon
+      expect(snapped, isTrue);
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 26)); // Wed
+    });
+
+    test('not-overdue completed task is untouched', () {
+      final e = task(rec: 'daily', dueAt: ms(2026, 8, 25), done: true);
+      expect(snapCompletedRecurring(e, dt(2026, 8, 24, 12)), isFalse);
+      expect(e.dueAt, ms(2026, 8, 25));
+    });
+
+    test('partly-done overdue task is untouched', () {
+      final e = Entry(
+        id: 'e1',
+        chatId: 'c1',
+        type: 'todo',
+        ts: 0,
+        items: [
+          TodoItem(id: 't1', text: 'дело', done: true),
+          TodoItem(id: 't2', text: 'второе', done: false),
+        ],
+        dueAt: ms(2026, 8, 20),
+        recurrence: 'daily',
+      );
+      expect(snapCompletedRecurring(e, dt(2026, 8, 24, 12)), isFalse);
+      expect(e.dueAt, ms(2026, 8, 20));
+    });
+
+    test('non-recurring overdue completed task is untouched', () {
+      final e = task(dueAt: ms(2026, 8, 20), done: true);
+      expect(snapCompletedRecurring(e, dt(2026, 8, 24, 12)), isFalse);
+      expect(e.dueAt, ms(2026, 8, 20));
+    });
+
+    test('monthly snap keeps clamped month day', () {
+      final e = task(rec: 'monthly', monthDay: 31, dueAt: ms(2026, 1, 31), done: true);
+      final snapped = snapCompletedRecurring(e, dt(2026, 2, 5));
+      expect(snapped, isTrue);
+      final d = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
+      expect(d.month, 2);
+      expect(d.day, 28); // clamped: no Feb 31
+    });
+  });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../src/app_model.dart';
 import '../src/i18n.dart';
+import '../src/reminders.dart';
 import '../src/theme.dart';
 import 'list_screen.dart';
 
@@ -12,16 +13,53 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with WidgetsBindingObserver {
   String _lang = 'ru';
   String _theme = 'system';
+  bool _notifOk = false;
+  bool _alarmsOk = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _lang = widget.model.state.lang;
     _theme = widget.model.state.theme;
     if (_theme != 'light' && _theme != 'dark' && _theme != 'system') _theme = 'system';
+    _checkPerms();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the system "Alarms & reminders" page.
+    if (state == AppLifecycleState.resumed) _checkPerms();
+  }
+
+  Future<void> _checkPerms() async {
+    final n = await RemindersService.instance.notificationsAllowed();
+    final a = await RemindersService.instance.exactAlarmsAllowed();
+    if (!mounted) return;
+    setState(() {
+      _notifOk = n;
+      _alarmsOk = a;
+    });
+  }
+
+  Future<void> _grantNotifications() async {
+    await RemindersService.instance.requestNotificationsPermission();
+    await _checkPerms();
+  }
+
+  Future<void> _grantAlarms() async {
+    await RemindersService.instance.requestExactAlarmsPermissionPage();
+    await _checkPerms();
   }
 
   Future<void> _finish() async {
@@ -126,13 +164,49 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                 ],
               ),
+
+              // ---- Permissions ----
+              const SizedBox(height: 24),
+              Text(tr('perm_title'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.6)),
+              const SizedBox(height: 8),
+              _permCard(
+                p,
+                icon: Icons.notifications_active_outlined,
+                title: tr('perm_notifications'),
+                desc: tr('perm_notifications_desc'),
+                granted: _notifOk,
+                grantLabel: tr('perm_grant'),
+                onGrant: _grantNotifications,
+              ),
+              const SizedBox(height: 8),
+              _permCard(
+                p,
+                icon: Icons.alarm_outlined,
+                title: tr('perm_alarms'),
+                desc: tr('perm_alarms_desc'),
+                granted: _alarmsOk,
+                grantLabel: tr('perm_grant'),
+                onGrant: _grantAlarms,
+              ),
+              if (!_notifOk || !_alarmsOk) ...[
+                const SizedBox(height: 8),
+                Text(tr('perm_hint'), style: TextStyle(fontSize: 12, color: p.textFaint, height: 1.4)),
+              ],
+
               const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                  onPressed: _finish,
-                  child: Text(tr('welcome_start'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _notifOk && _alarmsOk ? p.accent : p.textFaint.withValues(alpha: .35),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: (_notifOk && _alarmsOk) ? _finish : null,
+                  child: Text(
+                    (_notifOk && _alarmsOk) ? tr('welcome_start') : tr('perm_finish_locked'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -150,4 +224,53 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Expanded(child: Text(text, style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35))),
         ],
       );
+
+  Widget _permCard(
+    Palette p, {
+    required IconData icon,
+    required String title,
+    required String desc,
+    required bool granted,
+    required String grantLabel,
+    required VoidCallback onGrant,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: p.bgChat,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: granted ? p.accent.withValues(alpha: .55) : p.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: granted ? p.accent : p.textSoft),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+                const SizedBox(height: 2),
+                Text(desc, style: TextStyle(fontSize: 11.5, color: p.textSoft, height: 1.35)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (granted)
+            Icon(Icons.check_circle, color: p.accent, size: 26)
+          else
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: p.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: onGrant,
+              child: Text(grantLabel, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+        ],
+      ),
+    );
+  }
 }

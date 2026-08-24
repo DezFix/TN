@@ -680,6 +680,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _onCtxAction(Entry entry, EntryAction action) async {
     switch (action) {
+      case EntryAction.schedTime:
+        if (!mounted) return;
+        final when = await showReminderPicker(context, widget.model);
+        if (when == null) return;
+        entry.dueAt = when.millisecondsSinceEpoch;
+        await widget.model.save();
+        await _scheduleEntryReminder(entry);
+        if (mounted) {
+          setState(() {});
+          _toast(widget.model.tr('change_time_done'));
+        }
+        break;
       case EntryAction.select:
         _toggleSelect(entry.id);
         HapticFeedback.selectionClick();
@@ -1388,10 +1400,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     item.done = !item.done;
                     await model.save();
                     if (item.done) unawaited(Sounds.taskDone());
+                    // Completing an OVERDUE recurring task snaps its deadline
+                    // forward so the checkmark sticks until the new period
+                    // ends (otherwise rollover would instantly uncheck it).
+                    final snapped = entry.recurrence != null && snapCompletedRecurring(entry, DateTime.now());
                     // Recurring tasks reset via model.rolloverRecurring() —
                     // called here and on every app load / widget toggle.
-                    if (model.rolloverRecurring() > 0) {
+                    final rolled = model.rolloverRecurring();
+                    if (snapped || rolled > 0) {
                       await model.save();
+                      await _scheduleEntryReminder(entry);
                     }
                     if (mounted) setState(() {});
                   },

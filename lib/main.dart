@@ -148,6 +148,9 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     final model = AppModel();
     await model.load();
     await RemindersService.instance.init();
+    // Ask for the notifications permission right away; the exact-alarms
+    // system page is only opened from the welcome flow / reminder creation.
+    await RemindersService.instance.requestNotificationsPermission();
     try {
       final prefs = await SharedPreferences.getInstance();
       _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);
