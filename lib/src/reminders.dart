@@ -1,8 +1,9 @@
-import 'dart:io' show Platform;
+import 'dart:io' show File, FileMode, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -16,6 +17,29 @@ class RemindersService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
   int _tzAttempts = 0;
+  String _lastError = '';
+
+  String get lastError => _lastError;
+  bool get ready => _ready;
+
+  void _log(String msg) {
+    _lastError = msg;
+    assert(() {
+      debugPrint('TN reminders: $msg');
+      return true;
+    }());
+    // Best-effort file log — the only way to see what happened on a device
+    // we cannot attach a debugger to.
+    try {
+      getApplicationDocumentsDirectory().then((d) {
+        final f = File(
+            '${d.path}${Platform.pathSeparator}tn-reminders.log');
+        f.writeAsStringSync(
+            '${DateTime.now().toIso8601String()} $msg\n',
+            mode: FileMode.append);
+      }).catchError((_) {});
+    } catch (_) {}
+  }
 
   Future<void> init() async {
     try {
@@ -40,12 +64,15 @@ class RemindersService {
         // AUMID shortcut could not be created on Windows) — never pretend
         // we are ready or every later schedule call will silently throw.
         _ready = ok ?? false;
-        assert(() {
-          if (!_ready) debugPrint('TN: notification plugin init failed');
-          return true;
-        }());
+        if (!_ready) {
+          _log('init failed (plugin returned false)');
+        } else {
+          _log('init ok');
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      _log('init threw: $e');
+    }
   }
 
   Future<void> _initTz() async {
@@ -131,9 +158,12 @@ class RemindersService {
   Future<bool> schedule(Reminder r, String title, String body) async {
     if (!_ready) await init();
     try {
+      // Absolute instant via UTC — a broken/unknown local timezone can no
+      // longer shift the target into the past (which made zonedSchedule
+      // throw and silently lose the reminder, seen on Windows).
       final when = tz.TZDateTime.from(
-        DateTime.fromMillisecondsSinceEpoch(r.when),
-        tz.local,
+        DateTime.fromMillisecondsSinceEpoch(r.when, isUtc: true),
+        tz.UTC,
       );
       final exact = await exactAlarmsAllowed();
       await _plugin.zonedSchedule(
@@ -162,12 +192,10 @@ class RemindersService {
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
       );
+      _log('scheduled ${r.id} at $when');
       return true;
     } catch (e) {
-      assert(() {
-        debugPrint('TN: reminder ${r.id} schedule failed: $e');
-        return true;
-      }());
+      _log('schedule ${r.id} failed: $e');
       return false;
     }
   }
@@ -216,6 +244,26 @@ class RemindersService {
     try {
       await _plugin.cancelAllPendingNotifications();
     } catch (_) {}
+  }
+
+  /// Schedules a test reminder 15 seconds from now — lets the user verify
+  /// the whole pipeline (init → schedule → toast) without waiting for a
+  /// real task deadline.
+  Future<bool> sendTestReminder() async {
+    final when = DateTime.now().add(const Duration(seconds: 15));
+    return schedule(
+      Reminder(id: 'test-reminder', chatId: 'diag', when: when.millisecondsSinceEpoch),
+      'TN',
+      'Тестовое напоминание — если видите это, уведомления работают',
+    );
+  }
+
+  /// One-line health summary for the settings diagnostics card.
+  Future<String> diagLine() async {
+    if (!_ready) await init();
+    final platform = Platform.isWindows ? 'Windows' : 'Android';
+    if (!_ready) return '$platform: init FAILED — $_lastError';
+    return '$platform: ready — $_lastError';
   }
 }
 

@@ -139,19 +139,63 @@ class Chat {
 }
 
 class TodoItem {
-  TodoItem({required this.id, required this.text, this.done = false});
+  TodoItem({required this.id, required this.text, this.done = false, this.parentId});
 
   final String id;
   String text;
   bool done;
 
+  /// Non-null when this item is a subtask of another item in the same entry.
+  String? parentId;
+
   factory TodoItem.fromJson(Map<String, dynamic> j) => TodoItem(
         id: j['id'] as String? ?? '',
         text: j['text'] as String? ?? '',
         done: j['done'] as bool? ?? false,
+        parentId: j['pid'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'text': text, 'done': done};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        'done': done,
+        if (parentId != null) 'pid': parentId,
+      };
+}
+
+/// Toggles [id] and cascades the new value over its whole subtree (checking
+/// a parent checks its subtasks, unchecking unchecks them). Pure function —
+/// mutates [items] in place, returns true when anything changed.
+bool toggleTodoCascade(List<TodoItem> items, String id) {
+  final target = items.where((i) => i.id == id).firstOrNull;
+  if (target == null) return false;
+  final value = !target.done;
+  void apply(TodoItem t) {
+    t.done = value;
+    for (final c in items.where((i) => i.parentId == t.id)) {
+      apply(c);
+    }
+  }
+
+  apply(target);
+  return true;
+}
+
+/// Removes an item; its subtasks (if any) are re-parented to root level so
+/// no text is ever lost. Returns true when the item existed.
+bool removeTodoItem(List<TodoItem> items, String id) {
+  final target = items.where((i) => i.id == id).firstOrNull;
+  if (target == null) return false;
+  final wasParent = target.parentId;
+  for (final child in items.where((i) => i.parentId == id).toList()) {
+    child.parentId = wasParent; // keep sibling level, or lift to root
+  }
+  items.removeWhere((i) => i.id == id);
+  return true;
+}
+
+extension _FirstOf<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
 
 class Entry {

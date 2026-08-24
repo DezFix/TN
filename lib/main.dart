@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,7 +23,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.4';
+const _appVersion = '7.5';
 
 class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
@@ -49,7 +49,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Tasks checked from the home-screen widget land in storage while the
-    // app is backgrounded — pull them in when we come back.
+    // app is backgrounded вЂ” pull them in when we come back.
     if (state == AppLifecycleState.resumed) {
       _future.then((m) => m.syncIfExternal());
     }
@@ -70,7 +70,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
-            // 'system' theme was removed — only explicit light/dark remain.
+            // 'system' theme was removed вЂ” only explicit light/dark remain.
             final themeName = model.state.theme;
             final pl = paletteFor('light');
             final pd = paletteFor('dark');
@@ -192,10 +192,10 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
               onPressed: () async {
                 await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ko-fi.com/k_k • ${model.tr('support')}')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ko-fi.com/k_k вЂў ${model.tr('support')}')));
                 }
               },
-              child: Text('❤️ ko-fi', style: TextStyle(color: p.accent)),
+              child: Text('вќ¤пёЏ ko-fi', style: TextStyle(color: p.accent)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: p.accent),

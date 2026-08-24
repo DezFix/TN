@@ -328,98 +328,225 @@ Future<List<TodoItem>?> showTodoEditorDialog(
   final p = model.p;
   final tr = model.tr;
   final items = <TodoItem>[
-    if (entry != null) ...entry.items!.map((i) => TodoItem(id: i.id, text: i.text, done: i.done)),
+    if (entry != null)
+      ...entry.items!.map((i) =>
+          TodoItem(id: i.id, text: i.text, done: i.done, parentId: i.parentId)),
   ];
   final field = TextEditingController();
+  String? addUnder;
+
+  // Index right after the last descendant of parentId — keeps subtasks
+  // visually grouped under their parent in list order.
+  int insertAfterSubtree(List<TodoItem> list, String? parentId) {
+    if (parentId == null) return list.length;
+    var idx = list.indexWhere((i) => i.id == parentId);
+    if (idx < 0) return list.length;
+    final ids = {parentId};
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = idx + 1; i < list.length; i++) {
+        if (ids.contains(list[i].parentId)) {
+          ids.add(list[i].id);
+          idx = i;
+          changed = true;
+        }
+      }
+    }
+    return idx + 1;
+  }
 
   return showDialog<List<TodoItem>>(
     context: context,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => AlertDialog(
-        backgroundColor: p.modalBg,
-        title: Text(tr(entry != null ? 'todo_edit_title' : 'todo_new_title'),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
-        content: SizedBox(
-          width: 340,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: field,
-                      style: TextStyle(color: p.text, fontSize: 13.5),
-                      decoration: InputDecoration(
-                        hintText: tr('todo_item_hint'),
-                        hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
-                        isDense: true,
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
-                        focusedBorder:
-                            UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
-                      ),
-                      onSubmitted: (_) => setState(() {
-                        final t = field.text.trim();
-                        if (t.isNotEmpty) {
-                          items.add(TodoItem(id: uid('t'), text: t));
-                          field.clear();
-                        }
-                      }),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.add_circle, color: p.accent),
-                    onPressed: () => setState(() {
-                      final t = field.text.trim();
-                      if (t.isNotEmpty) {
-                        items.add(TodoItem(id: uid('t'), text: t));
-                        field.clear();
-                      }
-                    }),
-                  ),
-                ],
+      builder: (ctx, setState) {
+        void addItem() {
+          final t = field.text.trim();
+          if (t.isEmpty) return;
+          items.insert(insertAfterSubtree(items, addUnder),
+              TodoItem(id: uid('t'), text: t, parentId: addUnder));
+          field.clear();
+          setState(() => addUnder = null);
+        }
+
+        Future<void> rename(TodoItem it) async {
+          final c = TextEditingController(text: it.text);
+          final ok = await showDialog<bool>(
+            context: ctx,
+            builder: (c2) => AlertDialog(
+              backgroundColor: p.modalBg,
+              contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              content: TextField(
+                controller: c,
+                autofocus: true,
+                maxLines: 3,
+                minLines: 1,
+                style: TextStyle(color: p.text, fontSize: 14),
+                onSubmitted: (_) => Navigator.pop(c2, true),
               ),
-              const SizedBox(height: 6),
-              Container(
-                height: 200,
-                decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(8)),
-                child: ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (ctx, i) => ListTile(
-                    dense: true,
-                    leading: Icon(Icons.checklist, size: 18, color: p.textSoft),
-                    title: Text(items[i].text,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, color: p.text)),
-                    trailing: IconButton(
-                      icon: Icon(Icons.close, size: 18, color: p.textFaint),
-                      onPressed: () => setState(() => items.removeAt(i)),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(c2),
+                    child:
+                        Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: p.accent),
+                  onPressed: () => Navigator.pop(c2, true),
+                  child: Text(tr('save')),
+                ),
+              ],
+            ),
+          );
+          if (ok == true && c.text.trim().isNotEmpty) {
+            setState(() => it.text = c.text.trim());
+          }
+        }
+
+        // Ordered display pass: roots first, then each item's subtasks.
+        final display = <MapEntry<TodoItem, int>>[];
+        final byParent = <String?, List<TodoItem>>{};
+        for (final it in items) {
+          byParent.putIfAbsent(it.parentId, () => []).add(it);
+        }
+        void walk(String? parent, int d) {
+          for (final it in byParent[parent] ?? const <TodoItem>[]) {
+            display.add(MapEntry(it, d));
+            walk(it.id, d + 1);
+          }
+        }
+
+        walk(null, 0);
+
+        Widget circle(bool done, {double size = 17}) => AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: done ? p.accent : Colors.transparent,
+                border: Border.all(
+                    color: done ? p.accent : p.textFaint.withValues(alpha: .55),
+                    width: 2),
+              ),
+              child: done ? Icon(Icons.check, size: 12, color: Colors.white) : null,
+            );
+
+        return AlertDialog(
+          backgroundColor: p.modalBg,
+          title: Text(tr(entry != null ? 'todo_edit_title' : 'todo_new_title'),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: field,
+                        style: TextStyle(color: p.text, fontSize: 13.5),
+                        decoration: InputDecoration(
+                          hintText: tr(addUnder != null ? 'todo_sub_hint' : 'todo_item_hint'),
+                          hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
+                          isDense: true,
+                          enabledBorder:
+                              UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
+                          focusedBorder:
+                              UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                        ),
+                        onSubmitted: (_) => addItem(),
+                      ),
                     ),
+                    IconButton(
+                      icon: Icon(Icons.add_circle, color: p.accent),
+                      onPressed: addItem,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 220,
+                  decoration:
+                      BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(8)),
+                  child: ListView.builder(
+                    itemCount: display.length,
+                    itemBuilder: (ctx, i) {
+                      final me = display[i];
+                      final it = me.key;
+                      final depth = me.value;
+                      return ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: EdgeInsets.only(left: 8.0 + depth * 18.0, right: 2),
+                        leading: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () {
+                            toggleTodoCascade(items, it.id);
+                            setState(() {});
+                          },
+                          child: Padding(padding: const EdgeInsets.all(3), child: circle(it.done)),
+                        ),
+                        title: InkWell(
+                          onTap: () => rename(it),
+                          child: Text(it.text,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: it.done ? p.textFaint : p.text,
+                                decoration: it.done ? TextDecoration.lineThrough : null,
+                                decorationColor: p.textFaint,
+                              )),
+                        ),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (depth == 0)
+                            InkWell(
+                              onTap: () => setState(() => addUnder = it.id),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(Icons.subdirectory_arrow_right,
+                                    size: 15, color: p.textFaint),
+                              ),
+                            ),
+                          InkWell(
+                            onTap: () {
+                              removeTodoItem(items, it.id);
+                              setState(() {});
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(Icons.close, size: 16, color: p.textFaint),
+                            ),
+                          ),
+                        ]),
+                      );
+                    },
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: p.accent),
-            onPressed: () {
-              final cleaned = items.where((i) => i.text.trim().isNotEmpty).toList();
-              if (cleaned.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(tr('todo_empty'))));
-                return;
-              }
-              Navigator.pop(ctx, cleaned);
-            },
-            child: Text(tr('todo_done')),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: p.accent),
+              onPressed: () {
+                final cleaned =
+                    items.where((i) => i.text.trim().isNotEmpty).toList();
+                if (cleaned.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(tr('todo_empty'))));
+                  return;
+                }
+                Navigator.pop(ctx, cleaned);
+              },
+              child: Text(tr('todo_done')),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

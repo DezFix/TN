@@ -835,16 +835,24 @@ class _ChatScreenState extends State<ChatScreen> {
                   return;
                 }
                 final entry = matches.first;
+                // Leave selection mode first — otherwise the checkboxes and
+                // highlight stay around the inline editor.
+                if (mounted) setState(() => _selectedIds.clear());
                 if (v == 'time') {
                   await _onCtxAction(entry, EntryAction.schedTime);
                 } else if (v == 'edit') {
                   await _onCtxAction(entry, EntryAction.edit);
                 }
               },
-              itemBuilder: (_) => [
-                PopupMenuItem(value: 'time', height: 40, child: Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: p.text))),
-                PopupMenuItem(value: 'edit', height: 40, child: Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: p.text))),
-              ],
+              itemBuilder: (_) {
+                final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+                final one = matches.length == 1 ? matches.first : null;
+                return [
+                  PopupMenuItem(value: 'time', height: 40, child: Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: p.text))),
+                  if (one != null && (one.type == 'text' || one.type == 'todo'))
+                    PopupMenuItem(value: 'edit', height: 40, child: Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: p.text))),
+                ];
+              },
             ),
             IconButton(icon: Icon(Icons.share, color: p.accent), tooltip: widget.model.tr('share'), onPressed: _shareSelected),
             IconButton(icon: Icon(Icons.forward, color: p.accent), tooltip: widget.model.tr('forward'), onPressed: _forwardSelected),
@@ -1364,8 +1372,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildTodoBubble(AppModel model, Entry entry) {
     final allItems = entry.items ?? const <TodoItem>[];
-    final items = (_chat.kind == 'tasks' && _chat.tasksHideDone) ? allItems.where((i) => !i.done).toList() : allItems;
-    final overdue = entry.dueAt != null && entry.dueAt! < DateTime.now().millisecondsSinceEpoch && items.any((i) => !i.done);
+    final overdue = entry.dueAt != null &&
+        entry.dueAt! < DateTime.now().millisecondsSinceEpoch &&
+        allItems.any((i) => !i.done);
+    final doneCount = allItems.where((i) => i.done).length;
+    final progress = allItems.isEmpty ? 0.0 : doneCount / allItems.length;
+    final rows = _todoRows(model, entry, allItems);
     return Container(
       width: 300,
       padding: const EdgeInsets.fromLTRB(10, 9, 12, 7),
@@ -1409,49 +1421,239 @@ class _ChatScreenState extends State<ChatScreen> {
                 ]),
               ),
             ),
-          if (items.isEmpty && allItems.isNotEmpty)
-            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text('Выполнено ✓', style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
-          for (final item in items)
-            Row(
-              children: [
-                Checkbox(
-                  value: item.done,
-                  activeColor: p.accent,
-                  onChanged: (_) async {
-                    item.done = !item.done;
-                    await model.save();
-                    if (item.done) unawaited(Sounds.taskDone());
-                    // Completing an OVERDUE recurring task snaps its deadline
-                    // forward so the checkmark sticks until the new period
-                    // ends (otherwise rollover would instantly uncheck it).
-                    final snapped = entry.recurrence != null && snapCompletedRecurring(entry, DateTime.now());
-                    // Recurring tasks reset via model.rolloverRecurring() —
-                    // called here and on every app load / widget toggle.
-                    final rolled = model.rolloverRecurring();
-                    if (snapped || rolled > 0) {
-                      await model.save();
-                      await _scheduleEntryReminder(entry);
-                    }
-                    if (mounted) setState(() {});
-                  },
-                ),
+          if (allItems.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(children: [
                 Expanded(
-                  child: Text(
-                    item.text,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      color: p.text,
-                      decoration: item.done ? TextDecoration.lineThrough : null,
-                      decorationColor: p.textFaint,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 4,
+                      backgroundColor: p.divider,
+                      valueColor: AlwaysStoppedAnimation(p.accent),
                     ),
                   ),
                 ),
-              ],
+                const SizedBox(width: 8),
+                Text('$doneCount/${allItems.length}',
+                    style: TextStyle(fontSize: 10.5, color: p.textFaint, fontWeight: FontWeight.w600)),
+              ]),
             ),
+          if (rows.isEmpty && allItems.isNotEmpty)
+            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text('Выполнено ✓', style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
+          ...rows,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _showTaskItemSheet(model, entry),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.add, size: 15, color: p.accent),
+                  const SizedBox(width: 3),
+                  Text(model.tr('todo_add'), style: TextStyle(fontSize: 11.5, color: p.accent, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ),
           Text(_timeWithEdited(entry), style: TextStyle(fontSize: 10.5, color: p.textFaint)),
         ],
       ),
     );
+  }
+
+  List<Widget> _todoRows(AppModel model, Entry entry, List<TodoItem> allItems) {
+    final hideDone = _chat.kind == 'tasks' && _chat.tasksHideDone;
+    final byParent = <String?, List<TodoItem>>{};
+    for (final it in allItems) {
+      byParent.putIfAbsent(it.parentId, () => []).add(it);
+    }
+
+    bool hidden(TodoItem t) {
+      if (!hideDone || !t.done) return false;
+      return (byParent[t.id] ?? const <TodoItem>[]).every(hidden);
+    }
+
+    final rows = <Widget>[];
+    void walk(String? parent, int depth) {
+      for (final it in byParent[parent] ?? const <TodoItem>[]) {
+        if (hidden(it)) continue;
+        rows.add(_todoRow(model, entry, it, depth));
+        walk(it.id, depth + 1);
+      }
+    }
+
+    walk(null, 0);
+    return rows;
+  }
+
+  Widget _todoRow(AppModel model, Entry entry, TodoItem item, int depth) {
+    final isSub = depth > 0;
+    return Padding(
+      padding: EdgeInsets.only(left: depth * 22.0, bottom: isSub ? 0 : 1),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => _toggleTodoItem(model, entry, item),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: isSub ? 17 : 20,
+                height: isSub ? 17 : 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: item.done ? p.accent : Colors.transparent,
+                  border: Border.all(color: item.done ? p.accent : p.textFaint.withValues(alpha: .55), width: 2),
+                ),
+                child: item.done ? Icon(Icons.check, size: 12, color: Colors.white) : null,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _showTaskItemSheet(model, entry, item: item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.5),
+                child: Text(
+                  item.text,
+                  style: TextStyle(
+                    fontSize: isSub ? 12.5 : 13.5,
+                    color: item.done ? p.textFaint : p.text,
+                    decoration: item.done ? TextDecoration.lineThrough : null,
+                    decorationColor: p.textFaint,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (!isSub)
+            InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => _showTaskItemSheet(model, entry, parentId: item.id),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 6, 0, 6),
+                child: Icon(Icons.subdirectory_arrow_right, size: 14, color: p.textFaint),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleTodoItem(AppModel model, Entry entry, TodoItem item) async {
+    toggleTodoCascade(entry.items ??= <TodoItem>[], item.id);
+    await model.save();
+    if (item.done) unawaited(Sounds.taskDone());
+    // Completing an OVERDUE recurring task snaps its deadline forward so
+    // the checkmark sticks until the new period ends (otherwise rollover
+    // would instantly uncheck it).
+    final snapped = entry.recurrence != null && snapCompletedRecurring(entry, DateTime.now());
+    final rolled = model.rolloverRecurring();
+    if (snapped || rolled > 0) {
+      await model.save();
+      await _scheduleEntryReminder(entry);
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Bottom sheet for creating / renaming / deleting a single task item.
+  /// [parentId] starts a new subtask under that parent.
+  Future<void> _showTaskItemSheet(AppModel model, Entry entry, {TodoItem? item, String? parentId}) async {
+    final ctrl = TextEditingController(text: item?.text ?? '');
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: p.modalBg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(item != null ? model.tr('edit') : model.tr('todo_add'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              maxLines: 3,
+              minLines: 1,
+              style: TextStyle(color: p.text, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: p.bgChat,
+                hintText: model.tr('todo_item_hint'),
+                hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+              onSubmitted: (_) => Navigator.pop(ctx, 'save'),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              if (item != null)
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(ctx, 'delete'),
+                  icon: Icon(Icons.delete_outline, size: 18, color: p.danger),
+                  label: Text(model.tr('delete'), style: TextStyle(color: p.danger, fontSize: 13)),
+                ),
+              const Spacer(),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft))),
+              const SizedBox(width: 8),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: p.accent),
+                onPressed: () => Navigator.pop(ctx, 'save'),
+                child: Text(model.tr('save')),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+    if (action == null) return;
+    final items = entry.items ?? <TodoItem>[];
+    if (action == 'delete') {
+      removeTodoItem(items, item!.id);
+    } else if (action == 'save') {
+      final text = ctrl.text.trim();
+      if (text.isEmpty) return;
+      if (item != null) {
+        item.text = text;
+      } else {
+        items.insert(_insertAfterSubtree(items, parentId), TodoItem(id: uid('t'), text: text, parentId: parentId));
+      }
+    }
+    await model.save();
+    if (mounted) setState(() {});
+  }
+
+  /// Index right after the last descendant of [parentId] — keeps a newly
+  /// added subtask visually grouped with its parent in list order.
+  int _insertAfterSubtree(List<TodoItem> items, String? parentId) {
+    if (parentId == null) return items.length;
+    var idx = items.indexWhere((i) => i.id == parentId);
+    if (idx < 0) return items.length;
+    final ids = {parentId};
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = idx + 1; i < items.length; i++) {
+        if (ids.contains(items[i].parentId)) {
+          ids.add(items[i].id);
+          idx = i;
+          changed = true;
+        }
+      }
+    }
+    return idx + 1;
   }
 
   Widget _buildComposer() {

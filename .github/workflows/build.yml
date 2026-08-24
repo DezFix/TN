@@ -23,8 +23,8 @@ jobs:
 
       - run: flutter pub get
       - run: flutter test
-      - run: flutter build apk --release --split-per-abi
-      - run: flutter build apk --release
+      - run: flutter build apk --release --split-per-abi --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
+      - run: flutter build apk --release --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
 
       - name: Rename APKs
         run: |
@@ -51,7 +51,7 @@ jobs:
 
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
 
       - name: Zip exe
         shell: pwsh

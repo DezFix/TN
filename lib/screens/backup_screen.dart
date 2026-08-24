@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../src/app_model.dart';
 import '../src/backup.dart';
 import '../src/cloud.dart';
+import '../src/gdrive.dart';
 import '../src/i18n.dart';
 import '../src/theme.dart';
 
@@ -18,6 +19,8 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   NextcloudClient? _nc;
   bool _ncBusy = false;
+  GoogleDriveClient? _gd;
+  bool _gdBusy = false;
   final _serverCtrl = TextEditingController();
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
@@ -30,6 +33,7 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _loadAccount() async {
     final c = await NextcloudClient.loadSaved();
+    final g = await GoogleDriveClient.loadSaved();
     if (!mounted) return;
     setState(() {
       _nc = c;
@@ -38,6 +42,7 @@ class _BackupScreenState extends State<BackupScreen> {
         _userCtrl.text = c.user;
         _passCtrl.text = c.pass;
       }
+      _gd = g;
     });
   }
 
@@ -111,29 +116,149 @@ class _BackupScreenState extends State<BackupScreen> {
           ),
           const SizedBox(height: 8),
           _card(
-            child: Row(
-              children: [
-                Icon(Icons.add_to_drive, size: 22, color: p.textSoft),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Google Drive',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-                      const SizedBox(height: 2),
-                      Text(tr('backup_gdrive_soon'),
-                          style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.lock_outline, size: 18, color: p.textFaint),
-              ],
-            ),
+            child: (_gd == null || !_gd!.isConnected)
+                ? _gdriveForm()
+                : _gdriveConnected(),
           ),
         ],
       ),
     );
+  }
+
+  // ---------------- google drive ----------------
+
+  Widget _gdriveForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(Icons.add_to_drive, size: 22, color: p.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('Google Drive',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            icon: _gdBusy
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.login, size: 18),
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            label: Text(tr('gd_connect')),
+            onPressed: _gdBusy ? null : _connectGd,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _gdriveConnected() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(Icons.add_to_drive, size: 22, color: p.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('Google Drive',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+          ),
+          IconButton(
+            tooltip: tr('backup_disconnect'),
+            icon: Icon(Icons.link_off, size: 20, color: p.textSoft),
+            onPressed: () async {
+              await GoogleDriveClient.forget();
+              if (!mounted) return;
+              setState(() => _gd = null);
+            },
+          ),
+        ]),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            icon: _gdBusy
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.cloud_upload_outlined, size: 18),
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            label: Text(tr('backup_upload')),
+            onPressed: _gdBusy ? null : _uploadGd,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.cloud_download_outlined, size: 18),
+            label: Text(tr('backup_restore_last')),
+            onPressed: _gdBusy ? null : _restoreGd,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _connectGd() async {
+    setState(() => _gdBusy = true);
+    var client = _gd ?? GoogleDriveClient();
+    final ok = await client.connect();
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _gd = client;
+        _gdBusy = false;
+      });
+      _toast(tr('backup_connected'));
+    } else {
+      setState(() => _gdBusy = false);
+      _toast(tr('gd_failed'), error: true);
+    }
+  }
+
+  Future<void> _uploadGd() async {
+    if (_gd == null) return;
+    setState(() => _gdBusy = true);
+    try {
+      final zip = await BackupService.buildZip(widget.model.state);
+      final name = BackupService.lastExportName();
+      final ok = await _gd!.upload(name, zip);
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(ok ? tr('gd_uploaded') : tr('gd_failed'), error: !ok);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(tr('gd_failed'), error: true);
+    }
+  }
+
+  Future<void> _restoreGd() async {
+    if (_gd == null) return;
+    setState(() => _gdBusy = true);
+    try {
+      final list = await _gd!.listBackups();
+      if (list.isEmpty) {
+        if (!mounted) return;
+        setState(() => _gdBusy = false);
+        _toast(tr('gd_empty'), error: true);
+        return;
+      }
+      final bytes = await _gd!.download(list.last.key);
+      if (bytes == null) throw Exception('download failed');
+      await BackupService.importFromBytes(bytes, list.last.value, widget.model.state);
+      widget.model.tr = makeTranslator(widget.model.state.lang);
+      widget.model.refresh();
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(tr('backup_imported'));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(tr('gd_failed'), error: true);
+    }
   }
 
   // ---------------- local ----------------
