@@ -89,7 +89,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     onSurface: p.text,
                   ),
                   scaffoldBackgroundColor: p.bgList,
-                  pageTransitionsTheme: const PageTransitionsTheme(
+                  pageTransitionsTheme: PageTransitionsTheme(
                     builders: {
                       TargetPlatform.android: CupertinoPageTransitionsBuilder(),
                       TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
