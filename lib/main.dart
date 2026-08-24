@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -111,7 +112,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Tasks checked from the home-screen widget land in storage while the
-    // app is backgrounded вЂ” pull them in when we come back.
+    // app is backgrounded — pull them in when we come back.
     if (state == AppLifecycleState.resumed) {
       _future.then((m) => m.syncIfExternal());
     }
@@ -132,7 +133,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
-            // 'system' theme was removed вЂ” only explicit light/dark remain.
+            // 'system' theme was removed — only explicit light/dark remain.
             final themeName = model.state.theme;
             final pl = paletteFor('light');
             final pd = paletteFor('dark');
@@ -235,7 +236,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: p.modalBg,
-          title: Text(model.tr('whatsnew_title'),
+          title: Text('TN $_appVersion',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
           content: SingleChildScrollView(
             child: hasSplit
@@ -259,11 +260,20 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
             TextButton(
               onPressed: () async {
                 await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
+                var opened = false;
+                try {
+                  opened = await launchUrl(Uri.parse('https://ko-fi.com/k_k'),
+                      mode: LaunchMode.externalApplication);
+                } catch (_) {}
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ko-fi.com/k_k вЂў ${model.tr('support')}')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(opened
+                        ? model.tr('support')
+                        : 'ko-fi.com/k_k • ${model.tr('support')}'),
+                  ));
                 }
               },
-              child: Text('вќ¤пёЏ ko-fi', style: TextStyle(color: p.accent)),
+              child: Text('❤ ko-fi', style: TextStyle(color: p.accent)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: p.accent),
