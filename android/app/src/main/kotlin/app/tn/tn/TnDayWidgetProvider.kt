@@ -82,7 +82,10 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     "today" -> if (due == 0L || due > endOfTodayMillis()) continue
                     "week" -> if (due == 0L || due > endOfWeekMillis()) continue
                 }
-                val overdue = due in 1 until startOfTodayMillis()
+                // Overdue = the moment has already passed (same semantics as
+                // the in-app bubble), not merely "before today" — otherwise a
+                // task expiring earlier TODAY stays gray in the widget.
+                val overdue = due in 1 until System.currentTimeMillis()
                 val items = e.optJSONArray("items") ?: continue
                 for (j in 0 until items.length()) {
                     val it = items.getJSONObject(j)
@@ -171,6 +174,17 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val rows = try { loadRows(context) } catch (_: Exception) { emptyList<Row>() }
             rv.removeAllViews(R.id.dw_list)
             rv.setViewVisibility(R.id.dw_empty, if (rows.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE)
+
+            // Re-render the moment the nearest deadline passes so a task
+            // turns red exactly on time, not only at midnight / app saves.
+            try {
+                val now = System.currentTimeMillis()
+                rows.map { it.ts }.filter { it > now }.minOrNull()?.let {
+                    TnMidnightReceiver.scheduleDueAlarm(context, it)
+                }
+            } catch (_: Exception) {
+            }
+
             for (r in rows) {
                 val row = RemoteViews(context.packageName, R.layout.tn_day_row)
                 row.setTextViewText(R.id.dr_title, r.title)

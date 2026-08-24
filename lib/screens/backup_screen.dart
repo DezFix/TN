@@ -1,6 +1,5 @@
-import 'dart:async' show unawaited;
-import 'dart:io';
-
+﻿import 'dart:async' show unawaited;
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../src/app_model.dart';
@@ -26,11 +25,31 @@ class _BackupScreenState extends State<BackupScreen> {
   final _serverCtrl = TextEditingController();
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  String? _dir;
+  int _daysIdx = 0;
+  static const _daysValues = [0, 1, 3, 5, 7];
 
   @override
   void initState() {
     super.initState();
     _loadAccount();
+    _loadLocalSettings();
+  }
+
+  Future<void> _loadLocalSettings() async {
+    final d = await BackupService.getDays();
+    _dir = await BackupService.chosenDir();
+    if (!mounted) return;
+    setState(() {
+      _daysIdx = _daysValues.indexOf(d < 0 ? 0 : d);
+      if (_daysIdx < 0) _daysIdx = 0;
+    });
+  }
+
+  String _daysLabel(int idx) {
+    const keys = ['bk_manual', 'bk_day1', 'bk_day3', 'bk_day5', 'bk_day7'];
+    if (idx < 0 || idx >= keys.length) return '';
+    return tr(keys[idx]);
   }
 
   Future<void> _loadAccount() async {
@@ -86,11 +105,12 @@ class _BackupScreenState extends State<BackupScreen> {
           _section(tr('backup_local')),
           _card(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    icon: const Icon(Icons.upload, size: 18),
+                    icon: const Icon(Icons.backup_outlined, size: 18),
                     style: FilledButton.styleFrom(backgroundColor: p.accent),
                     label: Text(tr('backup_export')),
                     onPressed: _exportLocal,
@@ -100,12 +120,61 @@ class _BackupScreenState extends State<BackupScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    icon: Icon(Icons.download, size: 18, color: p.text),
+                    icon: Icon(Icons.restore, size: 18, color: p.text),
                     label: Text(tr('backup_import'), style: TextStyle(color: p.text)),
                     onPressed: _importLocal,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 14),
+                Text(tr('bk_freq'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: p.textFaint)),
+                Slider(
+                  value: _daysIdx.toDouble(),
+                  min: 0,
+                  max: 4,
+                  divisions: 4,
+                  label: _daysLabel(_daysIdx),
+                  activeColor: p.accent,
+                  onChanged: (v) => setState(() => _daysIdx = v.round()),
+                  onChangeEnd: (v) async =>
+                      await BackupService.setDays(_daysValues[v.round()]),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(_daysLabel(_daysIdx),
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textSoft)),
+                ),
+                const SizedBox(height: 14),
+                Text(tr('bk_folder'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: p.textFaint)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.folder_outlined, size: 18, color: p.textSoft),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _dir ?? tr('bk_folder_default'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: p.textSoft),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _pickFolder,
+                      child: Text(tr('bk_choose')),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(tr('backup_local_hint'),
                     style: TextStyle(fontSize: 11.5, color: p.textFaint)),
               ],
@@ -274,45 +343,37 @@ class _BackupScreenState extends State<BackupScreen> {
 
   // ---------------- local ----------------
 
+  Future<void> _pickFolder() async {
+    try {
+      final d = await getDirectoryPath();
+      if (d != null && d.isNotEmpty) {
+        await BackupService.setChosenDir(d);
+        if (!mounted) return;
+        setState(() => _dir = d);
+      }
+    } catch (_) {
+      if (mounted) _toast(tr('bk_folder_android'));
+    }
+  }
+
   Future<void> _exportLocal() async {
     try {
-      await BackupService.export(widget.model.state);
+      final path = await BackupService.export(widget.model.state, dir: _dir);
       if (!mounted) return;
-      _toast(tr('backup_shared'));
+      final name = path.split('/').last.split('\\').last;
+      _toast(tr('backup_exported', [name]));
     } catch (_) {
       if (mounted) _toast(tr('backup_error'), error: true);
     }
   }
 
   Future<void> _importLocal() async {
-    final files = await BackupService.listBackups();
-    if (!mounted) return;
-    if (files.isEmpty) {
-      _toast(tr('backup_error'), error: true);
-      return;
-    }
-    final picked = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        backgroundColor: p.modalBg,
-        title: Text(tr('backup_import'), style: TextStyle(color: p.text)),
-        children: [
-          for (final f in files.take(20))
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, f.path),
-              child: Text(f.path.split('/').last.split('\\').last,
-                  style: TextStyle(color: p.text, fontSize: 13)),
-            ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(tr('close'), style: TextStyle(color: p.textSoft)),
-          ),
-        ],
-      ),
-    );
-    if (picked == null) return;
     try {
-      await BackupService.importFrom(File(picked), widget.model.state);
+      const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
+      final f = await openFile(acceptedTypeGroups: groups);
+      if (f == null) return;
+      await BackupService.importFromBytes(
+          await f.readAsBytes(), f.name, widget.model.state);
       widget.model.tr = makeTranslator(widget.model.state.lang);
       widget.model.refresh();
       if (!mounted) return;
@@ -361,7 +422,7 @@ class _BackupScreenState extends State<BackupScreen> {
         const SizedBox(height: 8),
         _field(_userCtrl, tr('backup_nc_user'), 'user'),
         const SizedBox(height: 8),
-        _field(_passCtrl, tr('backup_nc_pass'), '••••••••', obscure: true),
+        _field(_passCtrl, tr('backup_nc_pass'), 'вЂўвЂўвЂўвЂўвЂўвЂўвЂўвЂў', obscure: true),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
@@ -415,7 +476,7 @@ class _BackupScreenState extends State<BackupScreen> {
               children: [
                 Text('Nextcloud',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-                Text('${_nc!.user} · ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
+                Text('${_nc!.user} В· ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 11.5, color: p.textSoft)),

@@ -1,6 +1,8 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../src/app_model.dart';
+import '../src/backup.dart';
 import '../src/i18n.dart';
 import '../src/reminders.dart';
 import '../src/theme.dart';
@@ -69,6 +71,30 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     await prefs.setBool('tn-welcome-done', true);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ListScreen(model: widget.model)));
+  }
+
+  Future<void> _restoreBackup() async {
+    try {
+      const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
+      final f = await openFile(acceptedTypeGroups: groups);
+      if (f == null) return;
+      await BackupService.importFromBytes(
+          await f.readAsBytes(), f.name, widget.model.state);
+      widget.model.tr = makeTranslator(widget.model.state.lang);
+      if (!mounted) return;
+      setState(() {
+        _lang = widget.model.state.lang;
+        _theme = widget.model.state.theme;
+      });
+      await _finish();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(makeTranslator(_lang)('backup_error')),
+          backgroundColor: const Color(0xFF3A2020),
+        ));
+      }
+    }
   }
 
   @override
@@ -207,6 +233,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     (_notifOk && _alarmsOk) ? tr('welcome_start') : tr('perm_finish_locked'),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
                   ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Center(
+                child: TextButton(
+                  onPressed: _restoreBackup,
+                  child: Text(tr('welcome_restore'),
+                      style: TextStyle(fontSize: 13, color: p.textSoft)),
                 ),
               ),
               const SizedBox(height: 10),

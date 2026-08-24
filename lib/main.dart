@@ -1,15 +1,19 @@
-﻿import 'dart:async' show unawaited;
+﻿import 'dart:async' show unawaited, Timer;
+import 'dart:convert' show jsonDecode;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'src/app_model.dart';
+import 'src/backup.dart';
 import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
 import 'src/sync.dart';
@@ -31,7 +35,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _appVersion = '7.9';
+const _appVersion = '8.0';
 
 bool _quitting = false;
 
@@ -222,6 +226,11 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     }
     if (!_isTestEnv) {
       unawaited(_initSync(model));
+      // Scheduled local backups (daily/weekly into the chosen folder).
+      unawaited(BackupService.maybeAutoBackup(model.state));
+      Timer.periodic(
+          const Duration(hours: 1),
+          (_) => unawaited(BackupService.maybeAutoBackup(model.state)));
     }
     return model;
   }
@@ -237,6 +246,39 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   Future<void> _maybeShowWhatsNew(BuildContext context, AppModel model) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Preferred source: the latest GitHub release notes.
+      try {
+        final r = await http
+            .get(
+              Uri.parse('https://api.github.com/repos/DezFix/TN/releases/latest'),
+              headers: {
+                'Accept': 'application/vnd.github+json',
+                'User-Agent': 'TN-app',
+              },
+            )
+            .timeout(const Duration(seconds: 8));
+        if (r.statusCode == 200) {
+          final j = jsonDecode(r.body) as Map<String, dynamic>;
+          final tag = j['tag_name'] as String?;
+          final name = (j['name'] as String?) ?? '';
+          final body = (j['body'] as String?) ?? '';
+          final seenTag = prefs.getString('tn-seen-release');
+          if (tag != null &&
+              tag.isNotEmpty &&
+              tag != seenTag &&
+              body.trim().isNotEmpty &&
+              context.mounted) {
+            await _showReleaseDialog(context, model,
+                title: name.isNotEmpty ? name : 'TN $tag', markdown: body);
+            await prefs.setString('tn-seen-release', tag);
+            await prefs.setString('tn-last-version', _appVersion);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      // Offline fallback: bundled notes.
       final seen = prefs.getString('tn-last-version');
       if (seen == _appVersion) return;
       if (!context.mounted) return;
@@ -297,5 +339,64 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       );
       await prefs.setString('tn-last-version', _appVersion);
     } catch (_) {}
+  }
+
+  Future<void> _showReleaseDialog(
+    BuildContext context,
+    AppModel model, {
+    required String title,
+    required String markdown,
+  }) async {
+    final p = model.p;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(title,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+        content: SizedBox(
+          width: 340,
+          child: SingleChildScrollView(
+            child: MarkdownBody(
+              data: markdown,
+              selectable: false,
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
+                h1: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text),
+                h2: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text),
+                h3: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: p.accent),
+                listBullet: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
+                code: TextStyle(fontSize: 12, color: p.textSoft, fontFamily: 'monospace'),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(const ClipboardData(text: 'https://ko-fi.com/k_k'));
+              var opened = false;
+              try {
+                opened = await launchUrl(Uri.parse('https://ko-fi.com/k_k'),
+                    mode: LaunchMode.externalApplication);
+              } catch (_) {}
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(opened
+                      ? model.tr('support')
+                      : 'ko-fi.com/k_k • ${model.tr('support')}'),
+                ));
+              }
+            },
+            child: Text('❤ ko-fi', style: TextStyle(color: p.accent)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(model.tr('close')),
+          ),
+        ],
+      ),
+    );
   }
 }

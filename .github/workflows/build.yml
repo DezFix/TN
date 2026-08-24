@@ -23,8 +23,18 @@ jobs:
 
       - run: flutter pub get
       - run: flutter test
-      - run: flutter build apk --release --split-per-abi --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
-      - run: flutter build apk --release --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
+      - name: Restore release keystore
+        run: |
+          echo "${{ secrets.TN_KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/tn-release.jks"
+      - name: Build APKs (release-signed)
+        env:
+          TN_STORE_FILE: ${{ runner.temp }}/tn-release.jks
+          TN_STORE_PASS: ${{ secrets.TN_STORE_PASS }}
+          TN_KEY_PASS: ${{ secrets.TN_KEY_PASS }}
+          TN_KEY_ALIAS: ${{ secrets.TN_KEY_ALIAS }}
+        run: |
+          flutter build apk --release --split-per-abi --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
+          flutter build apk --release --dart-define=TN_GDRIVE_CLIENT_ID=${{ secrets.TN_GDRIVE_CLIENT_ID }} --dart-define=TN_GDRIVE_CLIENT_SECRET=${{ secrets.TN_GDRIVE_CLIENT_SECRET }}
 
       - name: Rename APKs
         run: |

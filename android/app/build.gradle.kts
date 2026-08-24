@@ -31,11 +31,28 @@ android {
         versionName = flutter.versionName
     }
 
+    // Stable release signature. On CI the keystore arrives via secrets
+    // (TN_KEYSTORE_B64/TN_STORE_PASS/TN_KEY_PASS/TN_KEY_ALIAS); locally, when
+    // the env vars are absent, builds fall back to the debug key.
+    signingConfigs {
+        create("release") {
+            val storePath = System.getenv("TN_STORE_FILE")
+            if (storePath != null) {
+                storeFile = file(storePath)
+                storePassword = System.getenv("TN_STORE_PASS")
+                keyAlias = System.getenv("TN_KEY_ALIAS")
+                keyPassword = System.getenv("TN_KEY_PASS")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (System.getenv("TN_STORE_FILE") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
