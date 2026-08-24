@@ -98,7 +98,7 @@ String fmtDay(int ts, String Function(String) tr) {
     'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
   ];
-  return '${dt.day} $months[${dt.month - 1}]';
+  return '${dt.day} ${months[dt.month - 1]}';
 }
 
 String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {

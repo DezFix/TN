@@ -286,15 +286,15 @@ class _ListScreenState extends State<ListScreen> {
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
 
+    final lastByChat = _lastEntryByChat(model);
+
     final visible = active
         .where((c) => _folderFilter == null || c.folderId == _folderFilter)
         .toList()
       ..sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        final la = model.state.entriesFor(a.id);
-        final lb = model.state.entriesFor(b.id);
-        final ta = la.isEmpty ? 0 : la.last.ts;
-        final tb = lb.isEmpty ? 0 : lb.last.ts;
+        final ta = lastByChat[a.id]?.ts ?? 0;
+        final tb = lastByChat[b.id]?.ts ?? 0;
         return tb.compareTo(ta);
       });
 
@@ -309,14 +309,14 @@ class _ListScreenState extends State<ListScreen> {
             : Column(
                 children: [
                   for (final chat in archived)
-                    _chatListRow(model, p, tr, chat),
+                    _chatListRow(model, p, tr, chat, lastByChat: lastByChat),
                   const SizedBox(height: 8),
                 ],
               ),
       ));
     }
     for (final chat in visible) {
-      rows.add(_chatListRow(model, p, tr, chat));
+      rows.add(_chatListRow(model, p, tr, chat, lastByChat: lastByChat));
     }
     if (rows.isEmpty) {
       rows.add(Padding(
@@ -342,10 +342,28 @@ class _ListScreenState extends State<ListScreen> {
     );
   }
 
+  /// One pass over all entries instead of entriesFor() per chat inside the
+  /// sort comparator. Auto-collect chats are resolved separately (rare).
+  Map<String, Entry> _lastEntryByChat(AppModel model) {
+    final map = <String, Entry>{};
+    for (final e in model.state.entries) {
+      final cur = map[e.chatId];
+      if (cur == null || e.ts >= cur.ts) map[e.chatId] = e;
+    }
+    for (final c in model.state.chats) {
+      final rule = c.autoCollect;
+      if (rule == null || !rule.enabled) continue;
+      final merged = model.state.entriesFor(c.id);
+      if (merged.isEmpty) continue;
+      map[c.id] = merged.last;
+    }
+    return map;
+  }
+
   Widget _chatListRow(AppModel model, Palette p,
-      String Function(String, [List<String>?]) tr, Chat chat) {
-    final entries = model.state.entriesFor(chat.id);
-    final last = entries.isEmpty ? null : entries.last;
+      String Function(String, [List<String>?]) tr, Chat chat,
+      {required Map<String, Entry> lastByChat}) {
+    final last = lastByChat[chat.id];
     return _buildChatRow(chat, p, tr,
         preview: last == null ? tr('no_entries') : entryPreview(last, tr),
         time: last == null ? '' : fmtTime(last.ts));
