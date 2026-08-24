@@ -2,38 +2,38 @@
 
 [![Sponsor](https://img.shields.io/badge/Sponsor%20me-ko--fi-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/k_k)
 
-Заметки в виде телеграм-чата. [Поддержать проект — ko-fi.com/k_k](https://ko-fi.com/k_k)
+Notes that feel like a Telegram chat. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
 
-Приложение ведёт заметки как переписку с самим собой: чаты-темы, сообщения, фото, видео, голосовые, списки дел, хэштеги. Написано на Flutter (Dart).
+TN keeps your notes as a conversation with yourself: topic chats, messages, photos, videos, voice notes, to-do lists, hashtags. Built with Flutter (Dart).
 
-## Возможности
+## Features
 
-- Чаты-темы (например «Идеи», «Работа», «Избранное») с иконками и цветами
-- Папки для чатов: свои названия, цвета, перетаскивание; фильтр ленты по папке
-- Записи как сообщения: текст, фото, видео, голосовые, списки дел (TODO)
-- Списки дел с чекбоксами: отмечайте выполненное прямо в чате; у задачи можно задать срок (дедлайн), повторение (день/неделя/месяц) — просроченные подсвечиваются, есть виртуальный чат «Сегодня»
-- Гибкие чаты: авто-сбор задач по правилам из всех чатов или папки в один виртуальный чат
-- Архив чатов: убирайте неактуальные чаты с главного экрана (раскрывается overscroll'ом сверху)
-- Мультивыбор записей: закрепить, переместить, заархивировать, удалить группу сообщений
-- Запись и воспроизведение голосовых сообщений
-- Хэштеги `#тег` в тексте
-- Поиск по всем чатам и записям с переходом и подсветкой найденного сообщения
-- Переслать / изменить / удалить запись (долгое нажатие на сообщение); шеринг через системный share-sheet
-- RSS-каналы как чаты: новые посты приходят сообщениями
-- Виджеты на рабочий экран: список задач на день/неделю с отметкой выполнения прямо из виджета
-- Бэкап одним zip-файлом: вся база + медиафайлы; восстановление в пару тапов
-- Светлая и тёмная темы
-- Язык интерфейса: русский, английский, украинский, немецкий, испанский, французский
-- Данные хранятся локально на устройстве
+- Topic chats (e.g. "Ideas", "Work", "Favorites") with icons and colors
+- Chat folders: custom names, colors, drag & drop; feed filtering by folder
+- Entries as messages: text, photos, videos, voice notes, to-do lists
+- To-dos with checkboxes: check items right in the chat; set deadlines and repeats (daily / weekly / monthly) — overdue tasks are highlighted; a virtual "Today" chat collects what's due
+- Flexible chats: auto-collect tasks by rules from all chats or a folder into one virtual chat
+- Archived chats: keep inactive chats off the main screen (reveal via overscroll at the top)
+- Multi-select entries: pin, move, archive, delete a group of messages
+- Voice message recording and playback
+- `#hashtags` in text
+- Search across all chats and entries with jump-to-message and highlighting
+- Forward / edit / delete an entry (long press); sharing via the system share sheet
+- RSS feeds as chats: new posts arrive as messages
+- Home-screen widgets: day/week task lists, check off tasks right from the widget
+- One-zip backups: full database + media; restore in a couple of taps, scheduled backups into a folder of your choice
+- Light and dark themes
+- Interface languages: English, Russian, Ukrainian, German, Spanish, French
+- All data stays local on your device
 
-## Запуск
+## Run
 
 ```
 flutter pub get
 flutter run
 ```
 
-## Сборка APK
+## Build APK
 
 ```
 flutter build apk --release
@@ -41,16 +41,16 @@ flutter build apk --release
 
 APK: `build/app/outputs/flutter-apk/app-release.apk`
 
-## Тесты
+## Tests
 
 ```
 flutter test
 ```
 
-## Поддержать
+## Support
 
-Если TN вам полезен — поддержите: **https://ko-fi.com/k_k** — Sponsor this project на GitHub указан.
+If TN is useful to you — support the project: **https://ko-fi.com/k_k** (also listed under GitHub Sponsors).
 
-## Лицензия
+## License
 
-GPL-3.0 — приложение открытое, см. [LICENSE](LICENSE).
+GPL-3.0 — the app is open source, see [LICENSE](LICENSE).
