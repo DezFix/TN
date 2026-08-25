@@ -28,6 +28,8 @@ class _BackupScreenState extends State<BackupScreen> {
   String? _dir;
   int _daysIdx = 0;
   static const _daysValues = [0, 1, 3, 5, 7];
+  int _maxIdx = 1;
+  static const _maxValues = [1, 3, 5];
 
   @override
   void initState() {
@@ -39,10 +41,13 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _loadLocalSettings() async {
     final d = await BackupService.getDays();
     _dir = await BackupService.chosenDir();
+    final max = await BackupService.getMaxBackups();
     if (!mounted) return;
     setState(() {
       _daysIdx = _daysValues.indexOf(d < 0 ? 0 : d);
       if (_daysIdx < 0) _daysIdx = 0;
+      _maxIdx = _maxValues.indexOf(max);
+      if (_maxIdx < 0) _maxIdx = 1;
     });
   }
 
@@ -148,6 +153,32 @@ class _BackupScreenState extends State<BackupScreen> {
                   child: Text(_daysLabel(_daysIdx),
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textSoft)),
                 ),
+                const SizedBox(height: 14),
+                Text(tr('bk_max'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: p.textFaint)),
+                Slider(
+                  value: _maxIdx.toDouble(),
+                  min: 0,
+                  max: 2,
+                  divisions: 2,
+                  label: '${_maxValues[_maxIdx]}',
+                  activeColor: p.accent,
+                  onChanged: (v) => setState(() => _maxIdx = v.round()),
+                  onChangeEnd: (v) async =>
+                      await BackupService.setMaxBackups(_maxValues[v.round()]),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('${_maxValues[_maxIdx]}',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textSoft)),
+                ),
+                const SizedBox(height: 4),
+                Text(tr('bk_max_hint'),
+                    style: TextStyle(fontSize: 11.5, color: p.textFaint)),
                 const SizedBox(height: 14),
                 Text(tr('bk_folder'),
                     style: TextStyle(

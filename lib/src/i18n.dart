@@ -271,6 +271,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Максимальный размер кэша',
     'rss_cache_hint': 'Только картинки каналов, заметки хранятся всегда',
     'rss_cache_for': 'Для RSS и медиа',
+    'bk_max': 'Хранить бэкапов',
+    'bk_max_hint': 'Старые удаляются автоматически',
   },
   'en': {
     'app_title': 'Notes',
@@ -534,6 +536,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Maximum cache size',
     'rss_cache_hint': 'Channel images only; notes are always stored',
     'rss_cache_for': 'For RSS and media',
+    'bk_max': 'Keep backups',
+    'bk_max_hint': 'Old ones are deleted automatically',
   },
   'uk': {
     'app_title': 'Нотатки',
@@ -797,6 +801,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Максимальний розмір кешу',
     'rss_cache_hint': 'Тільки картинки каналів, нотатки зберігаються завжди',
     'rss_cache_for': 'Для RSS та медіа',
+    'bk_max': 'Зберігати бекапів',
+    'bk_max_hint': 'Старі видаляються автоматично',
   },
   'de': {
     'app_title': 'Notizen',
@@ -1060,6 +1066,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Maximale Cache-Größe',
     'rss_cache_hint': 'Nur Kanalbilder; Notizen werden immer gespeichert',
     'rss_cache_for': 'Für RSS und Medien',
+    'bk_max': 'Backups aufbewahren',
+    'bk_max_hint': 'Alte werden automatisch gelöscht',
   },
   'es': {
     'app_title': 'Notas',
@@ -1323,6 +1331,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Tamaño máximo de caché',
     'rss_cache_hint': 'Solo imágenes de canales; las notas se guardan siempre',
     'rss_cache_for': 'Para RSS y medios',
+    'bk_max': 'Conservar copias',
+    'bk_max_hint': 'Las antiguas se eliminan automáticamente',
   },
   'fr': {
     'app_title': 'Notes',
@@ -1586,6 +1596,8 @@ const strings = <String, Map<String, String>>{
     'rss_cache_max_size': 'Taille maximale du cache',
     'rss_cache_hint': 'Images de canaux uniquement ; les notes sont toujours sauvegardées',
     'rss_cache_for': 'Pour RSS et médias',
+    'bk_max': 'Garder les sauvegardes',
+    'bk_max_hint': 'Les anciennes sont supprimées automatiquement',
   },
 };
 

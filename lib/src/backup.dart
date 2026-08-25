@@ -22,7 +22,9 @@ class BackupService {
   static const daysKey = 'tn-backup-days'; // 0=manual, else every N days
   static const dirKey = 'tn-backup-dir';
   static const lastKey = 'tn-backup-last';
+  static const maxKey = 'tn-backup-max'; // max local backups to keep
   static const allowedDays = [0, 1, 3, 5, 7];
+  static const allowedMax = [1, 3, 5];
 
   static Future<String> getFrequency() async {
     try {
@@ -78,6 +80,42 @@ class BackupService {
     } catch (_) {}
   }
 
+  /// Max number of local backup files to keep (1, 3, or 5).
+  static Future<int> getMaxBackups() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getInt(maxKey);
+      if (v != null && allowedMax.contains(v)) return v;
+    } catch (_) {}
+    return 3;
+  }
+
+  static Future<void> setMaxBackups(int v) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(maxKey, allowedMax.contains(v) ? v : 3);
+    } catch (_) {}
+  }
+
+  /// Delete oldest local backups keeping at most [max] files.
+  static Future<void> pruneBackups(String dir, {int max = 3}) async {
+    try {
+      final d = Directory(dir);
+      if (!await d.exists()) return;
+      final files = <File>[];
+      await for (final e in d.list()) {
+        if (e is! File) continue;
+        final p = e.path;
+        if (p.endsWith('.zip') && p.contains('tn-backup')) files.add(e);
+      }
+      if (files.length <= max) return;
+      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      for (var i = max; i < files.length; i++) {
+        try { await files[i].delete(); } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   /// Runs the scheduled backup when due. Returns the written file path or
   /// null (manual mode / no folder chosen / not yet due).
   static Future<String?> maybeAutoBackup(AppState state) async {
@@ -109,6 +147,9 @@ class BackupService {
     }
     final file = File('${target.path}${Platform.pathSeparator}$name');
     await file.writeAsBytes(zip, flush: true);
+    // Prune old backups — keep at most `max` files.
+    final max = await getMaxBackups();
+    await pruneBackups(target.path, max: max);
     return file.path;
   }
 
