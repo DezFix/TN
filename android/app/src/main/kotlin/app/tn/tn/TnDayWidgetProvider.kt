@@ -160,7 +160,9 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // widget settings screen.
             var fontScale = 1.0f
             try {
-                when (val rawFont = prefs.all["flutter.tn-widget-font"]) {
+                var rawFont: Any? = prefs.all["flutter.tn-widget-font"]
+                if (rawFont == null) rawFont = prefs.all["tn-widget-font"]
+                when (rawFont) {
                     is Number -> fontScale = rawFont.toFloat()
                     is String -> fontScale = rawFont.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
                 }
@@ -214,14 +216,35 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // Transparency preset shared with the in-app settings screen.
             try {
                 var alpha = 1.0f
-                when (val raw = prefs.all["flutter.tn-widget-alpha"]) {
+                // Try multiple read paths: Number (Float/Double), String
+                // (Base64-prefixed by older Flutter), and plain numeric string.
+                val raw = prefs.all["flutter.tn-widget-alpha"]
+                when (raw) {
                     is Number -> alpha = raw.toFloat()
-                    is String -> alpha = raw.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
+                    is String -> {
+                        alpha = raw.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
+                    }
+                    else -> {
+                        // Fallback: also try reading the key without "flutter." prefix
+                        // (some SharedPreferences plugins don't add it).
+                        val alt = prefs.all["tn-widget-alpha"]
+                        when (alt) {
+                            is Number -> alpha = alt.toFloat()
+                            is String -> alpha = alt.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
+                            else -> {}
+                        }
+                    }
                 }
                 if (!alpha.isFinite() || alpha < 0.05f || alpha > 1.5f) alpha = 1.0f
                 val pct = (Math.round(alpha.coerceIn(0.2f, 1.0f) * 10) * 10).coerceIn(20, 100)
                 val resId = context.resources.getIdentifier("tn_widget_bg_$pct", "drawable", context.packageName)
-                if (resId != 0) rv.setInt(R.id.dw_root, "setBackgroundResource", resId)
+                if (resId != 0) {
+                    rv.setInt(R.id.dw_root, "setBackgroundResource", resId)
+                } else {
+                    // Last resort: apply transparency via alpha directly
+                    rv.setInt(R.id.dw_root, "setBackgroundColor",
+                        android.graphics.Color.argb((alpha.coerceIn(0.2f, 1.0f) * 255).toInt(), 0x17, 0x21, 0x2B))
+                }
             } catch (_: Exception) {
             }
             return rv

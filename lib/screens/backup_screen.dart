@@ -302,9 +302,7 @@ class _BackupScreenState extends State<BackupScreen> {
     if (_gd == null) return;
     setState(() => _gdBusy = true);
     try {
-      final zip = await BackupService.buildZip(widget.model.state);
-      final name = BackupService.lastExportName();
-      final ok = await _gd!.upload(name, zip);
+      final ok = await SyncService.instance.push();
       if (!mounted) return;
       setState(() => _gdBusy = false);
       _toast(ok ? tr('gd_uploaded') : tr('gd_failed'), error: !ok);
@@ -319,16 +317,8 @@ class _BackupScreenState extends State<BackupScreen> {
     if (_gd == null) return;
     setState(() => _gdBusy = true);
     try {
-      final list = await _gd!.listBackups();
-      if (list.isEmpty) {
-        if (!mounted) return;
-        setState(() => _gdBusy = false);
-        _toast(tr('gd_empty'), error: true);
-        return;
-      }
-      final bytes = await _gd!.download(list.last.key);
-      if (bytes == null) throw Exception('download failed');
-      await BackupService.importFromBytes(bytes, list.last.value, widget.model.state);
+      final ok = await SyncService.instance.pull();
+      if (!ok) throw Exception('pull failed');
       widget.model.tr = makeTranslator(widget.model.state.lang);
       widget.model.refresh();
       if (!mounted) return;

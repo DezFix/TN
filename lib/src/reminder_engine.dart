@@ -10,6 +10,7 @@ import 'models.dart';
 import 'reminders.dart';
 import '../screens/chat_screen.dart';
 import 'sound.dart';
+import 'win_toast.dart';
 
 /// One reminder that is due right now, already formatted for delivery.
 @visibleForTesting
@@ -137,11 +138,26 @@ class ReminderEngine {
     if (focused && model != null) {
       final ctx = _navKey?.currentContext;
       if (ctx == null || !ctx.mounted) return _toastFallback(d);
-      // Single soft sound — the banner itself is the notification.
-      unawaited(Sounds.taskDone());
-      showInAppBanner(ctx, model.p, title: d.title, body: d.body,
-          onTap: () => Navigator.of(ctx).push(MaterialPageRoute(
-              builder: (_) => ChatScreen(model: model, chatId: d.chatId))));
+      if (Platform.isWindows) {
+        // Telegram-style overlay toast in the bottom-right corner.
+        unawaited(Sounds.taskDone());
+        WinToast.show(
+          context: ctx,
+          title: d.title,
+          body: d.body,
+          onTap: () {
+            WinToast.dismiss();
+            Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => ChatScreen(model: model, chatId: d.chatId)));
+          },
+        );
+      } else {
+        // In-app banner for other platforms.
+        unawaited(Sounds.taskDone());
+        showInAppBanner(ctx, model.p, title: d.title, body: d.body,
+            onTap: () => Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => ChatScreen(model: model, chatId: d.chatId))));
+      }
     } else {
       await _toastFallback(d);
     }

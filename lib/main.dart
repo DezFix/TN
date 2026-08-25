@@ -39,7 +39,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.12.8';
+const _buildVersion = '1.13.0';
 
 bool _quitting = false;
 
@@ -275,12 +275,9 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  /// Google Drive sync: restore newer cloud state on boot, then push local
-  /// changes (debounced) so phone and PC stay in step.
+  /// Google Drive: bind for OAuth tokens only — upload is manual via Backup screen.
   Future<void> _initSync(AppModel model) async {
     await SyncService.instance.bind(model);
-    model.addListener(SyncService.instance.notifyChanged);
-    await SyncService.instance.syncOnStart();
   }
 
   /// Numeric compare of "vX.Y.Z" tags against the installed [_buildVersion].

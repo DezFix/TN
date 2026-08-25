@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel('RSS каналы', p),
+          _sectionLabel(tr('rss_channels'), p),
           _card(
             p,
             child: Column(
@@ -180,21 +180,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Кеш каналов', style: TextStyle(fontSize: 14.5, color: p.text)),
+                    Text(tr('rss_cache_channels'), style: TextStyle(fontSize: 14.5, color: p.text)),
                     TextButton(
                       onPressed: () async {
                         await RssService.clearCache();
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кеш очищен')));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('rss_cache_cleared'))));
                       },
-                      child: Text('Очистить', style: TextStyle(color: p.accent)),
+                      child: Text(tr('rss_clear'), style: TextStyle(color: p.accent)),
                     ),
                   ],
                 ),
                 const Divider(height: 24, color: Color(0xFF2A3441)),
-                Align(alignment: Alignment.centerLeft, child: Text('Максимальный размер кэша', style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
+                Align(alignment: Alignment.centerLeft, child: Text(tr('rss_cache_max_size'), style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
                 const SizedBox(height: 4),
-                Text('Только картинки каналов, заметки хранятся всегда', style: TextStyle(color: p.textFaint, fontSize: 11)),
+                Text(tr('rss_cache_hint'), style: TextStyle(color: p.textFaint, fontSize: 11)),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -214,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (v) => setState(() => _cacheMaxGb = [1024, 3072, 5120, 0][v.round()]),
                   onChangeEnd: (v) => _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
                 ),
-                Text('Для RSS и медиа', style: TextStyle(fontSize: 11, color: p.textFaint)),
+                Text(tr('rss_cache_for'), style: TextStyle(fontSize: 11, color: p.textFaint)),
               ],
             ),
           ),
