@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import 'package:record/record.dart';
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
+import '../src/link_preview.dart';
 import '../src/media.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
@@ -20,6 +22,7 @@ import '../src/sound.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -631,6 +634,7 @@ class _ChatScreenState extends State<ChatScreen> {
         entry.recurrenceDays =
             res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
         entry.monthDay = res.monthDay;
+        entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
         await widget.model.save();
         await widget.model.rescheduleAlarms();
         if (mounted) {
@@ -663,6 +667,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (items == null) return;
           entry.items = items;
           entry.editedAt = DateTime.now().millisecondsSinceEpoch;
+          entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
           await widget.model.save();
           if (mounted) setState(() {});
         } else {
@@ -707,6 +712,7 @@ class _ChatScreenState extends State<ChatScreen> {
     entry.text = text;
     entry.tags = extractTags(text);
     entry.editedAt = DateTime.now().millisecondsSinceEpoch;
+    entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
     _editingId = null;
     _editText.clear();
     await widget.model.save();
@@ -714,6 +720,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   String _timeWithEdited(Entry e) {
+    // Defensive: if ts is 0 (legacy/corrupted entry), show nothing.
+    if (e.ts == 0) return '';
     final base = fmtTime(e.ts);
     if (e.isEdited) return '$base · ${widget.model.tr('edited')}';
     return base;
@@ -748,6 +756,7 @@ class _ChatScreenState extends State<ChatScreen> {
     entry.recurrenceDays =
         res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
     entry.monthDay = res.monthDay;
+    entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
     await widget.model.save();
     await widget.model.rescheduleAlarms();
     if (mounted) {
@@ -1071,6 +1080,7 @@ class _ChatScreenState extends State<ChatScreen> {
       'audio' => _buildAudioBubble(model, entry),
       'video' => _buildVideoBubble(model, entry),
       'todo' => _buildTodoBubble(model, entry),
+      'doc' => _buildDocBubble(model, entry),
       _ => const SizedBox(),
     };
 
@@ -1174,13 +1184,19 @@ class _ChatScreenState extends State<ChatScreen> {
                       tableBody: TextStyle(color: p.text),
                       checkbox: TextStyle(color: p.accent),
                     ),
-                    onTapLink: (text, href, title) {},
+                    onTapLink: (text, href, title) {
+                      if (href != null && href.isNotEmpty) {
+                        launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                      }
+                    },
                   )
                 : SelectableText.rich(
                     TextSpan(children: _highlightTags(entry.text, p)),
                     style: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
                   ),
           ),
+          // Link preview card: fetch OG metadata for the first URL in the text.
+          if (!isMd) ..._maybeLinkPreview(entry.text),
           if (entry.tags.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -1211,20 +1227,93 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<TextSpan> _highlightTags(String text, Palette p) {
     final spans = <TextSpan>[];
-    final re = RegExp(r'#[\wа-яёіїєґА-ЯЁІЇЄҐ]+');
+    // Combined regex: #tag OR https URL.
+    final re = RegExp(r'(#[\wа-яёіїєґА-ЯЁІЇЄҐ]+|https?://[^\s<>")\]]+)');
     var last = 0;
     for (final m in re.allMatches(text)) {
       if (m.start > last) {
         spans.add(TextSpan(text: text.substring(last, m.start)));
       }
-      spans.add(TextSpan(
-        text: m.group(0),
-        style: TextStyle(color: p.accent, fontWeight: FontWeight.w600),
-      ));
+      final match = m.group(0)!;
+      if (match.startsWith('#')) {
+        spans.add(TextSpan(
+          text: match,
+          style: TextStyle(color: p.accent, fontWeight: FontWeight.w600),
+        ));
+      } else {
+        // URL: styled as a link and wrapped with tap gesture.
+        spans.add(TextSpan(
+          text: match,
+          style: TextStyle(color: Colors.blue[400], decoration: TextDecoration.underline, fontSize: 14.5, height: 1.35),
+          recognizer: _linkTapRecognizer(match),
+        ));
+      }
       last = m.end;
     }
     if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
     return spans;
+  }
+
+  GestureRecognizer _linkTapRecognizer(String url) {
+    return TapGestureRecognizer()..onTap = () {
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    };
+  }
+
+  /// If [text] contains a URL, return a widget list with a compact preview
+  /// card; otherwise an empty list (used with the spread operator `...`).
+  List<Widget> _maybeLinkPreview(String text) {
+    final m = RegExp(r'https?://[^\s<>")\]]+').firstMatch(text);
+    if (m == null) return const [];
+    final url = m.group(0)!;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: FutureBuilder<LinkPreviewData?>(
+          future: LinkPreview.fetch(url),
+          builder: (ctx, snap) {
+            if (!snap.hasData) return const SizedBox.shrink();
+            final d = snap.data!;
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 280),
+                decoration: BoxDecoration(
+                  color: p.bgChat,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: p.bubbleBorder),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (d.imageUrl != null)
+                    SizedBox(
+                      width: double.infinity, height: 100,
+                      child: Image.network(d.imageUrl!, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox()),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(d.domain, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: p.textFaint)),
+                      const SizedBox(height: 2),
+                      Text(d.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
+                      if (d.description.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(d.description, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: p.textSoft)),
+                      ],
+                    ]),
+                  ),
+                ]),
+              ),
+            );
+          },
+        ),
+      ),
+    ];
   }
 
   Widget _buildImageBubble(AppModel model, Entry entry) {
@@ -1534,6 +1623,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _toggleTodoItem(AppModel model, Entry entry, TodoItem item) async {
     toggleTodoCascade(entry.items ??= <TodoItem>[], item.id);
+    entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
     await model.save();
     if (item.done) unawaited(Sounds.taskDone());
     // Completing an OVERDUE recurring task snaps its deadline forward so
@@ -1638,6 +1728,117 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     return idx + 1;
+  }
+
+  // -- doc bubble & viewer ------------------------------------------------
+
+  static IconData _fileIcon(String? name) {
+    final ext = (name?.split('.').last ?? '').toLowerCase();
+    return switch (ext) {
+      'pdf' => Icons.picture_as_pdf,
+      'txt' || 'log' || 'csv' => Icons.description,
+      'doc' || 'docx' => Icons.article,
+      'xls' || 'xlsx' || 'csv' => Icons.table_chart,
+      'ppt' || 'pptx' => Icons.slideshow,
+      'zip' || 'rar' || '7z' || 'tar' || 'gz' => Icons.folder_zip,
+      'json' || 'xml' || 'html' || 'htm' => Icons.code,
+      'md' => Icons.smart_toy_outlined,
+      _ => Icons.insert_drive_file,
+    };
+  }
+
+  /// Whether the file extension is one we can display as readable text.
+  static bool _isTextFile(String? name) {
+    final ext = (name?.split('.').last ?? '').toLowerCase();
+    return const {'txt', 'log', 'csv', 'json', 'xml', 'html', 'htm', 'md', 'yaml', 'yml', 'ini', 'cfg', 'conf', 'sh', 'dart', 'py', 'js', 'ts', 'css'}.contains(ext);
+  }
+
+  Widget _buildDocBubble(AppModel model, Entry entry) {
+    final ext = (entry.mediaName?.split('.').last ?? '').toUpperCase();
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _showDocument(entry),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 300),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: p.bubbleOwn,
+          border: Border.all(color: p.bubbleBorder),
+          borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(14), topRight: Radius.circular(14),
+              bottomLeft: Radius.circular(14), bottomRight: Radius.circular(3)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)),
+              child: Icon(_fileIcon(entry.mediaName), color: p.accent, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(entry.mediaName ?? entry.media ?? 'file',
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.text)),
+              const SizedBox(height: 2),
+              Text('${ext.isNotEmpty ? '$ext · ' : ''}${entry.mediaSize ?? ''}',
+                  style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+            ])),
+          ]),
+          if (entry.text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(entry.text, maxLines: 6, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.5, color: p.textSoft, height: 1.4)),
+          ],
+          const SizedBox(height: 4),
+          _timeLabel(entry),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _showDocument(Entry entry) async {
+    final path = await MediaStore().pathOf(entry.media!);
+    if (!mounted) return;
+
+    // Text-readable files: show content in-app.
+    if (_isTextFile(entry.mediaName) && await File(path).exists()) {
+      try {
+        final content = await File(path).readAsString();
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: p.bg,
+            appBar: AppBar(
+              backgroundColor: p.bg,
+              iconTheme: IconThemeData(color: p.text),
+              title: Text(entry.mediaName ?? 'file',
+                  style: TextStyle(color: p.text, fontSize: 15)),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: widget.model.tr('share'),
+                  onPressed: () => _shareEntry(entry),
+                ),
+              ],
+            ),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: SelectableText(content,
+                  style: TextStyle(fontSize: 13.5, color: p.text, fontFamily: 'monospace', height: 1.5)),
+            ),
+          ),
+        ));
+        return;
+      } catch (_) {}
+    }
+
+    // Everything else: open with system handler.
+    try {
+      await launchUrl(Uri.file(path), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) _toast(widget.model.tr('cant_open_file'));
+    }
   }
 
   Widget _buildComposer() {

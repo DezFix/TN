@@ -37,7 +37,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.12.3';
+const _buildVersion = '1.12.4';
 
 bool _quitting = false;
 
@@ -301,7 +301,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       if (rel == null) return;
       final tag = (rel['tag_name'] as String?) ?? '';
       final name = (rel['name'] as String?) ?? '';
-      final body = (rel['body'] as String?) ?? '';
+      // Strip UTF-8 BOM that PowerShell Out-File inserts at file start.
+      final body = ((rel['body'] as String?) ?? '').replaceFirst(RegExp(r'^\uFEFF'), '');
       if (tag.isEmpty || body.trim().isEmpty) return;
 
       final updateAvailable = _isNewerTag(tag, _buildVersion);

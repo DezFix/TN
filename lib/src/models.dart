@@ -217,7 +217,8 @@ class Entry {
     this.monthDay,
     this.dueAt,
     this.editedAt,
-  });
+    int? updatedAt,
+  }) : updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   final String id;
   final String chatId;
@@ -240,6 +241,7 @@ class Entry {
   int? monthDay; // 1..31 for monthly, clamped to month length
   int? dueAt; // for tasks-chat todos: deadline millis
   int? editedAt; // millis when last edited
+  int updatedAt; // millis of last local change (for sync merge)
 
   bool get isEdited => editedAt != null;
 
@@ -261,6 +263,7 @@ class Entry {
         monthDay: (j['monthDay'] as num?)?.toInt(),
         dueAt: (j['dueAt'] as num?)?.toInt(),
         editedAt: (j['editedAt'] as num?)?.toInt(),
+        updatedAt: (j['updatedAt'] as num?)?.toInt(),
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -284,6 +287,7 @@ class Entry {
         if (monthDay != null) 'monthDay': monthDay,
         if (dueAt != null) 'dueAt': dueAt,
         if (editedAt != null) 'editedAt': editedAt,
+        'updatedAt': updatedAt,
       };
 }
 

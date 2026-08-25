@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -75,15 +77,16 @@ class ShareIn {
         );
       } else if (path != null) {
         final stored = await MediaStore().saveFile(path, 'file');
+        final size = await File(path).length();
         entry = Entry(
           id: uid('e'),
           chatId: chat.id,
-          type: 'text',
+          type: 'doc',
           ts: DateTime.now().millisecondsSinceEpoch,
-          text:
-              '${name ?? 'file'} · ${stored.contains('.') ? stored.split('.').last.toUpperCase() : ''}${(text == null || text.isEmpty) ? '' : '\n$text'}',
+          text: text ?? '',
           media: stored,
-          mediaName: name,
+          mediaName: name ?? stored,
+          mediaSize: _fmtSize(size),
         );
       } else {
         entry = Entry(
@@ -106,5 +109,11 @@ class ShareIn {
         ));
       }
     } catch (_) {}
+  }
+
+  static String _fmtSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
   }
 }

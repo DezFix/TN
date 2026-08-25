@@ -197,6 +197,61 @@ class GoogleDriveClient {
     }
   }
 
+  /// Find a file by exact [name]. Returns `null` if not found.
+  Future<Map<String, dynamic>?> findFile(String name) async {
+    final token = await _token();
+    if (token == null) return null;
+    try {
+      final uri = Uri.https('www.googleapis.com', '/drive/v3/files', {
+        'q': "name = '$name' and trashed=false",
+        'pageSize': '1',
+        'fields': 'files(id,modifiedTime)',
+      });
+      final resp = await http.get(uri, headers: {
+        'Authorization': 'Bearer $token',
+      }).timeout(const Duration(seconds: 30));
+      if (resp.statusCode != 200) return null;
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      final files = (json['files'] as List?) ?? const [];
+      return files.isEmpty ? null : (files.first as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Overwrite the content of an existing [fileId] with new [bytes].
+  Future<bool> updateFile(String fileId, String name, List<int> bytes) async {
+    final token = await _token();
+    if (token == null) return false;
+    try {
+      final boundary = 'tn${DateTime.now().millisecondsSinceEpoch}x';
+      final meta = jsonEncode({'name': name});
+      final body = <int>[
+        ...utf8.encode('--$boundary\r\n'
+            'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+            '$meta\r\n'
+            '--$boundary\r\n'
+            'Content-Type: application/zip\r\n\r\n'),
+        ...bytes,
+        ...utf8.encode('\r\n--$boundary--\r\n'),
+      ];
+      final resp = await http
+          .patch(
+            Uri.parse(
+                'https://www.googleapis.com/upload/drive/v3/files/$fileId?uploadType=multipart'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'multipart/related; boundary=$boundary',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 120));
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> upload(String name, List<int> bytes) async {
     final token = await _token();
     if (token == null) return false;
