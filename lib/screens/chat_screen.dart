@@ -23,6 +23,7 @@ import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_selector/file_selector.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -228,6 +229,76 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _showAttachSheet(AppModel model) async {
+    final p = model.p;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: p.modalBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36, height: 4, margin: const EdgeInsets.only(top: 10, bottom: 16),
+              decoration: BoxDecoration(color: p.textFaint.withValues(alpha: .3), borderRadius: BorderRadius.circular(2)),
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_outlined, color: p.accent),
+              title: Text(model.tr('attach_photo'), style: TextStyle(color: p.text)),
+              onTap: () => Navigator.pop(ctx, 'photo'),
+            ),
+            ListTile(
+              leading: Icon(Icons.insert_drive_file_outlined, color: p.accent),
+              title: Text(model.tr('attach_doc'), style: TextStyle(color: p.text)),
+              onTap: () => Navigator.pop(ctx, 'doc'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (result == 'photo') {
+      await _pickImage();
+    } else if (result == 'doc') {
+      await _pickDocument();
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    try {
+      final file = await openFile(acceptedTypeGroups: [
+        XTypeGroup(label: 'documents', extensions: ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'json', 'xml', 'html', 'md', 'zip', 'rar']),
+      ]);
+      if (file == null) return;
+      HapticFeedback.lightImpact();
+      // Save to media store and create doc entry directly.
+      final stored = await MediaStore().saveFile(file.path, 'file');
+      final size = await File(file.path).length();
+      final name = file.name;
+      final entry = Entry(
+        id: uid('e'),
+        chatId: widget.chatId,
+        type: 'doc',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        media: stored,
+        mediaName: name,
+        mediaSize: _fmtDocSize(size),
+      );
+      widget.model.state.entries.add(entry);
+      await widget.model.save();
+      if (mounted) setState(() {});
+    } catch (_) {
+      _toast(widget.model.tr('cant_open_file'), error: true);
+    }
+  }
+
+  String _fmtDocSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+  }
+
   Future<void> _sendPendingImage() async {
     final tmp = _pendingImagePath;
     if (tmp == null) return;
@@ -402,6 +473,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _playAudio(Entry entry) async {
+    if (entry.media == null) return;
     final path = await MediaStore().pathOf(entry.media!);
     if (_playingId == entry.id) {
       await _audioPlayer.stop();
@@ -419,6 +491,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showImage(Entry entry) {
+    if (entry.media == null) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => FutureBuilder<String>(
         future: MediaStore().pathOf(entry.media!),
@@ -728,16 +801,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Tappable timestamp under every message: opens the unified schedule
-  /// sheet (date + time + repeat presets).
+  /// sheet (date + time + repeat presets) — only in tasks chats.
   Widget _timeLabel(Entry e) {
+    final label = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      child: Text(_timeWithEdited(e),
+          style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+    );
+    if (_chat.kind != 'tasks') return label;
     return InkWell(
       borderRadius: BorderRadius.circular(4),
       onTap: () => _editEntrySchedule(e),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        child: Text(_timeWithEdited(e),
-            style: TextStyle(fontSize: 10.5, color: p.textFaint)),
-      ),
+      child: label,
     );
   }
 
@@ -844,11 +919,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
               },
               itemBuilder: (_) => [
-                PopupMenuItem(
-                    value: 'time',
-                    enabled: one != null,
-                    height: 42,
-                    child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: one != null ? p.accent : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: one != null ? p.text : p.textFaint))])),
+                if (_chat.kind == 'tasks')
+                  PopupMenuItem(
+                      value: 'time',
+                      enabled: one != null,
+                      height: 42,
+                      child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: one != null ? p.accent : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: one != null ? p.text : p.textFaint))])),
                 PopupMenuItem(
                     value: 'edit',
                     enabled: one != null && (one.type == 'text' || one.type == 'todo'),
@@ -1020,7 +1096,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_selecting) {
             _toggleSelect(e.id);
           } else {
-            final action = await showEntryCtxPopup(context, model, e, d.globalPosition);
+            final action = await showEntryCtxPopup(context, model, e, d.globalPosition, chatKind: _chat.kind);
             if (action != null) await _onCtxAction(e, action);
           }
         },
@@ -1317,6 +1393,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildImageBubble(AppModel model, Entry entry) {
+    if (entry.media == null) return const SizedBox.shrink();
     return GestureDetector(
       onTap: () => _showImage(entry),
       child: Container(
@@ -1798,6 +1875,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _showDocument(Entry entry) async {
+    if (entry.media == null) return;
     final path = await MediaStore().pathOf(entry.media!);
     if (!mounted) return;
 
@@ -1866,24 +1944,11 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_pendingImagePath != null) _buildPendingImageBar(model),
           Row(
             children: [
-              PopupMenuButton<AttachOption>(
+              IconButton(
                 icon: Icon(Icons.attach_file, color: p.textSoft),
-                color: p.modalBg,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                tooltip: 'attach',
-                onSelected: (v) async {
-                  switch (v) {
-                    case AttachOption.photo:
-                      await _pickImage();
-                      break;
-                    case AttachOption.todo:
-                      break;
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  PopupMenuItem(value: AttachOption.photo, child: Row(children: [Icon(Icons.photo_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(model.tr('attach_photo'), style: TextStyle(color: p.text))])),
-                ],
-          ),
+                tooltip: model.tr('attach'),
+                onPressed: () => _showAttachSheet(model),
+              ),
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),

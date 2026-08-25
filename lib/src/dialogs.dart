@@ -217,11 +217,12 @@ Future<bool?> showDeleteEntryDialog(BuildContext context, AppModel model) {
   );
 }
 
-Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Entry entry, Offset globalPos) {
+Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Entry entry, Offset globalPos, {String chatKind = 'note'}) {
   final p = model.p;
   final tr = model.tr;
   final canEdit = entry.type == 'text' || entry.type == 'todo';
   final isImage = entry.type == 'image';
+  final showSchedule = chatKind == 'tasks';
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   return showMenu<EntryAction>(
     context: context,
@@ -230,7 +231,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
     items: [
-      PopupMenuItem(value: EntryAction.schedTime, child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('change_time'), style: TextStyle(color: p.text))])),
+      if (showSchedule) PopupMenuItem(value: EntryAction.schedTime, child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('change_time'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.select, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('select'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.edit, child: Row(children: [Icon(Icons.edit, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
