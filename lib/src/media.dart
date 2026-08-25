@@ -1,9 +1,27 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+
+/// Top-level function for [compute]: decode, resize, and JPEG-encode an image
+/// off the main thread so the UI stays responsive during send.
+Uint8List _processImage(Uint8List args) {
+  final bytes = args;
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return bytes; // fallback: return original
+  var image = decoded;
+  const maxDim = 1600;
+  if (image.width > maxDim || image.height > maxDim) {
+    image = img.copyResize(image,
+        width: image.width > maxDim ? maxDim : null,
+        height: image.height > maxDim ? maxDim : null,
+        interpolation: img.Interpolation.cubic);
+  }
+  return Uint8List.fromList(img.encodeJpg(image, quality: 82));
+}
 
 class MediaStore {
   Directory? _dir;
@@ -21,20 +39,10 @@ class MediaStore {
     final name = '${uid('img')}.jpg';
     final dest = '${d.path}${Platform.pathSeparator}$name';
 
+    // Read bytes on main thread (fast I/O), then decode+resize in an isolate.
     final bytes = await File(sourcePath).readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded != null) {
-      var image = decoded;
-      if (image.width > maxDim || image.height > maxDim) {
-        image = img.copyResize(image,
-            width: image.width > maxDim ? maxDim : null,
-            height: image.height > maxDim ? maxDim : null,
-            interpolation: img.Interpolation.cubic);
-      }
-      await File(dest).writeAsBytes(img.encodeJpg(image, quality: quality));
-    } else {
-      await File(sourcePath).copy(dest);
-    }
+    final processed = await compute(_processImage, bytes);
+    await File(dest).writeAsBytes(processed);
     return name;
   }
 

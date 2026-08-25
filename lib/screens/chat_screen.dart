@@ -302,9 +302,13 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _sendPendingImage() async {
     final tmp = _pendingImagePath;
     if (tmp == null) return;
+    // Clear preview bar immediately for snappy UI.
+    final caption = _text.text.trim();
+    _text.clear();
+    setState(() => _pendingImagePath = null);
     try {
+      // saveImage now runs decode+resize in a background isolate.
       final name = await MediaStore().saveImage(tmp);
-      final caption = _text.text.trim();
       widget.model.state.entries.add(Entry(
         id: uid('e'),
         chatId: widget.chatId,
@@ -316,10 +320,8 @@ class _ChatScreenState extends State<ChatScreen> {
         mediaName: name,
       ));
       await widget.model.save();
-      _text.clear();
-      setState(() => _pendingImagePath = null);
       HapticFeedback.lightImpact();
-      setState(() {});
+      if (mounted) setState(() {});
     } catch (_) {
       _toast(widget.model.tr('photo_error'), error: true);
     }
