@@ -39,7 +39,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.13.0';
+const _buildVersion = '1.13.1';
 
 bool _quitting = false;
 
