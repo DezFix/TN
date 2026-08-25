@@ -165,8 +165,8 @@ class _ChatScreenState extends State<ChatScreen> {
       tags: extractTags(text),
     ));
     HapticFeedback.lightImpact();
-    await widget.model.save();
-    setState(() {});
+    if (mounted) setState(() {});
+    widget.model.save();
   }
 
   /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
@@ -213,9 +213,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     widget.model.state.entries.add(entry);
     _text.clear();
-    await widget.model.save();
-    await _scheduleEntryReminder(entry);
     if (mounted) setState(() {});
+    await _scheduleEntryReminder(entry);
+    widget.model.save();
   }
 
   Future<void> _pickImage() async {
@@ -286,8 +286,8 @@ class _ChatScreenState extends State<ChatScreen> {
         mediaSize: _fmtDocSize(size),
       );
       widget.model.state.entries.add(entry);
-      await widget.model.save();
       if (mounted) setState(() {});
+      widget.model.save();
     } catch (_) {
       _toast(widget.model.tr('cant_open_file'), error: true);
     }
@@ -302,12 +302,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _sendPendingImage() async {
     final tmp = _pendingImagePath;
     if (tmp == null) return;
-    // Clear preview bar immediately for snappy UI.
     final caption = _text.text.trim();
     _text.clear();
     setState(() => _pendingImagePath = null);
     try {
-      // saveImage now runs decode+resize in a background isolate.
       final name = await MediaStore().saveImage(tmp);
       widget.model.state.entries.add(Entry(
         id: uid('e'),
@@ -319,9 +317,9 @@ class _ChatScreenState extends State<ChatScreen> {
         media: name,
         mediaName: name,
       ));
-      await widget.model.save();
       HapticFeedback.lightImpact();
       if (mounted) setState(() {});
+      widget.model.save();
     } catch (_) {
       _toast(widget.model.tr('photo_error'), error: true);
     }
