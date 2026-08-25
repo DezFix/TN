@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-
 # Flutter/Dart
 .dart_tool/
 .packages
@@ -17,9 +16,7 @@ android/.gradle/
 android/local.properties
 android/app/.cxx/
 android/app/build/
-
 # Misc
-dist/
 runlog.txt
 smoke.txt
 smoke_test.py
@@ -28,3 +25,5 @@ pack*.txt
 sdk_*.txt
 *.log
 .DS_Store
+# Release binaries are built by CI, not committed
+dist/

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -9,11 +10,15 @@ class Updater {
 
   /// Downloads an APK from [url] to the cache directory, then triggers the
   /// Android package installer via a platform channel.
+  /// [expectedSha256] (hex, from the GitHub release asset digest) is verified
+  /// before anything is handed to the package installer — the old magic-bytes
+  /// check only proved the payload was *a* zip, not *our* APK.
   /// Returns the path of the downloaded file, or null on error.
   static Future<String?> downloadAndInstall(
     String url,
-    void Function(double progress)? onProgress,
-  ) async {
+    void Function(double progress)? onProgress, {
+    String? expectedSha256,
+  }) async {
     try {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}${Platform.pathSeparator}tn-update.apk');
@@ -52,7 +57,6 @@ class Updater {
       }
 
       if (bytes == null || bytes.isEmpty) return null;
-      await file.writeAsBytes(bytes, flush: true);
 
       // Verify the file starts with an APK magic header (ZIP format).
       if (bytes.length < 4) return null;
@@ -61,10 +65,26 @@ class Updater {
         return null;
       }
 
+      // Integrity: compare against the release asset digest when known.
+      if (expectedSha256 != null && expectedSha256.isNotEmpty) {
+        if (!verifySha256(bytes, expectedSha256)) return null;
+      }
+
+      await file.writeAsBytes(bytes, flush: true);
+
       await _channel.invokeMethod('installApk', file.path);
       return file.path;
     } catch (_) {
       return null;
     }
   }
+}
+
+/// Pure check, split out for tests: hex compare of the SHA-256 over [bytes].
+@pragma('vm:entry-point')
+bool verifySha256(List<int> bytes, String expectedHex) {
+  final expected = expectedHex.trim().toLowerCase();
+  if (expected.length != 64) return false;
+  final actual = crypto.sha256.convert(bytes).toString();
+  return actual == expected;
 }

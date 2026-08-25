@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
+import 'app_log.dart';
 import 'models.dart';
 
 /// Top-level function for [compute]: decode, resize, and JPEG-encode an image
@@ -84,7 +85,94 @@ class MediaStore {
     try {
       final f = File(await pathOf(mediaName));
       if (await f.exists()) await f.delete();
+    } catch (e, st) {
+      AppLog.error('media.remove', e, st);
+    }
+  }
+
+  Directory? _trashDir;
+
+  /// `tn_media/_trash` — deleted files rest here so an Undo can bring them
+  /// back; purged by [purgeTrash] on the next launches.
+  Future<Directory> trashDir() async {
+    if (_trashDir != null) return _trashDir!;
+    final base = await dir();
+    _trashDir = Directory('${base.path}${Platform.pathSeparator}_trash');
+    if (!await _trashDir!.exists()) await _trashDir!.create(recursive: true);
+    return _trashDir!;
+  }
+
+  /// Move a media file into the trash folder instead of deleting it.
+  /// Forwarded copies SHARE the same media name, so a hard delete would
+  /// break every other entry pointing at the file.
+  Future<bool> softRemove(String? mediaName) async {
+    if (mediaName == null || mediaName.isEmpty) return false;
+    try {
+      final f = File(await pathOf(mediaName));
+      if (!await f.exists()) return false;
+      final t = await trashDir();
+      final dest = File(
+          '${t.path}${Platform.pathSeparator}$mediaName');
+      if (await dest.exists()) await dest.delete();
+      await f.rename(dest.path);
+      return true;
+    } catch (e, st) {
+      AppLog.error('media.softRemove', e, st);
+      return false;
+    }
+  }
+
+  /// Put a soft-removed file back.
+  Future<void> restore(String? mediaName) async {
+    if (mediaName == null || mediaName.isEmpty) return;
+    try {
+      final t = await trashDir();
+      final src = File('${t.path}${Platform.pathSeparator}$mediaName');
+      if (!await src.exists()) return;
+      final dest = File(await pathOf(mediaName));
+      if (await dest.exists()) return; // someone else already owns the slot
+      await src.rename(dest.path);
+    } catch (e, st) {
+      AppLog.error('media.restore', e, st);
+    }
+  }
+
+  /// Drop trashed media older than [maxAge] (default 48 h).
+  Future<int> purgeTrash({Duration maxAge = const Duration(hours: 48)}) async {
+    var removed = 0;
+    try {
+      final t = await trashDir();
+      if (!await t.exists()) return 0;
+      final cutoff = DateTime.now().subtract(maxAge);
+      await for (final e in t.list()) {
+        if (e is! File) continue;
+        try {
+          if (await e.lastModified().then((m) => m.isBefore(cutoff))) {
+            await e.delete();
+            removed++;
+          }
+        } catch (_) {}
+      }
     } catch (_) {}
+    return removed;
+  }
+
+  /// Copy-on-forward: duplicated entries must not share one media file,
+  /// otherwise deleting either copy destroys both.
+  Future<String?> copyMedia(String mediaName) async {
+    try {
+      final src = File(await pathOf(mediaName));
+      if (!await src.exists()) return null;
+      final dot = mediaName.lastIndexOf('.');
+      final ext = dot >= 0 ? mediaName.substring(dot) : '';
+      final newName = '${uid('m')}$ext';
+      final d = await dir();
+      await src.copy('${d.path}${Platform.pathSeparator}$newName');
+      return newName;
+    } catch (e, st) {
+      AppLog.error('media.copyMedia', e, st);
+      return null;
+    }
   }
 }
 

@@ -20,6 +20,7 @@ import '../src/rss.dart';
 import '../src/share_service.dart';
 import '../src/sound.dart';
 import '../src/theme.dart';
+import '../src/undo.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -71,8 +72,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Duration _playPos = Duration.zero;
   Duration? _playDur;
 
-  Chat get _chat => widget.model.state.chatById(widget.chatId)!;
+  Chat? get _chatOrNull => widget.model.state.chatById(widget.chatId);
+  Chat get _chat => _chatOrNull!;
   Palette get p => widget.model.p;
+
+  /// Cached media path / link preview futures — a FutureBuilder that
+  /// re-creates its future on every build restarts the work each time.
+  final Map<String, Future<String>> _pathFutures = {};
+  final Map<String, Future<LinkPreviewData?>> _previewFutures = {};
+  final List<GestureRecognizer> _recognizers = [];
+
+  Future<String> _pathOf(String media) =>
+      _pathFutures.putIfAbsent(media, () => MediaStore().pathOf(media));
+
+  Future<LinkPreviewData?> _previewFor(String url) => _previewFutures
+      .putIfAbsent(url, () => LinkPreview.fetch(url));
 
   @override
   void initState() {
@@ -93,8 +107,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (d > Duration.zero) _playDur = d;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
-    if (_chat.rssUrl != null && _chat.rssUrl!.isNotEmpty) {
-      RssService.fetchForChat(_chat, widget.model.state).then((_) {
+    final chat = _chatOrNull;
+    if (chat != null && chat.rssUrl != null && chat.rssUrl!.isNotEmpty) {
+      RssService.fetchForChat(chat, widget.model.state).then((_) {
         if (mounted) setState(() {});
       });
     }
@@ -110,6 +125,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _recorder.dispose();
     _recordTimer?.cancel();
     _ampSub?.cancel();
+    for (final r in _recognizers) {
+      r.dispose();
+    }
     super.dispose();
   }
 
@@ -189,6 +207,10 @@ class _ChatScreenState extends State<ChatScreen> {
       Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
       widget.model.tr('remind_title', [_chat.name]),
       widget.model.tr('remind_body'),
+      snoozeLabels: [
+        widget.model.tr('snooze_10m'),
+        widget.model.tr('snooze_1h')
+      ],
     );
   }
 
@@ -476,7 +498,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _playAudio(Entry entry) async {
     if (entry.media == null) return;
-    final path = await MediaStore().pathOf(entry.media!);
+    final path = await _pathOf(entry.media!);
     if (_playingId == entry.id) {
       await _audioPlayer.stop();
       setState(() {
@@ -634,60 +656,33 @@ class _ChatScreenState extends State<ChatScreen> {
     if (entries.isEmpty) return;
     final target = await showForwardDialog(context, widget.model);
     if (target == null) return;
-    for (final e in entries) {
-      final copy = Entry(
-        id: uid('e'),
-        chatId: target.id,
-        type: e.type,
-        ts: DateTime.now().millisecondsSinceEpoch,
-        text: e.text,
-        tags: List.of(e.tags),
-        media: e.media,
-        mediaName: e.mediaName,
-        mediaSize: e.mediaSize,
-        duration: e.duration,
-        waveform: e.waveform == null ? null : List.of(e.waveform!),
-        items: e.items?.map((i) => TodoItem(id: i.id, text: i.text, done: i.done)).toList(),
-        dueAt: e.dueAt,
-        recurrence: e.recurrence,
-        recurrenceDays: e.recurrenceDays == null ? null : List.of(e.recurrenceDays!),
-      );
-      widget.model.state.entries.add(copy);
-    }
-    await widget.model.save();
-    if (mounted) {
-      setState(() => _selectedIds.clear());
-      _toast(widget.model.tr('forwarded_to', [target.name]));
-    }
+    await _forwardEntries(entries, target);
   }
 
   Future<void> _deleteSelected() async {
     final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
     if (entries.isEmpty) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: p.modalBg,
-        title: Text(widget.model.tr('delete_selected'), style: TextStyle(color: p.text, fontSize: 16, fontWeight: FontWeight.w700)),
-        content: Text('${entries.length} ${widget.model.tr('selected', ['${entries.length}']).toLowerCase()}', style: TextStyle(color: p.textSoft)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.model.tr('cancel'), style: TextStyle(color: p.textSoft))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    for (final e in entries) {
-      await MediaStore().remove(e.media);
-      await RemindersService.instance.cancelById(stableHash(e.id));
-    }
-    widget.model.state.entries.removeWhere((e) => _selectedIds.contains(e.id));
-    _selectedIds.clear();
-    await widget.model.save();
+    final ids = entries.map((e) => e.id).toSet();
+    await UndoService.deleteEntries(widget.model, entries);
+    _selectedIds.removeAll(ids);
     if (mounted) {
       setState(() {});
-      _toast(widget.model.tr('deleted'));
+      _showUndoBar(entries);
     }
+  }
+
+  /// Telegram-style "Deleted · UNDO" — no more confirm dialogs for messages.
+  void _showUndoBar(List<Entry> entries) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(widget.model.tr('deleted')),
+      duration: const Duration(seconds: 5),
+      backgroundColor: p.bgChat,
+      action: SnackBarAction(
+        label: widget.model.tr('undo'),
+        textColor: p.accent,
+        onPressed: () => UndoService.restoreEntries(widget.model, entries),
+      ),
+    ));
   }
 
   Future<void> _onCtxAction(Entry entry, EntryAction action) async {
@@ -719,6 +714,12 @@ class _ChatScreenState extends State<ChatScreen> {
       case EntryAction.select:
         _toggleSelect(entry.id);
         HapticFeedback.selectionClick();
+        break;
+      case EntryAction.pin:
+        entry.pinned = !entry.pinned;
+        entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        await widget.model.save();
+        if (mounted) setState(() {});
         break;
       case EntryAction.share:
         await _shareEntry(entry);
@@ -752,31 +753,40 @@ class _ChatScreenState extends State<ChatScreen> {
       case EntryAction.forward:
         final target = await showForwardDialog(context, widget.model);
         if (target == null || target.id == widget.chatId) return;
-        final copy = Entry(
-          id: uid('e'),
-          chatId: target.id,
-          type: entry.type,
-          ts: DateTime.now().millisecondsSinceEpoch,
-          text: entry.text,
-          tags: List.of(entry.tags),
-          media: entry.media,
-          mediaName: entry.mediaName,
-          mediaSize: entry.mediaSize,
-          duration: entry.duration,
-          items: entry.items?.map((i) => TodoItem(id: i.id, text: i.text, done: i.done)).toList(),
-        );
-        widget.model.state.entries.add(copy);
-        await widget.model.save();
-        _toast(widget.model.tr('forwarded_to', [target.name]));
+        await _forwardEntries([entry], target);
         break;
       case EntryAction.delete:
-        final ok = await showDeleteEntryDialog(context, widget.model);
-        if (ok != true) return;
-        await MediaStore().remove(entry.media);
-        widget.model.state.entries.removeWhere((e) => e.id == entry.id);
-        await widget.model.save();
+        final deleted = List<Entry>.of([entry]);
+        await UndoService.deleteEntries(widget.model, [entry]);
         if (mounted) setState(() {});
+        if (mounted) _showUndoBar(deleted);
         break;
+    }
+  }
+
+  /// Forward with full field parity AND copy-on-forward media: the old
+  /// copies silently dropped `monthDay`/`recurrenceDays` (breaking forwarded
+  /// recurring tasks) and shared one media file between copies, so deleting
+  /// either copy destroyed both.
+  Future<void> _forwardEntries(List<Entry> list, Chat target) async {
+    final store = MediaStore();
+    for (final e in list) {
+      final copy = e.copyForForward(target.id);
+      if ((e.type == 'image' || e.type == 'audio' || e.type == 'video' || e.type == 'doc') &&
+          e.media != null) {
+        final newName = await store.copyMedia(e.media!);
+        if (newName != null) {
+          copy
+            ..media = newName
+            ..mediaName = e.type == 'image' ? newName : e.mediaName;
+        }
+      }
+      widget.model.state.entries.add(copy);
+    }
+    await widget.model.save();
+    if (mounted) {
+      setState(() => _selectedIds.clear());
+      _toast(widget.model.tr('forwarded_to', [target.name]));
     }
   }
 
@@ -854,7 +864,19 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final chat = _chat;
+    final chat = _chatOrNull;
+
+    // The chat can disappear while this screen is open (trash purge, sync).
+    if (chat == null) {
+      return Scaffold(
+        backgroundColor: p.bg,
+        body: Center(
+          child: Text(model.tr('chat_deleted'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, color: p.textFaint)),
+        ),
+      );
+    }
 
     return PopScope(
       canPop: !_selecting,
@@ -998,6 +1020,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 case ChatTopAction.search:
                   setState(() => _searching = true);
                   break;
+                case ChatTopAction.export:
+                  await ShareService.exportChatMarkdown(
+                      _chat.name, widget.model.state.entriesFor(widget.chatId));
+                  break;
                 case ChatTopAction.edit:
                   await _editChat();
                   break;
@@ -1014,7 +1040,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   await widget.model.save();
                   if (mounted) {
                     setState(() {});
-                    _toast(_chat.notificationsEnabled ? 'Уведомления включены' : 'Уведомления выключены');
+                    _toast(_chat.notificationsEnabled
+                        ? widget.model.tr('notifications_on')
+                        : widget.model.tr('notifications_off'));
                   }
                   break;
                 case ChatTopAction.remind:
@@ -1022,13 +1050,14 @@ class _ChatScreenState extends State<ChatScreen> {
               }
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(value: ChatTopAction.search, child: Row(children: [Icon(Icons.search, size: 18, color: p.accent), const SizedBox(width: 10), Text('Поиск в чате', style: TextStyle(color: p.text))])),
+              PopupMenuItem(value: ChatTopAction.search, child: Row(children: [Icon(Icons.search, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('search_in_chat'), style: TextStyle(color: p.text))])),
+              PopupMenuItem(value: ChatTopAction.export, child: Row(children: [Icon(Icons.ios_share, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('export_chat'), style: TextStyle(color: p.text))])),
               PopupMenuItem(
                   value: ChatTopAction.toggleNotifications,
                   child: Row(children: [
                     Icon(_chat.notificationsEnabled ? Icons.notifications : Icons.notifications_off, size: 18, color: p.textSoft),
                     const SizedBox(width: 10),
-                    Text(_chat.notificationsEnabled ? 'Выключить уведомления' : 'Включить уведомления', style: TextStyle(color: p.text))
+                    Text(_chat.notificationsEnabled ? widget.model.tr('notifications_on') : widget.model.tr('notifications_off'), style: TextStyle(color: p.text))
                   ])),
               if (_chat.kind == 'tasks')
                 PopupMenuItem(
@@ -1036,7 +1065,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Row(children: [
                       Icon(_chat.tasksHideDone ? Icons.visibility_off : Icons.visibility, size: 18, color: p.textSoft),
                       const SizedBox(width: 10),
-                      Text(_chat.tasksHideDone ? 'Показать выполненные' : 'Скрыть выполненные', style: TextStyle(color: p.text))
+                      Text(_chat.tasksHideDone ? widget.model.tr('show_done') : widget.model.tr('hide_done'), style: TextStyle(color: p.text))
                     ])),
               PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('edit_chat'), style: TextStyle(color: p.text))])),
               PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))])),
@@ -1143,10 +1172,13 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (currentDay != null) children.add(pill(currentDay!));
 
-    return ListView(
+    // builder + reverse: index 0 is the BOTTOM (newest). Lazy building keeps
+    // long chats from materializing every row at once.
+    return ListView.builder(
       reverse: true,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      children: children,
+      itemCount: children.length,
+      itemBuilder: (ctx, i) => children[children.length - 1 - i],
     );
   }
 
@@ -1318,11 +1350,15 @@ class _ChatScreenState extends State<ChatScreen> {
           style: TextStyle(color: p.accent, fontWeight: FontWeight.w600),
         ));
       } else {
-        // URL: styled as a link and wrapped with tap gesture.
+        // URL: styled as a link and wrapped with tap gesture. Recognizers
+        // are tracked and disposed with the State — a fresh one per build
+        // used to leak native resources on every rebuild.
+        final recognizer = _linkTapRecognizer(match);
+        _recognizers.add(recognizer);
         spans.add(TextSpan(
           text: match,
           style: TextStyle(color: Colors.blue[400], decoration: TextDecoration.underline, fontSize: 14.5, height: 1.35),
-          recognizer: _linkTapRecognizer(match),
+          recognizer: recognizer,
         ));
       }
       last = m.end;
@@ -1347,7 +1383,7 @@ class _ChatScreenState extends State<ChatScreen> {
       Padding(
         padding: const EdgeInsets.only(top: 6),
         child: FutureBuilder<LinkPreviewData?>(
-          future: LinkPreview.fetch(url),
+          future: _previewFor(url),
           builder: (ctx, snap) {
             if (!snap.hasData) return const SizedBox.shrink();
             final d = snap.data!;
@@ -1409,19 +1445,24 @@ class _ChatScreenState extends State<ChatScreen> {
               bottomRight: Radius.circular(3)),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            FutureBuilder<String>(
-              future: MediaStore().pathOf(entry.media!),
-              builder: (ctx, snap) => snap.hasData
-                  ? SizedBox(
-                      width: 260,
-                      height: 300,
-                      child: Image.file(File(snap.data!), fit: BoxFit.cover, alignment: Alignment.center),
-                    )
-                  : Container(width: 260, height: 300, color: p.bgChat),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FutureBuilder<String>(
+                future: _pathOf(entry.media!),
+                builder: (ctx, snap) => snap.hasData
+                    ? SizedBox(
+                        width: 260,
+                        height: 300,
+                        // Decode at display resolution, not file size — a
+                        // 12 MP quickCopy used to allocate a full bitmap.
+                        child: Image.file(File(snap.data!),
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            cacheWidth: (260 * MediaQuery.devicePixelRatioOf(context)).round()),
+                      )
+                    : Container(width: 260, height: 300, color: p.bgChat),
             ),
             if (entry.text.isNotEmpty)
               Padding(
@@ -1593,7 +1634,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ]),
             ),
           if (rows.isEmpty && allItems.isNotEmpty)
-            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text('Выполнено ✓', style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
+            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(model.tr('todo_all_done'), style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
           ...rows,
           Align(
             alignment: Alignment.centerLeft,
@@ -1930,8 +1971,8 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Icon(Icons.rss_feed, color: p.textFaint, size: 20),
             const SizedBox(width: 8),
-            Expanded(child: Text('Только канал — пишет RSS', style: TextStyle(color: p.textFaint, fontSize: 13))),
-            TextButton(onPressed: () async { await RssService.fetchForChat(_chat, model.state); if (mounted) setState(() {}); }, child: Text('Обновить', style: TextStyle(color: p.accent))),
+            Expanded(child: Text(model.tr('rss_only_channel'), style: TextStyle(color: p.textFaint, fontSize: 13))),
+            TextButton(onPressed: () async { await RssService.fetchForChat(_chat, model.state); if (mounted) setState(() {}); }, child: Text(model.tr('rss_refresh'), style: TextStyle(color: p.accent))),
           ],
         ),
       );

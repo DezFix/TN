@@ -1,3 +1,5 @@
+import 'dart:math';
+
 const storageKey = 'tn-notes-data-v1';
 const mediaDirName = 'tn_media';
 
@@ -224,6 +226,7 @@ class Entry {
     this.dueAt,
     this.editedAt,
     int? updatedAt,
+    this.pinned = false,
   }) : updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   final String id;
@@ -248,8 +251,36 @@ class Entry {
   int? dueAt; // for tasks-chat todos: deadline millis
   int? editedAt; // millis when last edited
   int updatedAt; // millis of last local change (for sync merge)
+  bool pinned; // pinned entries float to the top of the chat
 
   bool get isEdited => editedAt != null;
+
+  /// Deep copy of every content field into a fresh entry in [targetChatId].
+  /// Used by forward — the old hand-rolled copies kept dropping recurrence
+  /// fields (`monthDay`, sometimes `recurrenceDays`), breaking forwarded
+  /// recurring tasks.
+  Entry copyForForward(String targetChatId, {int? ts}) => Entry(
+        id: uid('e'),
+        chatId: targetChatId,
+        type: type,
+        ts: ts ?? DateTime.now().millisecondsSinceEpoch,
+        text: text,
+        tags: List.of(tags),
+        media: media,
+        mediaName: mediaName,
+        mediaSize: mediaSize,
+        duration: duration,
+        waveform: waveform == null ? null : List.of(waveform!),
+        items: items
+            ?.map((i) => TodoItem(
+                id: i.id, text: i.text, done: i.done, parentId: i.parentId))
+            .toList(),
+        dueAt: dueAt,
+        recurrence: recurrence,
+        recurrenceDays:
+            recurrenceDays == null ? null : List.of(recurrenceDays!),
+        monthDay: monthDay,
+      );
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
         id: j['id'] as String,
@@ -270,6 +301,7 @@ class Entry {
         dueAt: (j['dueAt'] as num?)?.toInt(),
         editedAt: (j['editedAt'] as num?)?.toInt(),
         updatedAt: (j['updatedAt'] as num?)?.toInt(),
+        pinned: j['pinned'] as bool? ?? false,
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -294,6 +326,7 @@ class Entry {
         if (dueAt != null) 'dueAt': dueAt,
         if (editedAt != null) 'editedAt': editedAt,
         'updatedAt': updatedAt,
+        if (pinned) 'pinned': pinned,
       };
 }
 
@@ -323,7 +356,16 @@ List<String> extractTags(String text) {
   return tags;
 }
 
-String uid(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}-${(0xFFFF & DateTime.now().millisecond).toRadixString(16)}';
+/// Time-based id plus 3 random bytes from a secure RNG — two ids created in
+/// the same microsecond can no longer collide (the old millisecond-hex suffix
+/// had very low entropy).
+final Random _uidRandom = Random.secure();
+String uid(String prefix) {
+  final rnd = List.generate(3, (_) => _uidRandom.nextInt(256))
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '$prefix-${DateTime.now().microsecondsSinceEpoch}-$rnd';
+}
 
 /// Stable 31-bit FNV-1a hash. Unlike String.hashCode (randomized per process
 /// in Dart), this is identical across app restarts — required for native

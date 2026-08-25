@@ -1,4 +1,4 @@
-﻿import 'dart:async' show unawaited, Timer;
+import 'dart:async' show unawaited, Timer;
 import 'dart:convert' show jsonDecode;
 import 'dart:io' show Platform;
 
@@ -39,7 +39,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.13.2';
+const _buildVersion = '1.14.0';
 
 bool _quitting = false;
 
@@ -48,7 +48,7 @@ final bool _isTestEnv = Platform.environment.containsKey('FLUTTER_TEST');
 
 /// Windows: phone-shaped window, close button hides to tray instead of
 /// quitting — reminders keep arriving while TN sits in the tray.
-Future<void> _initWindowAndTray() async {
+Future<void> _initWindowAndTray(AppModel model) async {
   await windowManager.ensureInitialized();
   const options = WindowOptions(
     size: Size(412, 892),
@@ -68,11 +68,12 @@ Future<void> _initWindowAndTray() async {
 
   final tray = SystemTray();
   await tray.initSystemTray(title: 'TN', iconPath: 'assets/app_icon.ico', toolTip: 'TN');
+  // Localized labels (the model is fully loaded by the time we get here).
   final menu = Menu();
   await menu.buildFrom([
-    MenuItemLabel(label: 'Открыть TN', onClicked: (_) => windowManager.show()),
+    MenuItemLabel(label: model.tr('tray_open'), onClicked: (_) => windowManager.show()),
     MenuSeparator(),
-    MenuItemLabel(label: 'Выход', onClicked: (_) async {
+    MenuItemLabel(label: model.tr('tray_quit'), onClicked: (_) async {
       _quitting = true;
       await tray.destroy();
       await windowManager.destroy();
@@ -197,14 +198,16 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     return WelcomeScreen(model: model);
                   }
                   if (!_whatsNewChecked) {
-                    _whatsNewChecked = true;
+                    // Flag flips inside the callback — mutating state during
+                    // build is a no-no the analyzer rightly complains about.
                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _whatsNewChecked = true;
                       _maybeShowWhatsNew(innerCtx, model);
                     });
                   }
                   if (!_shareInWired) {
-                    _shareInWired = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _shareInWired = true;
                       ShareIn.init(model,
                           getContext: () => _navKey.currentContext!,
                           openChat: (chatId, entryId) {
@@ -234,12 +237,13 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     await RemindersService.instance.init();
     await RemindersService.instance.requestNotificationsPermission();
     _purgeExpiredTrash(model);
+    unawaited(MediaStore().purgeTrash());
     try {
       final prefs = await SharedPreferences.getInstance();
       _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);
     } catch (_) {}
     if (Platform.isWindows && !_isTestEnv) {
-      unawaited(_initWindowAndTray());
+      unawaited(_initWindowAndTray(model));
       ReminderEngine.instance.start(model, _navKey);
     }
     if (!_isTestEnv) {
@@ -324,18 +328,26 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       final updateAvailable = _isNewerTag(tag, _buildVersion);
 
       String? apkUrl;
+      String? apkSha256;
       if (updateAvailable && Platform.isAndroid) {
         final assets = rel['assets'] as List<dynamic>?;
         if (assets != null) {
-          String? fallback;
+          String? universalUrl, universalSha, lastUrl, lastSha;
           for (final a in assets) {
-            final n = (a as Map<String, dynamic>)['name'] as String? ?? '';
-            final u = a['browser_download_url'] as String? ?? '';
-            if (n.contains('universal')) fallback = u;
+            final map = a as Map<String, dynamic>;
+            final n = (map['name'] as String?) ?? '';
+            lastUrl = map['browser_download_url'] as String? ?? lastUrl;
+            // GitHub exposes 'sha256:<hex>' here — verified before install.
+            final digest = (map['digest'] as String?) ?? '';
+            final sha = digest.startsWith('sha256:') ? digest.substring(7) : '';
+            lastSha = sha.isNotEmpty ? sha : lastSha;
+            if (n.contains('universal')) {
+              universalUrl = map['browser_download_url'] as String?;
+              universalSha = sha.isNotEmpty ? sha : null;
+            }
           }
-          apkUrl = fallback ?? (assets.isNotEmpty
-              ? (assets.last as Map<String, dynamic>)['browser_download_url'] as String?
-              : null);
+          apkUrl = universalUrl ?? lastUrl;
+          apkSha256 = universalUrl != null ? universalSha : lastSha;
         }
       }
 
@@ -347,7 +359,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
             title: name.isNotEmpty ? name : 'TN $tag',
             markdown: body,
             updateUrl: updateAvailable ? pageUrl : null,
-            apkUrl: apkUrl);
+            apkUrl: apkUrl,
+            apkSha256: apkSha256);
         await prefs.setString('tn-seen-release', tag);
         return;
       }
@@ -356,14 +369,15 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
           prefs.getString('tn-update-prompted') != tag &&
           context.mounted) {
         await _showUpdateDialog(context, model, tag,
-            url: pageUrl, apkUrl: apkUrl);
+            url: pageUrl, apkUrl: apkUrl, apkSha256: apkSha256);
         await prefs.setString('tn-update-prompted', tag);
       }
     } catch (_) {}
   }
 
   Future<void> _showUpdateDialog(BuildContext context, AppModel model,
-      String tag, {required String url, String? apkUrl}) async {
+      String tag,
+      {required String url, String? apkUrl, String? apkSha256}) async {
     final p = model.p;
     await showDialog<void>(
       context: context,
@@ -399,7 +413,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     setDialogState(() { downloading = true; progress = 0; });
                     final result = await Updater.downloadAndInstall(apkUrl, (p) {
                       setDialogState(() => progress = p);
-                    });
+                    }, expectedSha256: apkSha256);
                     if (result == null && ctx.mounted) {
                       setDialogState(() => downloading = false);
                     }
@@ -427,6 +441,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     required String markdown,
     String? updateUrl,
     String? apkUrl,
+    String? apkSha256,
   }) async {
     final p = model.p;
     await showDialog<void>(

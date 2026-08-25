@@ -1,13 +1,156 @@
+import 'dart:convert';
 import 'dart:io' show File, FileMode, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'app_log.dart';
 import 'models.dart';
+
+/// Snooze durations offered right on the notification: (action id, minutes).
+const snoozeActions = [
+  ('tn_snooze_10', 10),
+  ('tn_snooze_60', 60),
+];
+
+AndroidNotificationDetails _androidDetails(
+    String title, String body, List<String>? snoozeLabels) {
+  final labels = snoozeLabels ?? const ['+10 min', '+1 hour'];
+  return AndroidNotificationDetails(
+    'tn_messages',
+    'TN messages',
+    channelDescription: 'Messages and reminders like Telegram',
+    importance: Importance.max,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.message,
+    styleInformation: MessagingStyleInformation(
+      // Chat name plays the "sender" — no hardcoded locale string here.
+      Person(name: title),
+      conversationTitle: title,
+      groupConversation: false,
+      messages: [Message(body, DateTime.now(), Person(name: title))],
+    ),
+    ticker: '$title: $body',
+    actions: [
+      AndroidNotificationAction(snoozeActions[0].$1, labels[0],
+          showsUserInterface: true),
+      AndroidNotificationAction(snoozeActions[1].$1, labels[1],
+          showsUserInterface: true),
+    ],
+  );
+}
+
+/// Background entry point for notification action taps (snooze) while the
+/// app process is gone. Edits the shared state JSON directly — the same
+/// contract the Kotlin widget uses — bumps the stamp and re-arms the native
+/// alarm, so the reminder fires later even if TN is never opened.
+@pragma('vm:entry-point')
+Future<void> notificationBackgroundHandler(NotificationResponse details) async {
+  await handleSnoozeResponse(details);
+}
+
+/// Shared by the background handler and the in-app response listener.
+/// [payload] format: `id|whenMillis`.
+Future<bool> handleSnoozeResponse(NotificationResponse details) async {
+  final actionId = details.actionId ?? '';
+  final payload = details.payload ?? '';
+  final match =
+      snoozeActions.where((a) => a.$1 == actionId).firstOrNull;
+  if (match == null || payload.isEmpty) return false;
+  final sep = payload.lastIndexOf('|');
+  if (sep <= 0) return false;
+  final id = payload.substring(0, sep);
+  final when = int.tryParse(payload.substring(sep + 1));
+  if (when == null) return false;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(storageKey);
+    if (raw == null || raw.isEmpty) return false;
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    final target =
+        DateTime.now().millisecondsSinceEpoch + match.$2 * 60 * 1000;
+    var hit = false;
+    final reminders = data['reminders'] as List?;
+    if (reminders != null) {
+      for (var i = 0; i < reminders.length; i++) {
+        final r = reminders[i] as Map<String, dynamic>;
+        if (r['id'] == id && (r['when'] as num?)?.toInt() == when) {
+          r['when'] = target;
+          hit = true;
+          break;
+        }
+      }
+    }
+    if (!hit) {
+      final entries = data['entries'] as List?;
+      if (entries != null) {
+        for (var i = 0; i < entries.length; i++) {
+          final e = entries[i] as Map<String, dynamic>;
+          if (e['id'] == id &&
+              e['dueAt'] != null &&
+              (e['dueAt'] as num).toInt() == when) {
+            e['dueAt'] = target;
+            e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+            hit = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!hit) return false;
+    await prefs.setString(storageKey, jsonEncode(data));
+    await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
+
+    // Re-arm the native alarm for the shifted time (fresh plugin instance —
+    // the background isolate shares nothing with the app's one).
+    if (Platform.isAndroid) {
+      try {
+        final plugin = FlutterLocalNotificationsPlugin();
+        await plugin.initialize(
+          settings: const InitializationSettings(
+            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          ),
+        );
+        tzdata.initializeTimeZones();
+        await plugin.zonedSchedule(
+          id: stableHash(id),
+          title: 'TN',
+          body: '',
+          scheduledDate: tz.TZDateTime.from(
+            DateTime.fromMillisecondsSinceEpoch(target, isUtc: true),
+            tz.UTC,
+          ),
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'tn_messages',
+              'TN messages',
+              channelDescription: 'Messages and reminders like Telegram',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: '$id|$target',
+        );
+      } catch (e, st) {
+        AppLog.error('snooze.rearm', e, st);
+      }
+    }
+    return true;
+  } catch (e, st) {
+    AppLog.error('snooze.bg', e, st);
+    return false;
+  }
+}
+
+extension _FirstOf<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
 
 class RemindersService {
   static final RemindersService instance = RemindersService._();
@@ -18,6 +161,10 @@ class RemindersService {
   bool _ready = false;
   int _tzAttempts = 0;
   String _lastError = '';
+
+  /// Set by the app at startup: receives (actionId, payload) taps made while
+  /// the app was running, so snooze updates the live model immediately.
+  static void Function(String actionId, String payload)? onNotificationAction;
 
   String get lastError => _lastError;
   bool get ready => _ready;
@@ -60,17 +207,21 @@ class RemindersService {
                         guid: 'F4A9E2D1-7C3B-4E8A-9D2F-1B6C5A0E9D43',
                       ),
                     ),
+              onDidReceiveNotificationResponse: (details) async {
+                if ((details.actionId ?? '').startsWith('tn_snooze_')) {
+                  await handleSnoozeResponse(details);
+                  onNotificationAction?.call(details.actionId!, details.payload ?? '');
+                }
+              },
+              onDidReceiveBackgroundNotificationResponse:
+                  notificationBackgroundHandler,
             )
             .timeout(const Duration(seconds: 4));
         // Native registration can legitimately fail (e.g. the Start Menu
         // AUMID shortcut could not be created on Windows) — never pretend
         // we are ready or every later schedule call will silently throw.
         _ready = ok ?? false;
-        if (!_ready) {
-          _log('init failed (plugin returned false)');
-        } else {
-          _log('init ok');
-        }
+        _log(_ready ? 'init ok' : 'init failed (plugin returned false)');
       }
     } catch (e) {
       _log('init threw: $e');
@@ -157,10 +308,11 @@ class RemindersService {
     }
   }
 
-  Future<bool> schedule(Reminder r, String title, String body) async {
+  Future<bool> schedule(Reminder r, String title, String body,
+      {List<String>? snoozeLabels}) async {
     // Desktop: native scheduled toasts proved unreliable (AUMID/shortcut
     // registration, timezone shifts) — ReminderEngine delivers reminders
-    // itself with banners and instant toasts instead.
+    // itself with Telegram-style overlays instead.
     if (!Platform.isAndroid) return true;
     if (!_ready) await init();
     try {
@@ -178,25 +330,12 @@ class RemindersService {
         body: body,
         scheduledDate: when,
         notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            'tn_messages',
-            'TN messages',
-            channelDescription: 'Messages and reminders like Telegram',
-            importance: Importance.max,
-            priority: Priority.high,
-            category: AndroidNotificationCategory.message,
-            styleInformation: MessagingStyleInformation(
-              const Person(name: 'Вы'),
-              conversationTitle: title,
-              groupConversation: false,
-              messages: [Message(body, DateTime.now(), Person(name: title))],
-            ),
-            ticker: '$title: $body',
-          ),
+          android: _androidDetails(title, body, snoozeLabels),
         ),
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: '${r.id}|${r.when}',
       );
       _log('scheduled ${r.id} at $when');
       return true;
@@ -206,7 +345,8 @@ class RemindersService {
     }
   }
 
-  Future<void> cancel(Reminder r) async {    try {
+  Future<void> cancel(Reminder r) async {
+    try {
       await _plugin.cancel(id: stableHash(r.id));
     } catch (_) {}
   }
@@ -225,21 +365,7 @@ class RemindersService {
         title: title,
         body: body,
         notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            'tn_messages',
-            'TN messages',
-            channelDescription: 'Messages and reminders like Telegram',
-            importance: Importance.max,
-            priority: Priority.high,
-            category: AndroidNotificationCategory.message,
-            styleInformation: MessagingStyleInformation(
-              const Person(name: 'Вы'),
-              conversationTitle: title,
-              groupConversation: false,
-              messages: [Message(body, DateTime.now(), Person(name: title))],
-            ),
-            ticker: '$title: $body',
-          ),
+          android: _androidDetails(title, body, null),
         ),
       );
     } catch (_) {}

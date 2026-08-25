@@ -4,6 +4,6 @@
     <string name="tn_widget_desc">Tasks from all chats</string>
     <string name="dw_title_notes">Notes</string>
     <string name="dw_empty">Nothing here yet</string>
-    <string name="dw_overdue">%1$s • overdue</string>
-    <string name="dw_meta_chat">%1$s • %2$s</string>
+    <string name="dw_overdue">%1$s — overdue</string>
+    <string name="dw_meta_chat">%1$s · %2$s</string>
 </resources>

@@ -18,14 +18,20 @@ class LinkPreviewData {
 }
 
 class LinkPreview {
+  /// Bounded LRU-ish cache: entries move to the end on hit; the oldest is
+  /// evicted past [_cacheLimit] (the map used to grow without limit).
   static final _cache = <String, _Entry>{};
+  static const _cacheLimit = 64;
 
   /// Fetch preview metadata for [url].  Returns `null` on failure or when the
   /// server does not expose OG/Twitter tags.  Results are cached for 1 hour.
   static Future<LinkPreviewData?> fetch(String url) async {
-    final cached = _cache[url];
-    if (cached != null && DateTime.now().difference(cached.ts) < const Duration(hours: 1)) {
-      return cached.data;
+    final cached = _cache.remove(url);
+    if (cached != null) {
+      _cache[url] = cached;
+      if (DateTime.now().difference(cached.ts) < const Duration(hours: 1)) {
+        return cached.data;
+      }
     }
     try {
       final uri = Uri.parse(url);
@@ -38,7 +44,12 @@ class LinkPreview {
 
       final html = resp.body;
       final data = _parse(html, uri.host);
-      if (data != null) _cache[url] = _Entry(data);
+      if (data != null) {
+        _cache[url] = _Entry(data);
+        while (_cache.length > _cacheLimit) {
+          _cache.remove(_cache.keys.first);
+        }
+      }
       return data;
     } catch (_) {
       return null;

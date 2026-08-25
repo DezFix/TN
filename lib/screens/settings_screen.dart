@@ -12,6 +12,7 @@ import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
 import 'folders_edit_screen.dart';
+import 'tags_screen.dart';
 import 'trash_screen.dart';
 import 'widget_settings_screen.dart';
 
@@ -147,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ]),
                   ),
                 ),
-                const Divider(height: 20, color: Color(0xFF2A3441)),
+                Divider(height: 20, color: p.divider),
                 InkWell(
                   borderRadius: BorderRadius.circular(10),
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrashScreen(model: model))),
@@ -191,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                const Divider(height: 24, color: Color(0xFF2A3441)),
+                Divider(height: 24, color: p.divider),
                 Align(alignment: Alignment.centerLeft, child: Text(tr('rss_cache_max_size'), style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
                 const SizedBox(height: 4),
                 Text(tr('rss_cache_hint'), style: TextStyle(color: p.textFaint, fontSize: 11)),
@@ -245,7 +246,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                const Divider(height: 20, color: Color(0xFF2A3441)),
+                Divider(height: 20, color: p.divider),
+                InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.tag, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('tags_title'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
+                Divider(height: 20, color: p.divider),
                 InkWell(
                   onTap: () => Navigator.push(
                     context,

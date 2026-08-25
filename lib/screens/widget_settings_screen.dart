@@ -186,11 +186,78 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   }
 
   Widget _preview(Palette p) {
-    final sampleRows = ['09:30 • работа   купить кофе', '12:00 • сегодня  позвонить маме', '18:45 • идеи     записать мысль'];
+    final model = widget.model;
+    // Mirrors the native widget layout (tn_day_widget.xml): dark rounded
+    // card, header pill with count badge + gear, task rows as inner cards.
+    Widget row(String time, String chat, String text,
+        {bool overdue = false}) {
+      final color = overdue ? const Color(0xFFFF6B6B) : const Color(0xFFEAECEF);
+      return Container(
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.fromLTRB(9, 7, 10, 7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF8A9BA8), width: 1.6),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12 * _font, height: 1.2, color: color)),
+                  const SizedBox(height: 2),
+                  Text('$time · $chat',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 10 * _font,
+                          color: overdue ? const Color(0xFFFF6B6B) : const Color(0xFF8A9BA8))),
+                ],
+              ),
+            ),
+            if (overdue)
+              Container(
+                width: 6,
+                height: 6,
+                decoration:
+                    const BoxDecoration(color: Color(0xFFFF6B6B), shape: BoxShape.circle),
+              ),
+          ],
+        ),
+      );
+    }
+
+    Widget badge(String label) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2AABEE).withValues(alpha: .2),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 10 * _font,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFEAECEF))),
+        );
+
     return Container(
       width: 250,
       margin: const EdgeInsets.only(top: 8, bottom: 6),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Color.fromARGB((_alpha * 255).round(), 0x17, 0x21, 0x2B),
         borderRadius: BorderRadius.circular(16),
@@ -198,24 +265,37 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header pill
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(color: const Color(0x2E000000), borderRadius: BorderRadius.circular(6)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: .18),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Задачи', style: TextStyle(fontSize: 13 * _font, fontWeight: FontWeight.w700, color: p.accent)),
-                Icon(Icons.settings, size: 16 * _font, color: const Color(0xFF8A9BA8)),
+                Icon(Icons.check_circle, size: 15 * _font, color: p.accent),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(model.tr('kind_tasks'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13 * _font,
+                          fontWeight: FontWeight.w700,
+                          color: p.accent)),
+                ),
+                badge('2'),
+                const SizedBox(width: 8),
+                Icon(Icons.settings, size: 14 * _font, color: const Color(0xFF8A9BA8)),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          for (final row in sampleRows)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(row, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5 * _font, color: const Color(0xFFEAECEF))),
-            ),
+          const SizedBox(height: 6),
+          row('09:30', model.tr('dw_period_today'), 'Купить кофе', overdue: true),
+          row('12:00', model.tr('today'), 'Позвонить маме'),
+          row('18:45', model.tr('tags_title'), '#идеи записать мысль'),
         ],
       ),
     );

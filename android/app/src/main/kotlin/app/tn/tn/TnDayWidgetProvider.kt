@@ -155,7 +155,6 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             )
 
             rv.setTextViewText(R.id.dw_title, context.getString(R.string.dw_title_tasks))
-
             // Adjustable font size (scale, default 1.0) written by the in-app
             // widget settings screen.
             var fontScale = 1.0f
@@ -193,9 +192,14 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 row.setTextViewText(R.id.dr_meta, r.meta)
                 row.setFloat(R.id.dr_title, "setTextSize", 13f * fontScale)
                 row.setFloat(R.id.dr_meta, "setTextSize", 11f * fontScale)
+                // Overdue: red title + red dot; normal: white title, no dot.
                 row.setInt(
-                    R.id.dr_meta, "setTextColor",
-                    if (r.overdue) Color.rgb(255, 107, 107) else Color.rgb(138, 155, 168)
+                    R.id.dr_title, "setTextColor",
+                    if (r.overdue) Color.rgb(255, 107, 107) else Color.WHITE
+                )
+                row.setViewVisibility(
+                    R.id.dr_dot,
+                    if (r.overdue) android.view.View.VISIBLE else android.view.View.GONE
                 )
                 row.setViewVisibility(R.id.dr_check, android.view.View.VISIBLE)
                 row.setInt(R.id.dr_check, "setImageResource", R.drawable.ic_dw_check_off)
@@ -211,6 +215,15 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 )
                 row.setOnClickPendingIntent(R.id.dr_root, pi)
                 rv.addView(R.id.dw_list, row)
+            }
+
+            // Task-count badge in the header.
+            rv.setViewVisibility(
+                R.id.dw_count,
+                if (rows.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+            )
+            if (rows.isNotEmpty()) {
+                rv.setTextViewText(R.id.dw_count, rows.size.toString())
             }
 
             // Transparency preset shared with the in-app settings screen.

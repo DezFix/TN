@@ -1,5 +1,5 @@
 name: tn
-description: "A new Flutter project."
+description: "TN — notes that feel like a Telegram chat."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.13.2+49
+version: 1.14.0+50
 
 environment:
   sdk: ^3.11.1
@@ -44,6 +44,7 @@ dependencies:
   timezone: ^0.11.1
   flutter_timezone: ^5.1.0
   intl: ^0.20.2
+  crypto: ^3.0.6
 
   flutter_localizations:
     sdk: flutter

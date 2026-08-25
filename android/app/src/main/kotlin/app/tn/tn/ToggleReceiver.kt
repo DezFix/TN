@@ -128,8 +128,21 @@ class ToggleReceiver : BroadcastReceiver() {
 
         private fun playDing(context: Context) {
             try {
-                val mp = MediaPlayer.create(context, R.raw.tn_ding) ?: return
+                val mp = MediaPlayer()
+                // Route to the NOTIFICATION stream (USAGE_NOTIFICATION_EVENT +
+                // SONIFICATION): the ding used to land on the MEDIA track, so
+                // it ignored the notification volume and blared over music.
+                mp.setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                val afd = context.resources.openRawResourceFd(R.raw.tn_ding)
+                mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
                 mp.setOnCompletionListener { it.release() }
+                mp.prepare()
                 mp.start()
             } catch (_: Exception) {
             }

@@ -5,7 +5,7 @@ import 'models.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum EntryAction { schedTime, copy, edit, forward, delete, select, share, download }
+enum EntryAction { schedTime, copy, edit, forward, delete, select, share, download, pin }
 
 Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? chat}) async {
   final p = model.p;
@@ -232,6 +232,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
     position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
     items: [
       if (showSchedule) PopupMenuItem(value: EntryAction.schedTime, child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('change_time'), style: TextStyle(color: p.text))])),
+      PopupMenuItem(value: EntryAction.pin, child: Row(children: [Icon(Icons.push_pin_outlined, size: 18, color: entry.pinned ? p.accent : p.textSoft), const SizedBox(width: 10), Text(tr(entry.pinned ? 'unpin' : 'pin'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.select, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('select'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.edit, child: Row(children: [Icon(Icons.edit, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('edit'), style: TextStyle(color: p.text))])),
@@ -620,7 +621,7 @@ Future<AttachOption?> showAttachMenuPopup(
   );
 }
 
-enum ChatTopAction { remind, edit, delete, toggleHide, toggleNotifications, search }
+enum ChatTopAction { remind, edit, delete, toggleHide, toggleNotifications, search, export }
 
 Future<ChatTopAction?> showChatTopMenuPopup(
     BuildContext context, AppModel model) {
@@ -691,7 +692,7 @@ Future<int?> showMonthDayPickerDialog(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => AlertDialog(
         backgroundColor: p.modalBg,
-        title: Text('Каждый месяц, числа', style: TextStyle(color: p.text)),
+        title: Text(model.tr('sched_monthly_day'), style: TextStyle(color: p.text)),
         content: SizedBox(
           width: double.maxFinite,
           height: 300,

@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:tn/src/models.dart';
 import 'package:tn/src/reminder_engine.dart';
 
@@ -23,6 +23,7 @@ String fakeTr(String key, [List<String>? args]) =>
       final due = collectDue(
         reminders: [Reminder(id: 'r1', chatId: 'c1', when: now)],
         entries: const [],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
         tr: fakeTr,
         now: now,
@@ -40,6 +41,7 @@ String fakeTr(String key, [List<String>? args]) =>
           Reminder(id: 'ok', chatId: 'c1', when: now - 23 * hour),
         ],
         entries: const [],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
         tr: fakeTr,
         now: now,
@@ -55,6 +57,7 @@ String fakeTr(String key, [List<String>? args]) =>
           todoEntry('t2', null),
           Entry(id: 'x', chatId: 'c1', type: 'text', ts: 0, text: 'hi'),
         ],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
         tr: fakeTr,
         now: now,
@@ -66,13 +69,15 @@ String fakeTr(String key, [List<String>? args]) =>
       final a = collectDue(
           reminders: [Reminder(id: 'r', chatId: 'c1', when: now)],
           entries: const [],
-          chatNameOf: (_) => 'X',
+          chatTrashed: (_) => false,
+        chatNameOf: (_) => 'X',
           tr: fakeTr,
           now: now);
       final b = collectDue(
           reminders: [Reminder(id: 'r', chatId: 'c1', when: now + hour)],
           entries: const [],
-          chatNameOf: (_) => 'X',
+          chatTrashed: (_) => false,
+        chatNameOf: (_) => 'X',
           tr: fakeTr,
           now: now + hour);
       expect(a.single.key == b.single.key, isFalse);
@@ -82,6 +87,7 @@ String fakeTr(String key, [List<String>? args]) =>
       final due = collectDue(
         reminders: [Reminder(id: 't1', chatId: 'c1', when: now)],
         entries: [todoEntry('t1', now)],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
         tr: fakeTr,
         now: now,

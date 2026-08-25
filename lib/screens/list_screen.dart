@@ -4,16 +4,22 @@ import 'package:flutter/services.dart';
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/models.dart';
+import '../src/reminders.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
+import 'agenda_screen.dart';
 import 'chat_edit_screen.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
+import 'tags_screen.dart';
 
 class ListScreen extends StatefulWidget {
-  const ListScreen({super.key, required this.model});
+  const ListScreen({super.key, required this.model, this.initialQuery});
 
   final AppModel model;
+
+  /// Pre-filled search (e.g. '#tag' from the tag manager).
+  final String? initialQuery;
 
   @override
   State<ListScreen> createState() => _ListScreenState();
@@ -35,6 +41,10 @@ class _ListScreenState extends State<ListScreen> {
   void initState() {
     super.initState();
     widget.model.addListener(_onModel);
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
+      _q = widget.initialQuery!.trim().toLowerCase();
+      _search.text = widget.initialQuery!;
+    }
   }
 
   @override
@@ -139,9 +149,18 @@ class _ListScreenState extends State<ListScreen> {
     for (final c in model.state.chats) {
       if (_sel.contains(c.id)) c.deletedAt = now;
     }
+    // Cancel the native alarms of the trashed chats — both chat reminders
+    // and todo deadlines inside them kept firing after bulk delete.
     for (final r in model.state.reminders.toList()) {
-      if (_sel.contains(r.chatId)) {
-        model.state.reminders.remove(r);
+      if (!_sel.contains(r.chatId)) continue;
+      await RemindersService.instance.cancel(r);
+      model.state.reminders.remove(r);
+    }
+    for (final e in model.state.entries) {
+      if (e.dueAt == null) continue;
+      final chat = model.state.chatById(e.chatId);
+      if (chat != null && chat.isTrashed) {
+        await RemindersService.instance.cancelById(stableHash(e.id));
       }
     }
     await model.save();
@@ -584,6 +603,32 @@ class _ListScreenState extends State<ListScreen> {
                 },
               ),
             ],
+            const SizedBox(width: 6),
+            // Tag manager + agenda shortcuts.
+            chip(
+              label: tr('tags_title'),
+              icon: Icons.tag,
+              selected: false,
+              onTap: () async {
+                HapticFeedback.selectionClick();
+                final q = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
+                );
+                if (q != null && mounted) setState(() => _q = q);
+              },
+            ),
+            const SizedBox(width: 6),
+            chip(
+              label: tr('agenda_title'),
+              icon: Icons.event_outlined,
+              selected: false,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => AgendaScreen(model: model)),
+                );
+              },
+            ),
             const SizedBox(width: 6),
             chip(
               label: tr('new_folder'),

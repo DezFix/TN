@@ -5,7 +5,6 @@ import 'package:share_plus/share_plus.dart';
 
 import 'media.dart';
 import 'models.dart';
-
 class ShareService {
   /// Share single entry: if image -> share file, else share text
   static Future<void> shareEntry(Entry e) async {
@@ -79,8 +78,7 @@ class ShareService {
   }
 
   /// Download image entry to Downloads folder
-  static Future<String?> downloadImage(Entry e) async {
-    if (e.media == null) return null;
+  static Future<String?> downloadImage(Entry e) async {    if (e.media == null) return null;
     final srcPath = await MediaStore().pathOf(e.media!);
     final srcFile = File(srcPath);
     if (!await srcFile.exists()) return null;
@@ -120,5 +118,45 @@ class ShareService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Render [entries] (oldest first) as a Markdown document — the whole chat
+  /// becomes a portable file via the system share sheet. Pure part is split
+  /// out for tests.
+  static String entryToMarkdown(Entry e) {
+    final buf = StringBuffer();
+    final when = DateTime.fromMillisecondsSinceEpoch(e.ts).toIso8601String();
+    switch (e.type) {
+      case 'todo':
+        for (final i in e.items ?? const <TodoItem>[]) {
+          buf.writeln('- [${i.done ? 'x' : ' '}] ${i.text}');
+        }
+        break;
+      case 'image':
+        buf.writeln('![${e.text.isNotEmpty ? e.text.replaceAll('\n', ' ') : e.mediaName}]()');
+        if (e.text.isNotEmpty) buf.writeln();
+        buf.writeln(e.text);
+        break;
+      default:
+        buf.writeln(e.text);
+    }
+    final head = '**$when**';
+    return '$head\n${buf.toString().trim()}';
+  }
+
+  static Future<void> exportChatMarkdown(String chatName, List<Entry> entries) async {
+    if (entries.isEmpty) return;
+    final sorted = List<Entry>.of(entries)..sort((a, b) => a.ts.compareTo(b.ts));
+    final md = StringBuffer('# $chatName\n\n');
+    for (final e in sorted) {
+      md.writeln(entryToMarkdown(e));
+      md.writeln();
+    }
+    final dir = await getTemporaryDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final safeName = chatName.replaceAll(RegExp(r'[^\w\- ]'), '').trim();
+    final f = File('${dir.path}${Platform.pathSeparator}tn-$safeName-$stamp.md');
+    await f.writeAsString(md.toString(), flush: true);
+    await Share.shareXFiles([XFile(f.path, mimeType: 'text/markdown')]);
   }
 }

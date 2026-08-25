@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 
+import 'app_log.dart';
 import 'models.dart';
 import 'state.dart';
 import 'package:path_provider/path_provider.dart';
@@ -68,10 +69,12 @@ class RssService {
         added++;
         if (added >= 10) break;
       }
-      cache[chat.id] = seen.toList();
+      cache[chat.id] = seen.length > 500 ? seen.toList().sublist(seen.length - 500) : seen.toList();
       await prefs.setString(_cacheKey, jsonEncode(cache));
       if (added > 0) await state.save();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.error('rss.fetch', e, st);
+    }
   }
 
   static Future<void> fetchAll(AppState state) async {

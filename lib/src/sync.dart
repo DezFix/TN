@@ -1,11 +1,16 @@
-﻿import 'package:shared_preferences/shared_preferences.dart';
+﻿import 'dart:convert';
 
+import 'package:archive/archive.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'app_log.dart';
 import 'app_model.dart';
 import 'backup.dart';
 import 'gdrive.dart';
 
-/// Simple Google Drive backup: a single `tn_backup.zip` file.
-/// Upload is manual (button press). Download replaces local state wholesale.
+/// Google Drive / WebDAV backup sync. Upload is manual (button press).
+/// Download MERGES by `updatedAt` instead of replacing local state —
+/// pulling an older backup can no longer wipe recent notes.
 class SyncService {
   static final SyncService instance = SyncService._();
   SyncService._();
@@ -25,7 +30,9 @@ class SyncService {
     _model = model;
     try {
       _gd = await GoogleDriveClient.loadSaved();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLog.error('sync.bind', e, st);
+    }
   }
 
   Future<void> reloadAccount() async {
@@ -65,12 +72,13 @@ class SyncService {
         await prefs.setString(_prefFileId, fileId);
       }
       return ok;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error('sync.push', e, st);
       return false;
     }
   }
 
-  /// Download the backup from Drive and replace local state wholesale.
+  /// Download the backup from Drive and merge it into local state.
   Future<bool> pull() async {
     final m = _model, gd = _gd;
     if (m == null || gd == null || !gd.isConnected) return false;
@@ -82,10 +90,23 @@ class SyncService {
 
       final bytes = await gd.download(fileId);
       if (bytes == null || bytes.isEmpty) return false;
-      await BackupService.importFromBytes(bytes, _syncFileName, m.state);
+
+      // Extract data.json and merge record-by-record (LWW on updatedAt).
+      final archive = ZipDecoder().decodeBytes(bytes);
+      ArchiveFile? data;
+      for (final f in archive) {
+        if (f.name == 'data.json' || f.name.endsWith('/data.json')) {
+          data = f;
+          break;
+        }
+      }
+      if (data == null) return false;
+      m.state.mergeFromJson(utf8.decode(data.content));
+      await m.save();
       m.refresh();
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error('sync.pull', e, st);
       return false;
     }
   }

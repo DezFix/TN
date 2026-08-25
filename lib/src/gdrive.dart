@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -10,20 +12,33 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// Uses an "installed app" OAuth client: the system browser opens the consent
 /// page, a temporary loopback HTTP server catches the redirect, and the code
-/// is exchanged for tokens. Only files created by TN (drive.file scope) are
-/// visible to the app.
+/// is exchanged for tokens. The exchange is protected with PKCE (S256) —
+/// the recommended flow for native apps, no client secret involved.
 /// OAuth credentials are injected at build time (kept out of the repo):
 ///   --dart-define=TN_GDRIVE_CLIENT_ID=...
-///   --dart-define=TN_GDRIVE_CLIENT_SECRET=...
 class GoogleDriveClient {
   static const _clientId = String.fromEnvironment('TN_GDRIVE_CLIENT_ID');
-  static const _clientSecret = String.fromEnvironment('TN_GDRIVE_CLIENT_SECRET');
   static const _scope = 'https://www.googleapis.com/auth/drive.file';
   static const _prefsKey = 'tn-cloud-gdrive';
 
   String? _refresh;
   String? _access;
   int _expiry = 0;
+
+  /// PKCE verifier for the connect() in flight.
+  String _codeVerifier = '';
+
+  /// RFC 7636: 43-128 chars from an unreserved alphabet.
+  static String generateCodeVerifier() {
+    const chars =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    final rnd = Random.secure();
+    return List.generate(64, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
+  static String codeChallengeS256(String verifier) =>
+      base64Url.encode(crypto.sha256.convert(ascii.encode(verifier)).bytes)
+          .replaceAll('=', '');
 
   /// Machine-readable reason of the last failed connect() — used to show a
   /// helpful hint (wrong client type, account not in Test users, etc).
@@ -79,6 +94,7 @@ class GoogleDriveClient {
     }
     final port = server.port;
     final redirect = 'http://localhost:$port';
+    _codeVerifier = generateCodeVerifier();
     final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
       'client_id': _clientId,
       'redirect_uri': redirect,
@@ -86,6 +102,8 @@ class GoogleDriveClient {
       'scope': _scope,
       'access_type': 'offline',
       'prompt': 'consent',
+      'code_challenge': codeChallengeS256(_codeVerifier),
+      'code_challenge_method': 'S256',
     });
     try {
       await launchUrl(authUrl, mode: LaunchMode.externalApplication);
@@ -131,10 +149,11 @@ class GoogleDriveClient {
             Uri.parse('https://oauth2.googleapis.com/token'),
             body: {
               'client_id': _clientId,
-              'client_secret': _clientSecret,
               'code': code,
               'grant_type': 'authorization_code',
               'redirect_uri': redirect,
+              // PKCE: proves the app that started the flow is redeeming it.
+              'code_verifier': _codeVerifier,
             },
           )
           .timeout(const Duration(seconds: 30));
@@ -176,7 +195,6 @@ class GoogleDriveClient {
             Uri.parse('https://oauth2.googleapis.com/token'),
             body: {
               'client_id': _clientId,
-              'client_secret': _clientSecret,
               'grant_type': 'refresh_token',
               'refresh_token': _refresh,
             },

@@ -13,15 +13,22 @@ class WinToast {
     required String title,
     required String body,
     VoidCallback? onTap,
+    List<(String, String)> actions = const [],
+    void Function(String actionKey)? onAction,
   }) {
     dismiss();
-    _dismissTimer = Timer(const Duration(seconds: 5), dismiss);
+    _dismissTimer = Timer(const Duration(seconds: 8), dismiss);
 
     _entry = OverlayEntry(builder: (_) => _ToastWidget(
       title: title,
       body: body,
       onTap: onTap,
       onDismiss: dismiss,
+      actions: actions,
+      onAction: (key) {
+        dismiss();
+        onAction?.call(key);
+      },
     ));
     Overlay.of(context).insert(_entry!);
   }
@@ -29,7 +36,9 @@ class WinToast {
   static void dismiss() {
     _dismissTimer?.cancel();
     _dismissTimer = null;
-    _entry?.remove();
+    try {
+      _entry?.remove();
+    } catch (_) {}
     _entry = null;
   }
 }
@@ -40,11 +49,15 @@ class _ToastWidget extends StatefulWidget {
     required this.body,
     this.onTap,
     this.onDismiss,
+    this.actions = const [],
+    this.onAction,
   });
   final String title;
   final String body;
   final VoidCallback? onTap;
   final VoidCallback? onDismiss;
+  final List<(String, String)> actions;
+  final void Function(String actionKey)? onAction;
 
   @override
   State<_ToastWidget> createState() => _ToastWidgetState();
@@ -131,6 +144,30 @@ class _ToastWidgetState extends State<_ToastWidget>
                         color: Color(0xFF8A9BA8),
                       ),
                     ),
+                    if (widget.actions.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          for (final (key, label) in widget.actions) ...[
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => widget.onAction?.call(key),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                child: Text(label,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF2AABEE))),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

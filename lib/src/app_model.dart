@@ -42,6 +42,8 @@ class AppModel extends ChangeNotifier {
   /// Rebuilds every pending alarm from the state — the source of truth.
   /// Heals lost reminders after plugin hiccups, permission grants, app
   /// updates or anything else that could have silently dropped them.
+  /// Trashed chats are skipped: their reminders were cancelled on delete,
+  /// and entry deadlines must not keep firing either.
   Future<void> rescheduleAlarms() async {
     try {
       await RemindersService.instance.cancelAll();
@@ -50,21 +52,61 @@ class AppModel extends ChangeNotifier {
     for (final r in state.reminders) {
       if (r.when <= now) continue;
       final chat = state.chatById(r.chatId);
+      if (chat == null || chat.isTrashed) continue;
       await RemindersService.instance.schedule(
         r,
-        tr('remind_title', [chat?.name ?? 'TN']),
+        tr('remind_title', [chat.name]),
         tr('remind_body'),
       );
     }
     for (final e in state.entries) {
       if (e.type != 'todo' || e.dueAt == null || e.dueAt! <= now) continue;
       final chat = state.chatById(e.chatId);
+      if (chat == null || chat.isTrashed) continue;
       await RemindersService.instance.schedule(
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
-        tr('remind_title', [chat?.name ?? 'TN']),
+        tr('remind_title', [chat.name]),
         entryNotifBody(e, tr),
+        snoozeLabels: [tr('snooze_10m'), tr('snooze_1h')],
       );
     }
+  }
+
+  /// Shifts a due moment (custom reminder or todo deadline) into the future
+  /// by [minutes] from now. [key] is DueItem's `id|when`. Returns true when
+  /// something was rescheduled.
+  Future<bool> snoozeByKey(String key, int minutes) async {
+    final sep = key.lastIndexOf('|');
+    if (sep <= 0) return false;
+    final id = key.substring(0, sep);
+    final when = int.tryParse(key.substring(sep + 1));
+    if (when == null) return false;
+    final target =
+        DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
+    var hit = false;
+    for (final r in state.reminders) {
+      if (r.id == id && r.when == when) {
+        state.reminders.remove(r);
+        state.reminders.add(Reminder(id: r.id, chatId: r.chatId, when: target));
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
+      for (final e in state.entries) {
+        if (e.id == id && e.dueAt == when) {
+          e.dueAt = target;
+          e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+          hit = true;
+          break;
+        }
+      }
+    }
+    if (!hit) return false;
+    await save();
+    await rescheduleAlarms();
+    notifyListeners();
+    return true;
   }
 
   /// Recurring tasks reset themselves (see rolloverRecurringTasks); after
@@ -77,6 +119,7 @@ class AppModel extends ChangeNotifier {
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat?.name ?? 'TN']),
         entryNotifBody(e, tr),
+        snoozeLabels: [tr('snooze_10m'), tr('snooze_1h')],
       ).catchError((_) => false);
     }
     return rolled.length;
@@ -137,18 +180,17 @@ String fmtTime(int ts) {
   return '${two(dt.hour)}:${two(dt.minute)}';
 }
 
-String fmtDay(int ts, String Function(String) tr) {
+String fmtDay(int ts, String Function(String, [List<String>?]) tr) {
   final dt = DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(dt.year, dt.month, dt.day);
   if (day == today) return tr('today');
   if (day == today.subtract(const Duration(days: 1))) return tr('yesterday');
-  const months = [
-    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
-  ];
-  return '${dt.day} ${months[dt.month - 1]}';
+  // Month names come from the i18n table — the old hardcoded Russian list
+  // leaked into every interface language.
+  final label = '${dt.day} ${tr('month_${dt.month}')}';
+  return dt.year == now.year ? label : '$label ${dt.year}';
 }
 
 String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {
