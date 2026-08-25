@@ -46,6 +46,26 @@ class MediaStore {
     return name;
   }
 
+  /// Quick copy without resize — lets the entry appear in chat instantly.
+  /// The caller then fires [optimizeImage] in the background to downscale.
+  Future<String> quickCopy(String sourcePath) async {
+    final d = await dir();
+    final name = '${uid('img')}.jpg';
+    await File(sourcePath).copy('${d.path}${Platform.pathSeparator}$name');
+    return name;
+  }
+
+  /// Downscale an already-copied image in a background isolate (fire-and-forget).
+  Future<void> optimizeImage(String mediaName, {int maxDim = 1600, int quality = 82}) async {
+    try {
+      final d = await dir();
+      final dest = '${d.path}${Platform.pathSeparator}$mediaName';
+      final bytes = await File(dest).readAsBytes();
+      final processed = await compute(_processImage, bytes);
+      await File(dest).writeAsBytes(processed);
+    } catch (_) {}
+  }
+
   Future<String> saveFile(String sourcePath, String prefix) async {
     final d = await dir();
     final ext = sourcePath.contains('.') ? sourcePath.split('.').last : '';

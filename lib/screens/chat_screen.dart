@@ -306,7 +306,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _text.clear();
     setState(() => _pendingImagePath = null);
     try {
-      final name = await MediaStore().saveImage(tmp);
+      final store = MediaStore();
+      final name = await store.quickCopy(tmp);
       widget.model.state.entries.add(Entry(
         id: uid('e'),
         chatId: widget.chatId,
@@ -320,6 +321,7 @@ class _ChatScreenState extends State<ChatScreen> {
       HapticFeedback.lightImpact();
       if (mounted) setState(() {});
       widget.model.save();
+      store.optimizeImage(name);
     } catch (_) {
       _toast(widget.model.tr('photo_error'), error: true);
     }
@@ -559,8 +561,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _deleteChat() async {
     final ok = await showDeleteChatDialog(context, widget.model);
     if (ok != true) return;
-    for (final e in widget.model.state.entriesFor(widget.chatId)) {
-      await MediaStore().remove(e.media);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final c in widget.model.state.chats.where((c) => c.id == widget.chatId)) {
+      c.deletedAt = now;
     }
     for (final r in widget.model.state.reminders.toList()) {
       if (r.chatId == widget.chatId) {
@@ -568,8 +571,6 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.reminders.remove(r);
       }
     }
-    widget.model.state.entries.removeWhere((e) => e.chatId == widget.chatId);
-    widget.model.state.chats.removeWhere((c) => c.id == widget.chatId);
     await widget.model.save();
     if (mounted) Navigator.of(context).pop();
   }

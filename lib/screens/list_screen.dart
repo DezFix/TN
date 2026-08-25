@@ -135,9 +135,15 @@ class _ListScreenState extends State<ListScreen> {
     if (!mounted) return;
     final ok = await showDeleteChatDialog(context, model);
     if (ok != true) return;
-    model.state.chats.removeWhere((c) => _sel.contains(c.id));
-    model.state.entries.removeWhere((e) => _sel.contains(e.chatId));
-    model.state.reminders.removeWhere((r) => _sel.contains(r.chatId));
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final c in model.state.chats) {
+      if (_sel.contains(c.id)) c.deletedAt = now;
+    }
+    for (final r in model.state.reminders.toList()) {
+      if (_sel.contains(r.chatId)) {
+        model.state.reminders.remove(r);
+      }
+    }
     await model.save();
     if (mounted) setState(() => _sel.clear());
   }
@@ -279,8 +285,8 @@ class _ListScreenState extends State<ListScreen> {
       );
     }
 
-    final active = model.state.chats.where((c) => !c.archived).toList();
-    final archived = model.state.chats.where((c) => c.archived).toList()
+    final active = model.state.chats.where((c) => !c.archived && !c.isTrashed).toList();
+    final archived = model.state.chats.where((c) => c.archived && !c.isTrashed).toList()
       ..sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
@@ -597,10 +603,10 @@ class _ListScreenState extends State<ListScreen> {
     final matchedEntries = <Entry>[];
 
     for (final c in model.state.chats) {
-      if (c.name.toLowerCase().contains(q)) matchedChats.add(c);
+      if (!c.isTrashed && c.name.toLowerCase().contains(q)) matchedChats.add(c);
     }
     for (final e in model.state.searchEntries(q)) {
-      if (!matchedEntries.any((x) => x.id == e.id)) matchedEntries.add(e);
+      if (!matchedEntries.any((x) => x.id == e.id) && !(model.state.chatById(e.chatId)?.isTrashed ?? false)) matchedEntries.add(e);
     }
 
     if (matchedChats.isEmpty && matchedEntries.isEmpty) {

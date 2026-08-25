@@ -87,6 +87,7 @@ class Chat {
     this.notificationsEnabled = true,
     this.notificationSound,
     this.autoCollect,
+    this.deletedAt,
   });
 
   final String id;
@@ -102,6 +103,9 @@ class Chat {
   bool notificationsEnabled = true;
   String? notificationSound;
   AutoCollect? autoCollect;
+  int? deletedAt; // millis when moved to trash; null = active
+
+  bool get isTrashed => deletedAt != null;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -116,6 +120,7 @@ class Chat {
         rssUrl: j['rssUrl'] as String?,
         notificationsEnabled: j['notificationsEnabled'] as bool? ?? true,
         notificationSound: j['notificationSound'] as String?,
+        deletedAt: (j['deletedAt'] as num?)?.toInt(),
         autoCollect: j['autoCollect'] == null
             ? null
             : AutoCollect.fromJson(j['autoCollect'] as Map<String, dynamic>),
@@ -134,6 +139,7 @@ class Chat {
         if (notificationSound != null) 'notificationSound': notificationSound,
         if (rssUrl != null) 'rssUrl': rssUrl,
         if (folderId != null) 'folderId': folderId,
+        if (deletedAt != null) 'deletedAt': deletedAt,
         if (autoCollect != null) 'autoCollect': autoCollect!.toJson(),
       };
 }
@@ -390,6 +396,7 @@ int nextOccurrence({
 /// Returns the entries that were reset.
 List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
   final rolled = <Entry>[];
+  final todayStart = DateTime(now.year, now.month, now.day);
   for (final e in entries) {
     final rec = e.recurrence;
     if (rec == null || e.dueAt == null) continue;
@@ -397,6 +404,25 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
     if (items == null || items.isEmpty || !items.every((i) => i.done)) {
       continue;
     }
+    final dueDt = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
+    final dueDayStart = DateTime(dueDt.year, dueDt.month, dueDt.day);
+
+    if (rec == 'daily') {
+      // Daily: reset at the start of a new calendar day.
+      if (!dueDayStart.isBefore(todayStart)) continue;
+    } else {
+      // Weekly/monthly: stay checked until the next matching occurrence.
+      var next = nextOccurrence(
+        recurrence: rec,
+        days: e.recurrenceDays,
+        monthDay: e.monthDay,
+        fromMs: e.dueAt!,
+        after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
+      );
+      if (now.isBefore(DateTime.fromMillisecondsSinceEpoch(next))) continue;
+    }
+
+    // Catch up: find the next occurrence strictly after now.
     var next = nextOccurrence(
       recurrence: rec,
       days: e.recurrenceDays,
@@ -404,9 +430,6 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
       fromMs: e.dueAt!,
       after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
     );
-    // Still inside the current period — keep showing it as done.
-    if (now.isBefore(DateTime.fromMillisecondsSinceEpoch(next))) continue;
-    // Catch up over missed periods so the new deadline is in the future.
     while (!DateTime.fromMillisecondsSinceEpoch(next).isAfter(now)) {
       next = nextOccurrence(
         recurrence: rec,
@@ -416,14 +439,14 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
         after: DateTime.fromMillisecondsSinceEpoch(next),
       );
     }
-  e.dueAt = next;
-      for (final i in items) {
-        i.done = false;
-      }
-      rolled.add(e);
+    e.dueAt = next;
+    for (final i in items) {
+      i.done = false;
     }
-    return rolled;
+    rolled.add(e);
   }
+  return rolled;
+}
 
   /// Called right after a recurring task was completed while OVERDUE (its
   /// period already ended): snaps the deadline forward to the next

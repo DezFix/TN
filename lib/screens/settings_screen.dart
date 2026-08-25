@@ -12,6 +12,7 @@ import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
 import 'folders_edit_screen.dart';
+import 'trash_screen.dart';
 import 'widget_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -131,18 +132,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionLabel(tr('section_backup'), p),
           _card(
             p,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
-                  Icon(Icons.chevron_right, size: 20, color: p.textFaint),
-                ]),
-              ),
+            child: Column(
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
+                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                    ]),
+                  ),
+                ),
+                const Divider(height: 20, color: Color(0xFF2A3441)),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrashScreen(model: model))),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      Icon(Icons.delete_outline, size: 20, color: p.danger),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(tr('trash'), style: TextStyle(fontSize: 14.5, color: p.text))),
+                      if (model.state.chats.any((c) => c.isTrashed))
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: p.danger.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                          child: Text('${model.state.chats.where((c) => c.isTrashed).length}',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.danger)),
+                        ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                    ]),
+                  ),
+                ),
+              ],
             ),
           ),
           _sectionLabel('RSS каналы', p),
