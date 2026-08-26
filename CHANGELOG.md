@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.1] - 2026-08-26
+
+- Fixed garbled Russian/Ukrainian (and some German/Spanish/French) interface strings introduced in recent releases — all translations verified against a new audit script and regression tests
+- Redesigned "Deleted · Undo" as an in-app pill with a circular 5-second countdown ring — it no longer lingers on screen indefinitely
+
 ## [1.16.0] - 2026-08-26
 
 - App lock reworked into its own sub-screen with three methods: biometrics, in-app pattern and in-app PIN code

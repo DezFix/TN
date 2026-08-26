@@ -29,4 +29,19 @@ void main() {
   test('unknown language falls back to ru', () {
     expect(makeTranslator('zz')('app_title'), 'Заметки');
   });
+
+  test('cyrillic values are intact (no double-encoding regressions)', () {
+    final ru = makeTranslator('ru');
+    // Regression guard: these were corrupted by a bad shell edit once.
+    expect(ru('show_done'), 'Показать выполненные');
+    expect(ru('hide_done'), 'Скрыть выполненные');
+    expect(ru('todo_all_done'), 'Выполнено ✓');
+    expect(ru('notifications_on'), 'Уведомления включены');
+    expect(ru('undo'), 'Вернуть');
+    expect(ru('month_3'), 'марта');
+    expect(ru('lock_method_pin'), 'ПИН-код');
+    final uk = makeTranslator('uk');
+    expect(uk('hide_done'), 'Приховати виконані');
+    expect(uk('month_3'), 'березня');
+  });
 }

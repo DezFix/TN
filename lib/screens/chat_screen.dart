@@ -21,6 +21,7 @@ import '../src/share_service.dart';
 import '../src/sound.dart';
 import '../src/theme.dart';
 import '../src/undo.dart';
+import '../src/undo_toast.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -671,18 +672,15 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Telegram-style "Deleted · UNDO" — no more confirm dialogs for messages.
+  /// Telegram-style "Deleted · UNDO" pill with a 5-second countdown ring.
   void _showUndoBar(List<Entry> entries) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(widget.model.tr('deleted')),
-      duration: const Duration(seconds: 5),
-      backgroundColor: p.bgChat,
-      action: SnackBarAction(
-        label: widget.model.tr('undo'),
-        textColor: p.accent,
-        onPressed: () => UndoService.restoreEntries(widget.model, entries),
-      ),
-    ));
+    UndoToast.show(
+      context,
+      message: widget.model.tr('deleted'),
+      actionLabel: widget.model.tr('undo'),
+      p: p,
+      onUndo: () => UndoService.restoreEntries(widget.model, entries),
+    );
   }
 
   Future<void> _onCtxAction(Entry entry, EntryAction action) async {
