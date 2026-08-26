@@ -9,6 +9,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import org.json.JSONObject
+import java.util.Calendar
 
 /**
  * Fired from the "Today's tasks" widget checkbox: toggles all items of the
@@ -100,11 +101,13 @@ class ToggleReceiver : BroadcastReceiver() {
         }
 
         /**
-         * Completing an OVERDUE recurring task snaps its deadline forward to
-         * the next occurrence after now, so the checkmark sticks until the new
-         * period ends — otherwise Recurrence.rollover would instantly uncheck
-         * it again ("can't tick overdue tasks from the widget").
-         * Mirrors models.dart snapCompletedRecurring.
+         * Completing an OVERDUE recurring task snaps its deadline forward so
+         * the checkmark sticks until the new period ends. DAILY tasks use
+         * calendar-day semantics (mirrors models.dart snapCompletedRecurring):
+         * completing yesterday's leftover today snaps the deadline to TODAY,
+         * same clock time — it stays checked until tonight's midnight
+         * rollover, and the fresh instance is today's. Other rules snap to
+         * the next occurrence after now.
          */
         private fun snapCompletedRecurring(e: JSONObject) {
             try {
@@ -121,7 +124,20 @@ class ToggleReceiver : BroadcastReceiver() {
                     IntArray(arr.length()) { arr.getInt(it) }
                 }
                 val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
-                e.put("dueAt", Recurrence.nextAfter(rec, daysArr, mDay, now))
+                val next: Long = if (rec == "daily") {
+                    val dueCal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
+                    val hour = dueCal.get(Calendar.HOUR_OF_DAY)
+                    val minute = dueCal.get(Calendar.MINUTE)
+                    Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, hour)
+                        set(Calendar.MINUTE, minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                } else {
+                    Recurrence.nextAfter(rec, daysArr, mDay, now)
+                }
+                e.put("dueAt", next)
             } catch (_: Exception) {
             }
         }

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_lock.dart';
 import '../src/app_model.dart';
+import 'lock_settings_screen.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
 import '../src/models.dart';
@@ -29,6 +30,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   int _cacheMaxGb = 1024; // 0 = ∞, in MB (1024=1GB)
   bool _lockOn = false;
+  String _methodKey = 'biometric';
 
   @override
   void initState() {
@@ -40,21 +42,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadLockPref() async {
     final v = await AppLock.isEnabled();
-    if (mounted) setState(() => _lockOn = v);
-  }
-
-  /// Turning the lock ON requires one successful auth right away — the user
-  /// must never be able to enable a lock they cannot pass.
-  Future<void> _toggleLock(BuildContext context) async {
-    if (_lockOn) {
-      await AppLock.setEnabled(false);
-      if (mounted) setState(() => _lockOn = false);
-      return;
+    var methodKey = 'biometric';
+    if (v) {
+      switch (await AppLock.getMethod()) {
+        case LockMethod.pattern:
+          methodKey = 'pattern';
+          break;
+        case LockMethod.pin:
+          methodKey = 'pin';
+          break;
+        case LockMethod.biometric:
+          methodKey = 'biometric';
+          break;
+      }
     }
-    final ok = await AppLock.unlock(widget.model.tr);
-    if (!ok) return;
-    await AppLock.setEnabled(true);
-    if (mounted) setState(() => _lockOn = true);
+    if (mounted) setState(() => _lockOn = v);
+    if (mounted) setState(() => _methodKey = methodKey);
   }
 
   Future<void> _loadCachePref() async {
@@ -337,29 +340,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _card(
               p,
               child: InkWell(
-                onTap: () => _toggleLock(context),
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => LockSettingsScreen(model: model)),
+                  );
+                  await _loadLockPref();
+                },
                 borderRadius: BorderRadius.circular(12),
                 child: Row(
                   children: [
-                    Icon(Icons.fingerprint, size: 22,
-                        color: _lockOn ? p.accent : p.textSoft),
+                    Icon(Icons.fingerprint,
+                        size: 22, color: _lockOn ? p.accent : p.textSoft),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(tr('lock_enable'),
-                              style: TextStyle(fontSize: 14.5, color: p.text)),
-                          Text(tr('lock_hint'),
-                              style: TextStyle(fontSize: 11, color: p.textFaint)),
+                              style:
+                                  TextStyle(fontSize: 14.5, color: p.text)),
+                          Text(tr(_lockOn
+                                  ? 'lock_method_${_methodKey}'
+                                  : 'lock_hint'),
+                              style: TextStyle(
+                                  fontSize: 11, color: p.textFaint)),
                         ],
                       ),
                     ),
-                    Switch(
-                      value: _lockOn,
-                      activeColor: p.accent,
-                      onChanged: (_) => _toggleLock(context),
-                    ),
+                    Icon(Icons.chevron_right, color: p.textFaint),
                   ],
                 ),
               ),

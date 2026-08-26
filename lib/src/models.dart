@@ -490,13 +490,15 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
   return rolled;
 }
 
-  /// Called right after a recurring task was completed while OVERDUE (its
-  /// period already ended): snaps the deadline forward to the next
-  /// occurrence after [now] so the entry stays checked until that new
-  /// deadline passes and only then rolls over. Without this, completing an
-  /// overdue daily task would instantly uncheck it again ("can't tick it").
-  /// Returns true when the entry changed.
-  bool snapCompletedRecurring(Entry e, DateTime now) {
+/// Called right after a recurring task was completed while OVERDUE (its
+/// period already ended). For DAILY tasks the period is the CALENDAR DAY:
+/// completing yesterday's leftover today snaps the deadline to *today*,
+/// same clock time (even if that moment already passed) — the checkmark
+/// then holds until tonight's 00:00 rollover, and the fresh instance is
+/// always today's, never "the overdue one". Weekly/monthly keep snapping
+/// to the next occurrence after [now].
+/// Returns true when the entry changed.
+bool snapCompletedRecurring(Entry e, DateTime now) {
     final rec = e.recurrence;
     if (rec == null || e.dueAt == null) return false;
     final items = e.items;
@@ -505,6 +507,13 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
     }
     if (DateTime.fromMillisecondsSinceEpoch(e.dueAt!).isAfter(now)) {
       return false; // not overdue — normal flow, nothing to snap
+    }
+    if (rec == 'daily') {
+      final due = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
+      e.dueAt =
+          DateTime(now.year, now.month, now.day, due.hour, due.minute)
+              .millisecondsSinceEpoch;
+      return true;
     }
     e.dueAt = nextOccurrence(
       recurrence: rec,

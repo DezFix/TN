@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.0] - 2026-08-26
+
+- App lock reworked into its own sub-screen with three methods: biometrics, in-app pattern and in-app PIN code
+- Re-lock timing setting: keep the app unlocked immediately / 5 minutes / 10 minutes after unlocking
+- Fixed a long-standing bug: daily tasks now reset exactly at midnight, not at their execution time — checked off yesterday means a fresh instance this morning in the widget too
+- Completing an overdue daily task on the next day now hands over to the CURRENT day at midnight instead of skipping it
+
 ## [1.15.2] - 2026-08-26
 
 - Fixed: "package corrupted" during in-app updates — local builds are now signed with the same key as published releases (one signature everywhere)

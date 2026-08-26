@@ -137,11 +137,14 @@ void main() {
           monthDay: monthDay,
         );
 
-    test('overdue completed daily task snaps past now and stays checked', () {
+    test('overdue daily completed today snaps to TODAY (midnight handover)', () {
       final e = task(rec: 'daily', dueAt: ms(2026, 8, 20), done: true);
       final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12));
       expect(snapped, isTrue);
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 25));
+      // Calendar-day semantics: deadline becomes today's date with the
+      // original clock time — tonight's 00:00 rollover then hands the
+      // fresh instance to tomorrow; no day is skipped.
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 24));
       expect(e.items!.every((i) => i.done), isTrue);
     });
 
