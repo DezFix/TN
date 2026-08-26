@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
@@ -95,6 +96,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     widget.model.addListener(_onModel);
     _highlightId = widget.highlightEntryId;
+    _loadDraft();
+    _text.addListener(_saveDraft);
     _audioPlayer.onPlayerStateChanged.listen((s) {
       if (s == PlayerState.completed && _playingId != null) {
         _playingId = null;
@@ -123,6 +126,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     widget.model.removeListener(_onModel);
+    _text.removeListener(_saveDraft);
     _text.dispose();
     _editText.dispose();
     _searchCtrl.dispose();
@@ -151,6 +155,35 @@ class _ChatScreenState extends State<ChatScreen> {
   }
   void _onModel() {
     if (mounted) setState(() {});
+  }
+
+  // ---- drafts ----
+
+  String get _draftKey => 'tn-draft-${widget.chatId}';
+
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = prefs.getString(_draftKey);
+      if (draft != null && draft.isNotEmpty && mounted) {
+        _text.text = draft;
+      }
+    } catch (_) {}
+  }
+
+  void _saveDraft() {
+    final text = _text.text;
+    SharedPreferences.getInstance().then((prefs) {
+      if (text.isEmpty) {
+        prefs.remove(_draftKey);
+      } else {
+        prefs.setString(_draftKey, text);
+      }
+    });
+  }
+
+  void _clearDraft() {
+    SharedPreferences.getInstance().then((prefs) => prefs.remove(_draftKey));
   }
 
   void _scrollToTarget() {
@@ -190,6 +223,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _text.text.trim();
     if (text.isEmpty) return;
     _text.clear();
+    _clearDraft();
     final isTasksChat = _chat.kind == 'tasks';
     widget.model.state.entries.add(Entry(
       id: uid('e'),
@@ -258,6 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     widget.model.state.entries.add(entry);
     _text.clear();
+    _clearDraft();
     if (mounted) setState(() {});
     await _scheduleEntryReminder(entry);
     widget.model.save();
@@ -349,6 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (tmp == null) return;
     final caption = _text.text.trim();
     _text.clear();
+    _clearDraft();
     setState(() => _pendingImagePath = null);
     try {
       final store = MediaStore();
@@ -2030,8 +2066,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 minLines: 1,
                 maxLines: 4,
                 keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submitComposer(),
+                textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
                   hintStyle: TextStyle(color: p.textFaint),
