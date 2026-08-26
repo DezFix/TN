@@ -209,7 +209,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
         backgroundColor: p.bgList,
         foregroundColor: p.text,
         elevation: 0,
-        title: Text(tr('lock_enable'),
+        title: Text(tr('lock_menu'),
             style:
                 TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.text)),
         leading: IconButton(
@@ -242,7 +242,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(tr('lock_enable'),
+                        Text(tr('lock_menu'),
                             style:
                                 TextStyle(fontSize: 14.5, color: p.text)),
                         Text(tr('lock_hint'),

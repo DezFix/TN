@@ -376,75 +376,122 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFF4EA4F6);
-    const bg = Color(0xFF1C232C);
     final method = _method ?? LockMethod.biometric;
     final tr = widget.tr;
 
-    return ColoredBox(
-      color: bg,
+    Widget input;
+    switch (method) {
+      case LockMethod.pattern:
+        input = PatternLockView(selectedColor: accent, onCompleted: _submitCode);
+        break;
+      case LockMethod.pin:
+        input = PinPadView(accent: accent, onSubmit: _submitCode);
+        break;
+      case LockMethod.biometric:
+        input = Column(
+          children: [
+            const SizedBox(height: 8),
+            Material(
+              color: Colors.white.withValues(alpha: .06),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _busy ? null : () => _tryBiometrics(),
+                child: SizedBox(
+                  width: 84,
+                  height: 84,
+                  child: Icon(Icons.fingerprint,
+                      size: 46, color: _busy ? Colors.white24 : accent),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(tr('lock_title'),
+                style:
+                    TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: .5))),
+          ],
+        );
+        break;
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF141B23), Color(0xFF1C232C), Color(0xFF22303D)],
+        ),
+      ),
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // App logo with an accent glow.
                 Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                      color: Color(0x264EA4F6), shape: BoxShape.circle),
-                  child:
-                      const Icon(Icons.lock_outline, size: 30, color: accent),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                          color: accent.withValues(alpha: .35),
+                          blurRadius: 34,
+                          offset: const Offset(0, 10)),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset('assets/icon.png',
+                        width: 84, height: 84, fit: BoxFit.cover),
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text(
                   method == LockMethod.pattern
                       ? tr('lock_draw_unlock')
                       : method == LockMethod.pin
                           ? tr('lock_enter_pin')
-                          : tr('lock_title'),
-                  style: const TextStyle(fontSize: 14.5, color: Colors.white70),
+                          : tr('lock_menu'),
+                  style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: .9)),
                 ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(_error!,
-                        style: const TextStyle(
-                            fontSize: 12.5, color: Color(0xFFF07575))),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF07575).withValues(alpha: .14),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(_error!,
+                          style: const TextStyle(
+                              fontSize: 12.5, color: Color(0xFFF07575))),
+                    ),
                   ),
-                const SizedBox(height: 16),
-                switch (method) {
-                  LockMethod.pattern => PatternLockView(
-                      selectedColor: accent,
-                      onCompleted: _submitCode,
-                    ),
-                  LockMethod.pin => PinPadView(
-                      accent: accent,
-                      hidden: true,
-                      onSubmit: _submitCode,
-                    ),
-                  LockMethod.biometric => Column(
-                      children: [
-                        const SizedBox(height: 24),
-                        FilledButton.icon(
-                          style:
-                              FilledButton.styleFrom(backgroundColor: accent),
-                          icon: const Icon(Icons.fingerprint, size: 20),
-                          label: Text(tr('lock_title')),
-                          onPressed:
-                              _busy ? null : () => _tryBiometrics(),
-                        ),
-                        const SizedBox(height: 10),
-                        Text('TN',
-                            style: TextStyle(
-                                fontSize: 12,
-                                letterSpacing: 2,
-                                color:
-                                    Colors.white.withValues(alpha: .35))),
-                      ],
-                    ),
-                },
+                const SizedBox(height: 18),
+                // Frosted input card.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .05),
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: .08)),
+                  ),
+                  child: Center(child: input),
+                ),
+                const SizedBox(height: 28),
+                Text('TN',
+                    style: TextStyle(
+                        fontSize: 12,
+                        letterSpacing: 4,
+                        color: Colors.white.withValues(alpha: .25))),
               ],
             ),
           ),

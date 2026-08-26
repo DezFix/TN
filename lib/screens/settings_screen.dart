@@ -360,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tr('lock_enable'),
+                          Text(tr('lock_menu'),
                               style:
                                   TextStyle(fontSize: 14.5, color: p.text)),
                           Text(tr(_lockOn

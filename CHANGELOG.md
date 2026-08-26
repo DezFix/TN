@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.3] - 2026-08-26
+
+- Lock entry in Settings renamed to "Lock" with a padlock icon; the on/off switch inside is now labeled "Lock" too (method selection unchanged below it)
+- Redesigned lock screen: gradient background, app logo with accent glow, frosted input card
+- Chats: auto-scroll to the bottom when opening a chat and after sending, so new messages always appear from the bottom edge
+- About screen now actually shows the app icon (asset was missing from the bundle)
+
 ## [1.16.2] - 2026-08-26
 
 - App lock: cascaded verification — biometrics first, then device PIN/pattern fallback; a failed fingerprint can no longer make the lock impossible to remove

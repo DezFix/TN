@@ -1,4 +1,4 @@
-// ignore_for_file: unnecessary_non_null_assertion
+﻿// ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
 import 'dart:io';
 
@@ -49,6 +49,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _text = TextEditingController();
   final _editText = TextEditingController();
   final _searchCtrl = TextEditingController();
+  final _listCtrl = ScrollController();
   bool _searching = false;
   String _searchQuery = '';
   final Set<String> _selectedIds = {};
@@ -107,7 +108,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _audioPlayer.onDurationChanged.listen((d) {
       if (d > Duration.zero) _playDur = d;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.scrollToEntryId == null) _scrollToBottom(animate: false);
+      _scrollToTarget();
+    });
     final chat = _chatOrNull;
     if (chat != null && chat.rssUrl != null && chat.rssUrl!.isNotEmpty) {
       RssService.fetchForChat(chat, widget.model.state).then((_) {
@@ -122,6 +126,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _text.dispose();
     _editText.dispose();
     _searchCtrl.dispose();
+    _listCtrl.dispose();
     _audioPlayer.dispose();
     _recorder.dispose();
     _recordTimer?.cancel();
@@ -132,6 +137,18 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  /// Pins the reversed list to its offset-0 edge == visual bottom, so newly
+  /// sent messages are always visible appearing from the bottom.
+  void _scrollToBottom({bool animate = true}) {
+    if (!_listCtrl.hasClients) return;
+    if (animate) {
+      _listCtrl.animateTo(0,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic);
+    } else {
+      _listCtrl.jumpTo(0);
+    }
+  }
   void _onModel() {
     if (mounted) setState(() {});
   }
