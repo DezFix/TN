@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.4] - 2026-08-26
+
+- One permanent release signing key generated and wired everywhere (local builds via android/key.properties, CI via updated secrets) — daily reinstalls caused by mismatched debug/local signatures are over
+- NOTE: updating from ≤ 1.16.3 requires ONE final uninstall + fresh install because the signing identity changes this single time; every later update installs cleanly on top
+
 ## [1.16.3] - 2026-08-26
 
 - Lock entry in Settings renamed to "Lock" with a padlock icon; the on/off switch inside is now labeled "Lock" too (method selection unchanged below it)
