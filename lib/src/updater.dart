@@ -8,6 +8,11 @@ import 'package:path_provider/path_provider.dart';
 class Updater {
   static const _channel = MethodChannel('tn/install');
 
+  /// Machine-readable reason of the last failed [downloadAndInstall]:
+  /// 'sha_mismatch' | 'truncated' | 'not_apk' | 'network' | 'empty'
+  /// | 'INSTALL_FAILED' (native installer rejected the package).
+  static String lastError = '';
+
   /// Numeric compare of "vX.Y.Z" tags against the installed version.
   /// Pre-release suffixes ("1.2.3-beta") are ignored, missing components
   /// count as 0, and any non-equal component decides (no equal → false).
@@ -31,15 +36,22 @@ class Updater {
   /// [expectedSha256] (hex, from the GitHub release asset digest) is verified
   /// before anything is handed to the package installer — the old magic-bytes
   /// check only proved the payload was *a* zip, not *our* APK.
-  /// Returns the path of the downloaded file, or null on error.
+  /// Returns the path of the downloaded file, or null on error (see
+  /// [lastError]).
   static Future<String?> downloadAndInstall(
     String url,
     void Function(double progress)? onProgress, {
     String? expectedSha256,
   }) async {
+    lastError = '';
     try {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}${Platform.pathSeparator}tn-update.apk');
+      // A stale half-written file from a previous session must never be
+      // mistaken for the fresh download.
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
 
       // Follow redirects manually — http.Client().send() does NOT follow
       // them, and GitHub's download URLs redirect to their CDN.
@@ -52,12 +64,18 @@ class Updater {
 
         if (resp.statusCode >= 300 && resp.statusCode < 400) {
           final location = resp.headers['location'];
-          if (location == null || location.isEmpty) return null;
+          if (location == null || location.isEmpty) {
+            lastError = 'network';
+            return null;
+          }
           currentUrl = location;
           continue;
         }
 
-        if (resp.statusCode != 200) return null;
+        if (resp.statusCode != 200) {
+          lastError = 'http_${resp.statusCode}';
+          return null;
+        }
 
         // Stream the body with progress reporting.
         final total = resp.contentLength ?? 0;
@@ -74,28 +92,68 @@ class Updater {
         break;
       }
 
-      if (bytes == null || bytes.isEmpty) return null;
+      if (bytes == null || bytes.isEmpty) {
+        lastError = 'empty';
+        return null;
+      }
 
-      // Verify the file starts with an APK magic header (ZIP format).
-      if (bytes.length < 4) return null;
-      if (bytes[0] != 0x50 || bytes[1] != 0x4B) {
-        // Not a valid ZIP/APK — probably an HTML error page.
+      // Container sanity BEFORE any hashing: a real APK starts with a local
+      // file header and MUST contain an End-of-Central-Directory record near
+      // the tail. A truncated download passes the old 2-byte magic check but
+      // then Android reports "package corrupted" — exactly the recurring
+      // user report this is meant to diagnose.
+      if (!validateZipContainer(bytes)) {
+        lastError =
+            bytes[0] == 0x50 && bytes[1] == 0x4B ? 'truncated' : 'not_apk';
         return null;
       }
 
       // Integrity: compare against the release asset digest when known.
       if (expectedSha256 != null && expectedSha256.isNotEmpty) {
-        if (!verifySha256(bytes, expectedSha256)) return null;
+        if (!verifySha256(bytes, expectedSha256)) {
+          lastError = 'sha_mismatch';
+          return null;
+        }
       }
 
       await file.writeAsBytes(bytes, flush: true);
 
-      await _channel.invokeMethod('installApk', file.path);
+      try {
+        await _channel.invokeMethod('installApk', file.path);
+      } on PlatformException catch (e) {
+        // Native side rejected the install attempt (signature mismatch,
+        // parse failure, installer refused). Surfaced so the UI can explain
+        // instead of silently resetting the dialog.
+        lastError =
+            e.code == 'INSTALL_FAILED' ? 'INSTALL_FAILED' : 'native_${e.code}';
+        return null;
+      }
       return file.path;
     } catch (_) {
+      lastError = 'network';
       return null;
     }
   }
+}
+
+/// Pure container validation, split out for tests: ZIP starts with the local
+/// file header `PK\x03\x04` and ends (within the last 64 KB + comment room)
+/// with an End-of-Central-Directory record `PK\x05\x06`.
+bool validateZipContainer(List<int> bytes) {
+  if (bytes.length < 8) return false;
+  if (bytes[0] != 0x50 || bytes[1] != 0x4B || bytes[2] != 0x03 || bytes[3] != 0x04) {
+    return false;
+  }
+  final windowStart = bytes.length - 65536 < 0 ? 0 : bytes.length - 65536;
+  for (var i = bytes.length - 22; i >= windowStart; i--) {
+    if (bytes[i] == 0x50 &&
+        bytes[i + 1] == 0x4B &&
+        bytes[i + 2] == 0x05 &&
+        bytes[i + 3] == 0x06) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /// Pure check, split out for tests: hex compare of the SHA-256 over [bytes].

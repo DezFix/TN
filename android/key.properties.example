@@ -1,0 +1,11 @@
+# Copy this file to android/key.properties (it is gitignored) and fill in
+# the values of the ONE global release keystore — the same one CI uses
+# (TN_KEYSTORE_B64/TN_STORE_PASS/TN_KEY_PASS/TN_KEY_ALIAS secrets).
+# After that every local `flutter build apk --release` is signed with the
+# published signature and in-app updates install cleanly.
+#
+# Windows path example — use forward slashes or escaped backslashes:
+TN_STORE_FILE=D:/keys/tn-release.jks
+TN_STORE_PASS=change-me
+TN_KEY_ALIAS=tn
+TN_KEY_PASS=change-me

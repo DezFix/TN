@@ -28,3 +28,8 @@ sdk_*.txt
 # Release binaries are built by CI, not committed
 dist/
 release-body.md
+
+# Release signing (ONE global keystore) — never commit
+android/key.properties
+*.jks
+*.keystore

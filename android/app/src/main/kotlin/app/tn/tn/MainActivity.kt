@@ -75,15 +75,31 @@ class MainActivity : FlutterFragmentActivity() {
                         if (path != null) {
                             try {
                                 val file = File(path)
+                                if (!file.exists() || file.length() < 8L) {
+                                    result.error("INSTALL_FAILED", "update file missing or too small", null)
+                                    return@setMethodCallHandler
+                                }
                                 val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                                     FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
                                 } else {
                                     Uri.fromFile(file)
                                 }
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                // ACTION_INSTALL_PACKAGE is the dedicated
+                                // installer action; some OEM shells misreport
+                                // plain ACTION_VIEW installs as "package
+                                // corrupted". ClipData carries the explicit
+                                // read grant — several Android 14 skins need
+                                // it on top of FLAG_GRANT_READ_URI_PERMISSION.
+                                val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                                    Intent.ACTION_INSTALL_PACKAGE else Intent.ACTION_VIEW
+                                val intent = Intent(action).apply {
                                     setDataAndType(uri, "application/vnd.android.package-archive")
+                                    clipData = android.content.ClipData.newRawUri("TN_UPDATE", uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        putExtra(Intent.EXTRA_RETURN_RESULT, false)
+                                    }
                                 }
                                 startActivity(intent)
                                 result.success(true)

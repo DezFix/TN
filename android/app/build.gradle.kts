@@ -5,6 +5,27 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// ONE keystore everywhere (local AND CI) — the published global signature:
+//   1. android/key.properties  (gitignored; the preferred local setup)
+//        TN_STORE_FILE=/abs/path/to/tn-release.jks
+//        TN_STORE_PASS=...
+//        TN_KEY_ALIAS=...
+//        TN_KEY_PASS=...
+//   2. CI secrets via env vars of the same names.
+// If neither is present the build falls back to the DEBUG key on purpose
+// (so `flutter build apk` never hard-fails), but prints a loud warning —
+// such an APK cannot install over the published app, which is exactly what
+// produced the recurring "package corrupted" update reports.
+import java.util.Properties
+
+val tnKeyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun tnSigningProp(name: String): String? =
+    tnKeyProps.getProperty(name) ?: System.getenv(name)
+
 android {
     namespace = "app.tn.tn"
     compileSdk = flutter.compileSdkVersion
@@ -31,26 +52,32 @@ android {
         versionName = flutter.versionName
     }
 
-    // Stable release signature. On CI the keystore arrives via secrets
-    // (TN_KEYSTORE_B64/TN_STORE_PASS/TN_KEY_PASS/TN_KEY_ALIAS); locally, when
-    // the env vars are absent, builds fall back to the debug key.
     signingConfigs {
         create("release") {
-            val storePath = System.getenv("TN_STORE_FILE")
-            if (storePath != null) {
+            val storePath = tnSigningProp("TN_STORE_FILE")
+            val storePass = tnSigningProp("TN_STORE_PASS")
+            val keyAlias = tnSigningProp("TN_KEY_ALIAS")
+            val keyPass = tnSigningProp("TN_KEY_PASS")
+            if (storePath != null && storePass != null && keyAlias != null && keyPass != null) {
                 storeFile = file(storePath)
-                storePassword = System.getenv("TN_STORE_PASS")
-                keyAlias = System.getenv("TN_KEY_ALIAS")
-                keyPassword = System.getenv("TN_KEY_PASS")
+                storePassword = storePass
+                this.keyAlias = keyAlias
+                keyPassword = keyPass
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (System.getenv("TN_STORE_FILE") != null) {
+            val signingConfigured = tnSigningProp("TN_STORE_FILE") != null &&
+                    tnSigningProp("TN_STORE_PASS") != null &&
+                    tnSigningProp("TN_KEY_ALIAS") != null &&
+                    tnSigningProp("TN_KEY_PASS") != null
+            signingConfig = if (signingConfigured) {
                 signingConfigs.getByName("release")
             } else {
+                println("WARNING: TN release signing not configured (android/key.properties or TN_* env vars).")
+                println("WARNING: This APK is signed with the DEBUG key — it will NOT install over the published app.")
                 signingConfigs.getByName("debug")
             }
         }

@@ -1,4 +1,7 @@
 
+import 'dart:convert';
+
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tn/src/updater.dart';
 
@@ -75,6 +78,31 @@ void main() {
         {'name': 'app-universal.apk', 'digest': 'sha256:$hex', 'browser_download_url': 'https://x/u.apk'},
       ]);
       expect(r.sha, hex);
+    });
+  });
+
+  group('validateZipContainer (APK sanity before install)', () {
+    test('accepts a real zip', () {
+      final archive = Archive()
+        ..add(ArchiveFile.bytes('data.json', utf8.encode('{}')));
+      final zip = ZipEncoder().encode(archive);
+      expect(validateZipContainer(zip), isTrue);
+    });
+
+    test('rejects a truncated download even with PK header', () {
+      final archive = Archive()
+        ..add(ArchiveFile.bytes('data.json', List.generate(5000, (i) => i % 251)));
+      final zip = ZipEncoder().encode(archive);
+      // Simulate a cut-off transfer: drop the EOCD record at the tail.
+      final truncated = zip.sublist(0, zip.length - 30);
+      expect(validateZipContainer(truncated), isFalse,
+          reason: 'truncated APKs used to pass the old 2-byte magic check '
+              'and only failed inside the Android installer');
+    });
+
+    test('rejects html/error pages and empty payloads', () {
+      expect(validateZipContainer(utf8.encode('<html>402 Payment Required</html>')), isFalse);
+      expect(validateZipContainer(const <int>[]), isFalse);
     });
   });
 }

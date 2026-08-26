@@ -46,7 +46,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.15.1';
+const _buildVersion = '1.15.2';
 
 bool _quitting = false;
 
@@ -417,6 +417,15 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     }, expectedSha256: apkSha256);
                     if (result == null && ctx.mounted) {
                       setDialogState(() => downloading = false);
+                      // Explain instead of silently resetting the dialog:
+                      // INSTALL_FAILED almost always means a signing-key
+                      // mismatch with the installed build.
+                      final reinstall = Updater.lastError == 'INSTALL_FAILED';
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(reinstall
+                            ? model.tr('update_reinstall')
+                            : model.tr('download_failed'))),
+                      );
                     }
                   } else {
                     Navigator.pop(ctx);
@@ -509,9 +518,15 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                       setDialogState(() { downloading = true; progress = 0; });
                       final result = await Updater.downloadAndInstall(apkUrl, (p) {
                         setDialogState(() => progress = p);
-                      });
+                      }, expectedSha256: apkSha256);
                       if (result == null && ctx.mounted) {
                         setDialogState(() => downloading = false);
+                        final reinstall = Updater.lastError == 'INSTALL_FAILED';
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(reinstall
+                              ? model.tr('update_reinstall')
+                              : model.tr('download_failed')),
+                        ));
                       }
                     } else {
                       Navigator.pop(ctx);
