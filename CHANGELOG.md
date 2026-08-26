@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.19.0] - 2026-08-26
+
+- Multi-lock: you can now enable several unlock methods at once (biometrics + pattern + PIN); the lock screen shows all active methods with a switcher, and settings use checkboxes so each method is configured independently
+- Backward-compatible: existing single-method lock settings migrate automatically
+
 ## [1.18.1] - 2026-08-26
 
 - Fix: "What's new" changelog dialog was invisible when app lock was enabled — it now appears after the lock gate opens for the first time
