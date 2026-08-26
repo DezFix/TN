@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_log.dart';
 import 'app_model.dart';
 import 'backup.dart';
+import 'backup_crypto.dart';
 import 'gdrive.dart';
 
 /// Google Drive / WebDAV backup sync. Upload is manual (button press).
@@ -41,12 +42,13 @@ class SyncService {
     } catch (_) {}
   }
 
-  /// Upload local state to Drive, overwriting the fixed file.
+  /// Upload local state to Drive, overwriting the fixed file. The payload is
+  /// E2E-encrypted when a backup password is set.
   Future<bool> push() async {
     final m = _model, gd = _gd;
     if (m == null || gd == null || !gd.isConnected) return false;
     try {
-      final zip = await BackupService.buildZip(m.state);
+      final zip = await BackupService.payloadForUpload(m.state);
       final prefs = await SharedPreferences.getInstance();
       var fileId = prefs.getString(_prefFileId);
 
@@ -91,8 +93,24 @@ class SyncService {
       final bytes = await gd.download(fileId);
       if (bytes == null || bytes.isEmpty) return false;
 
+      // E2E: decrypt with the stored backup password before parsing.
+      var payload = bytes;
+      if (BackupCrypto.isEncrypted(bytes)) {
+        final password = await BackupService.getPassword();
+        if (password.isEmpty) {
+          AppLog.info('sync.pull', 'backup is encrypted but no password stored');
+          return false;
+        }
+        final plain = await BackupCrypto.decrypt(bytes, password);
+        if (plain == null) {
+          AppLog.info('sync.pull', 'decrypt failed (wrong password?)');
+          return false;
+        }
+        payload = plain;
+      }
+
       // Extract data.json and merge record-by-record (LWW on updatedAt).
-      final archive = ZipDecoder().decodeBytes(bytes);
+      final archive = ZipDecoder().decodeBytes(payload);
       ArchiveFile? data;
       for (final f in archive) {
         if (f.name == 'data.json' || f.name.endsWith('/data.json')) {

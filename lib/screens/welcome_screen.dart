@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../src/app_model.dart';
 import '../src/backup.dart';
+import '../src/backup_crypto.dart';
 import '../src/i18n.dart';
 import '../src/reminders.dart';
 import '../src/theme.dart';
@@ -78,8 +79,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
       final f = await openFile(acceptedTypeGroups: groups);
       if (f == null) return;
-      await BackupService.importFromBytes(
-          await f.readAsBytes(), f.name, widget.model.state);
+      final bytes = await f.readAsBytes();
+      String? password;
+      if (BackupCrypto.isEncrypted(bytes)) {
+        password = await _promptPassword();
+        if (password == null || password.isEmpty) return;
+      }
+      await BackupService.importFromBytes(bytes, f.name, widget.model.state,
+          password: password);
       widget.model.tr = makeTranslator(widget.model.state.lang);
       if (!mounted) return;
       setState(() {
@@ -87,6 +94,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         _theme = widget.model.state.theme;
       });
       await _finish();
+    } on BackupEncryptedException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(makeTranslator(_lang)('bk_wrong_pass')),
+          backgroundColor: const Color(0xFF3A2020),
+        ));
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -95,6 +109,40 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         ));
       }
     }
+  }
+
+  Future<String?> _promptPassword() async {
+    final tr = makeTranslator(_lang);
+    final p = paletteFor(_theme);
+    final ctrl = TextEditingController();
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(tr('bk_pass_prompt'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          obscureText: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          style: TextStyle(color: p.text, fontSize: 14),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: Text(tr('todo_done')),
+          ),
+        ],
+      ),
+    );
+    return res?.trim();
   }
 
   @override

@@ -5,6 +5,8 @@ import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_log.dart';
+import 'backup_crypto.dart';
 import 'media.dart';
 import 'state.dart';
 
@@ -16,6 +18,13 @@ const backupPrefKeys = [
   'tn-daywidget-period',
 ];
 
+/// Raised when a backup is [BackupCrypto]-encrypted and no password was
+/// supplied — the UI shows a password prompt and retries.
+class BackupEncryptedException implements Exception {
+  final bool wrongPassword; // true = password given but rejected
+  const BackupEncryptedException({this.wrongPassword = false});
+}
+
 class BackupService {
   // ---- local backup settings ----
   static const freqKey = 'tn-backup-freq'; // legacy: manual | daily | weekly
@@ -25,6 +34,27 @@ class BackupService {
   static const maxKey = 'tn-backup-max'; // max local backups to keep
   static const allowedDays = [0, 1, 3, 5, 7];
   static const allowedMax = [1, 3, 5];
+  static const passKey = 'tn-backup-pass';
+
+  /// The backup encryption password, if the user set one.
+  static Future<String> getPassword() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(passKey) ?? '';
+    } catch (_) {}
+    return '';
+  }
+
+  static Future<void> setPassword(String v) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (v.isEmpty) {
+        await prefs.remove(passKey);
+      } else {
+        await prefs.setString(passKey, v);
+      }
+    } catch (_) {}
+  }
 
   static Future<String> getFrequency() async {
     try {
@@ -128,7 +158,8 @@ class BackupService {
       final last = prefs.getInt(lastKey) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
       if (now - last < days * 24 * 3600 * 1000) return null;
-      final path = await export(state, dir: dir);
+      final password = prefs.getString(passKey) ?? '';
+      final path = await export(state, dir: dir, password: password);
       await prefs.setInt(lastKey, DateTime.now().millisecondsSinceEpoch);
       return path;
     } catch (_) {}
@@ -137,9 +168,14 @@ class BackupService {
 
   /// Build the zip and write it silently to [dir] (or Downloads). No share
   /// sheet — "back up now" should just save the file.
-  static Future<String> export(AppState state, {String? dir}) async {
+  static Future<String> export(AppState state, {String? dir, String? password}) async {
     final name = _fileName();
-    final zip = await _buildZip(state);
+    var zip = await _buildZip(state);
+    // E2E: with a password set, the archive never leaves the device in
+    // plaintext (local file AND cloud uploads share this path).
+    if (password != null && password.isNotEmpty) {
+      zip = await BackupCrypto.encrypt(zip, password);
+    }
     Directory target = await _downloadsDir();
     if (dir != null && dir.isNotEmpty) {
       final d = Directory(dir);
@@ -154,6 +190,20 @@ class BackupService {
   }
 
   static Future<List<int>> buildZip(AppState state) => _buildZip(state);
+
+  /// Zip bytes for upload paths — encrypted when a backup password is set
+  /// in prefs (the same password the user typed in the backup screen).
+  static Future<List<int>> payloadForUpload(AppState state) async {
+    final zip = await _buildZip(state);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final password = prefs.getString(passKey) ?? '';
+      if (password.isNotEmpty) return await BackupCrypto.encrypt(zip, password);
+    } catch (e, st) {
+      AppLog.error('backup.payload', e, st);
+    }
+    return zip;
+  }
 
   static Future<List<int>> _buildZip(AppState state) async {
     final archive = Archive();
@@ -207,15 +257,28 @@ class BackupService {
     return files;
   }
 
-  static Future<void> importFrom(File file, AppState state) async {
+  static Future<void> importFrom(File file, AppState state, {String? password}) async {
     final bytes = await file.readAsBytes();
-    await importFromBytes(bytes, file.path, state);
+    await importFromBytes(bytes, file.path, state, password: password);
   }
 
   /// Accepts raw bytes of a .zip (or legacy .json) backup — used by cloud
   /// restore where there is no local file yet.
   static Future<void> importFromBytes(
-      List<int> bytes, String sourceName, AppState state) async {
+      List<int> bytes, String sourceName, AppState state,
+      {String? password}) async {
+    if (BackupCrypto.isEncrypted(bytes)) {
+      if (password == null || password.isEmpty) {
+        throw const BackupEncryptedException();
+      }
+      final plain = await BackupCrypto.decrypt(bytes, password);
+      if (plain == null) {
+        // Wrong password or corrupted container — never feed garbage to the
+        // zip decoder.
+        throw const BackupEncryptedException(wrongPassword: true);
+      }
+      bytes = plain;
+    }
     if (sourceName.toLowerCase().endsWith('.zip')) {
       await _importZipBytes(bytes, state);
     } else {
@@ -259,15 +322,21 @@ class BackupService {
     }
 
     // restore media files that are missing locally
-    final mediaDir = await MediaStore().dir();
-    for (final f in archive) {
-      if (!f.isFile) continue;
-      final parts = f.name.split('/');
-      if (parts.length != 2 || parts.first != 'media') continue;
-      final dest =
-          File('${mediaDir.path}${Platform.pathSeparator}${parts.last}');
-      if (await dest.exists()) continue;
-      await dest.writeAsBytes(f.content, flush: true);
+    try {
+      final mediaDir = await MediaStore().dir();
+      for (final f in archive) {
+        if (!f.isFile) continue;
+        final parts = f.name.split('/');
+        if (parts.length != 2 || parts.first != 'media') continue;
+        final dest =
+            File('${mediaDir.path}${Platform.pathSeparator}${parts.last}');
+        if (await dest.exists()) continue;
+        await dest.writeAsBytes(f.content, flush: true);
+      }
+    } catch (e, st) {
+      // No media dir (tests, transient FS errors) — data.json is restored
+      // regardless, media can be re-imported later.
+      AppLog.error('backup.importMedia', e, st);
     }
     await state.save();
   }

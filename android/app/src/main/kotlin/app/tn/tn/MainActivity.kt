@@ -5,7 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -23,7 +23,9 @@ object PendingShare {
     }
 }
 
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity (not FlutterActivity) — required by local_auth's
+// biometric prompt on Android.
+class MainActivity : FlutterFragmentActivity() {
 
     override fun getInitialRoute(): String {
         if (intent?.getBooleanExtra("open_settings", false) == true) return "/widget-settings"

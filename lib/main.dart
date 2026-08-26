@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
@@ -12,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'src/app_lock.dart';
 import 'src/app_model.dart';
 import 'src/backup.dart';
 import 'src/media.dart';
@@ -29,6 +31,11 @@ import 'screens/widget_settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
+  // silently falls back to pure Dart otherwise.
+  try {
+    FlutterCryptography.enable();
+  } catch (_) {}
   runApp(const TN());
 }
 
@@ -39,7 +46,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.14.0';
+const _buildVersion = '1.15.0';
 
 bool _quitting = false;
 
@@ -189,6 +196,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
               themeMode: themeName == 'dark' ? ThemeMode.dark : ThemeMode.light,
               theme: buildTheme(pl, Brightness.light),
               darkTheme: buildTheme(pd, Brightness.dark),
+              builder: (context, child) =>
+                  LockGate(tr: model.tr, child: child ?? const SizedBox.shrink()),
               routes: {
                 '/widget-settings': (_) => WidgetSettingsScreen(model: model),
               },

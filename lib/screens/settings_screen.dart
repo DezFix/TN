@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../src/app_lock.dart';
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
@@ -27,12 +28,33 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   int _cacheMaxGb = 1024; // 0 = ∞, in MB (1024=1GB)
+  bool _lockOn = false;
 
   @override
   void initState() {
     super.initState();
     widget.model.addListener(_onModel);
     _loadCachePref();
+    _loadLockPref();
+  }
+
+  Future<void> _loadLockPref() async {
+    final v = await AppLock.isEnabled();
+    if (mounted) setState(() => _lockOn = v);
+  }
+
+  /// Turning the lock ON requires one successful auth right away — the user
+  /// must never be able to enable a lock they cannot pass.
+  Future<void> _toggleLock(BuildContext context) async {
+    if (_lockOn) {
+      await AppLock.setEnabled(false);
+      if (mounted) setState(() => _lockOn = false);
+      return;
+    }
+    final ok = await AppLock.unlock(widget.model.tr);
+    if (!ok) return;
+    await AppLock.setEnabled(true);
+    if (mounted) setState(() => _lockOn = true);
   }
 
   Future<void> _loadCachePref() async {
@@ -289,28 +311,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           // Home-screen widgets are an Android feature — hide on desktop.
           if (!Platform.isWindows) ...[
-            _sectionLabel(tr('section_widget'), p),
-            _card(
+            _sectionLabel(tr('section_widget'), p),            _card(
               p,
               child: InkWell(
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
                 ),
+                 borderRadius: BorderRadius.circular(12),
+                 child: Row(
+                   children: [
+                     Expanded(
+                       child: Text(tr('widget_settings_title'),
+                           style: TextStyle(fontSize: 14.5, color: p.text)),
+                     ),
+                     Icon(Icons.chevron_right, color: p.textFaint),
+                   ],
+                 ),
+               ),
+             ),
+           ],
+          // Biometric app lock — Android/iOS only (local_auth support).
+          if (AppLock.supported) ...[
+            _sectionLabel(tr('lock_enable'), p),
+            _card(
+              p,
+              child: InkWell(
+                onTap: () => _toggleLock(context),
                 borderRadius: BorderRadius.circular(12),
                 child: Row(
                   children: [
+                    Icon(Icons.fingerprint, size: 22,
+                        color: _lockOn ? p.accent : p.textSoft),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(tr('widget_settings_title'),
-                          style: TextStyle(fontSize: 14.5, color: p.text)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tr('lock_enable'),
+                              style: TextStyle(fontSize: 14.5, color: p.text)),
+                          Text(tr('lock_hint'),
+                              style: TextStyle(fontSize: 11, color: p.textFaint)),
+                        ],
+                      ),
                     ),
-                    Icon(Icons.chevron_right, color: p.textFaint),
+                    Switch(
+                      value: _lockOn,
+                      activeColor: p.accent,
+                      onChanged: (_) => _toggleLock(context),
+                    ),
                   ],
                 ),
               ),
             ),
           ],
-          const SizedBox(height: 24),
+           const SizedBox(height: 24),
         ],
       ),
     );

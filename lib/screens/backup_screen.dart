@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../src/app_model.dart';
 import '../src/backup.dart';
+import '../src/backup_crypto.dart';
 import '../src/cloud.dart';
 import '../src/gdrive.dart';
 import '../src/i18n.dart';
@@ -25,6 +26,8 @@ class _BackupScreenState extends State<BackupScreen> {
   final _serverCtrl = TextEditingController();
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _encCtrl = TextEditingController();
+  bool _showEnc = false;
   String? _dir;
   int _daysIdx = 0;
   static const _daysValues = [0, 1, 3, 5, 7];
@@ -41,6 +44,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _loadLocalSettings() async {
     final d = await BackupService.getDays();
     _dir = await BackupService.chosenDir();
+    final enc = await BackupService.getPassword();
     final max = await BackupService.getMaxBackups();
     if (!mounted) return;
     setState(() {
@@ -48,6 +52,8 @@ class _BackupScreenState extends State<BackupScreen> {
       if (_daysIdx < 0) _daysIdx = 0;
       _maxIdx = _maxValues.indexOf(max);
       if (_maxIdx < 0) _maxIdx = 1;
+      _encCtrl.text = enc;
+      _showEnc = enc.isNotEmpty;
     });
   }
 
@@ -77,6 +83,7 @@ class _BackupScreenState extends State<BackupScreen> {
     _serverCtrl.dispose();
     _userCtrl.dispose();
     _passCtrl.dispose();
+    _encCtrl.dispose();
     super.dispose();
   }
 
@@ -130,6 +137,51 @@ class _BackupScreenState extends State<BackupScreen> {
                     onPressed: _importLocal,
                   ),
                 ),
+                const SizedBox(height: 14),
+                Text(tr('bk_encrypt'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: p.textFaint)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _encCtrl,
+                        obscureText: !_showEnc,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        style: TextStyle(color: p.text, fontSize: 13.5),
+                        onChanged: (v) {
+                          unawaited(BackupService.setPassword(v.trim()));
+                          setState(() {});
+                        },
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: tr('bk_pass_field'),
+                          hintStyle: TextStyle(color: p.textFaint, fontSize: 12.5),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: _encCtrl.text.isEmpty ? p.divider : p.accent)),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: p.accent)),
+                          suffixIcon: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(_showEnc ? Icons.visibility_off : Icons.visibility,
+                                size: 18, color: p.textFaint),
+                            onPressed: () => setState(() => _showEnc = !_showEnc),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(tr('bk_encrypt_hint'),
+                    style: TextStyle(fontSize: 11, color: p.textFaint)),
                 const SizedBox(height: 14),
                 Text(tr('bk_freq'),
                     style: TextStyle(
@@ -379,7 +431,8 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _exportLocal() async {
     try {
-      final path = await BackupService.export(widget.model.state, dir: _dir);
+      final path = await BackupService.export(widget.model.state,
+          dir: _dir, password: _encCtrl.text.trim());
       if (!mounted) return;
       final name = path.split('/').last.split('\\').last;
       _toast(tr('backup_exported', [name]));
@@ -388,18 +441,59 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  /// Dialog asking for the encryption password of an encrypted backup.
+  Future<String?> _promptPassword() async {
+    final ctrl = TextEditingController();
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(tr('bk_pass_prompt'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          obscureText: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          style: TextStyle(color: p.text, fontSize: 14),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: p.accent),
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: Text(tr('todo_done')),
+          ),
+        ],
+      ),
+    );
+    return res?.trim();
+  }
+
   Future<void> _importLocal() async {
     try {
       const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
       final f = await openFile(acceptedTypeGroups: groups);
       if (f == null) return;
-      await BackupService.importFromBytes(
-          await f.readAsBytes(), f.name, widget.model.state);
+      final bytes = await f.readAsBytes();
+      var password = _encCtrl.text.trim().isNotEmpty ? _encCtrl.text.trim() : null;
+      if (BackupCrypto.isEncrypted(bytes) && password == null) {
+        password = await _promptPassword();
+        if (password == null || password.isEmpty) return;
+      }
+      await BackupService.importFromBytes(bytes, f.name, widget.model.state,
+          password: password);
       widget.model.tr = makeTranslator(widget.model.state.lang);
       widget.model.refresh();
       if (!mounted) return;
       _toast(tr('backup_imported'));
       setState(() {});
+    } on BackupEncryptedException {
+      if (mounted) _toast(tr('bk_wrong_pass'), error: true);
     } catch (_) {
       if (mounted) _toast(tr('backup_error'), error: true);
     }
@@ -572,7 +666,7 @@ class _BackupScreenState extends State<BackupScreen> {
     if (_nc == null) return;
     setState(() => _ncBusy = true);
     try {
-      final zip = await BackupService.buildZip(widget.model.state);
+      final zip = await BackupService.payloadForUpload(widget.model.state);
       final name = BackupService.lastExportName();
       final ok = await _nc!.upload(name, zip);
       if (!mounted) return;
@@ -598,12 +692,26 @@ class _BackupScreenState extends State<BackupScreen> {
       }
       final bytes = await _nc!.download(list.last);
       if (bytes == null) throw Exception('download failed');
-      await BackupService.importFromBytes(bytes, list.last, widget.model.state);
+      var password = _encCtrl.text.trim().isNotEmpty ? _encCtrl.text.trim() : null;
+      if (BackupCrypto.isEncrypted(bytes) && password == null) {
+        password = await _promptPassword();
+        if (password == null || password.isEmpty) {
+          if (!mounted) return;
+          setState(() => _ncBusy = false);
+          return;
+        }
+      }
+      await BackupService.importFromBytes(bytes, list.last, widget.model.state,
+          password: password);
       widget.model.tr = makeTranslator(widget.model.state.lang);
       widget.model.refresh();
       if (!mounted) return;
       setState(() => _ncBusy = false);
       _toast(tr('backup_imported'));
+    } on BackupEncryptedException {
+      if (!mounted) return;
+      setState(() => _ncBusy = false);
+      _toast(tr('bk_wrong_pass'), error: true);
     } catch (_) {
       if (!mounted) return;
       setState(() => _ncBusy = false);
