@@ -1784,7 +1784,9 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: p.modalBg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => Padding(
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1819,14 +1821,15 @@ class _ChatScreenState extends State<ChatScreen> {
               const Spacer(),
               TextButton(onPressed: () => Navigator.pop(ctx), child: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft))),
               const SizedBox(width: 8),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: p.accent),
-                onPressed: () => Navigator.pop(ctx, 'save'),
-                child: Text(model.tr('save')),
-              ),
-            ]),
+               FilledButton(
+                 style: FilledButton.styleFrom(backgroundColor: p.accent),
+                 onPressed: () => Navigator.pop(ctx, 'save'),
+                 child: Text(model.tr('save')),
+               ),
+             ]),
           ],
         ),
+      ),
       ),
     );
     if (action == null) return;

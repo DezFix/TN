@@ -98,6 +98,8 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
+  static const _retentionValues = [1, 7, 30, 0];
+
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
@@ -152,37 +154,34 @@ class _TrashScreenState extends State<TrashScreen> {
         children: [
           _sectionLabel(tr('retention'), p),
           _card(p, child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(tr('retention_hint'),
-                      style: TextStyle(fontSize: 14.5, color: p.text)),
-                ],
+              Text(tr('retention_hint'),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: p.textFaint)),
+              Slider(
+                value: _retentionValues.indexOf(_retentionDays).clamp(0, 3).toDouble(),
+                min: 0,
+                max: 3,
+                divisions: 3,
+                label: _retentionLabel(_retentionDays),
+                activeColor: p.accent,
+                inactiveColor: p.divider,
+                thumbColor: p.accent,
+                onChanged: (v) =>
+                    setState(() => _retentionDays = _retentionValues[v.round()]),
+                onChangeEnd: (v) => _saveRetention(_retentionValues[v.round()]),
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final days in [1, 7, 30, 0])
-                    GestureDetector(
-                      onTap: () => _saveRetention(days),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _retentionDays == days ? p.accent : p.bgChat,
-                          borderRadius: BorderRadius.circular(8),
-                          border: _retentionDays == days ? null : Border.all(color: p.divider),
-                        ),
-                        child: Text(_retentionLabel(days),
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _retentionDays == days ? Colors.white : p.textSoft)),
-                      ),
-                    ),
-                ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(_retentionLabel(_retentionDays),
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: p.textSoft)),
               ),
             ],
           )),

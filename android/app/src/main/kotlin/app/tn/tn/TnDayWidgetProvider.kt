@@ -60,7 +60,11 @@ class TnDayWidgetProvider : AppWidgetProvider() {
         private fun loadRows(context: Context): List<Row> {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return emptyList()
-            val period = prefs.getString("flutter.tn-daywidget-period", "all") ?: "all"
+            // Legacy values ('all', 'week') map to 'upcoming' — the "All tasks"
+            // option was removed and Week was replaced by Upcoming.
+            val periodRaw = prefs.getString("flutter.tn-daywidget-period", "upcoming") ?: "upcoming"
+            val period = if (periodRaw == "today") "today" else "upcoming"
+            val now = System.currentTimeMillis()
             val data = JSONObject(raw)
             val names = HashMap<String, String>()
             data.optJSONArray("chats")?.let { chats ->
@@ -80,7 +84,8 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 val due = e.optLong("dueAt", 0L)
                 when (period) {
                     "today" -> if (due == 0L || due > endOfTodayMillis()) continue
-                    "week" -> if (due == 0L || due > endOfWeekMillis()) continue
+                    // Upcoming: overdue + today + tomorrow + day after tomorrow.
+                    else -> if (due == 0L || due > endOfUpcomingMillis()) continue
                 }
                 // Overdue = the moment has already passed (same semantics as
                 // the in-app bubble), not merely "before today" — otherwise a
@@ -119,13 +124,29 @@ class TnDayWidgetProvider : AppWidgetProvider() {
 
         private fun endOfTodayMillis(): Long = startOfTodayMillis() + 24 * 60 * 60 * 1000L - 1
 
-        private fun endOfWeekMillis(): Long = startOfTodayMillis() + 7 * 24 * 60 * 60 * 1000L - 1
+        private fun endOfUpcomingMillis(): Long = startOfTodayMillis() + 3 * 24 * 60 * 60 * 1000L - 1
 
+        /** Widget strings follow the IN-APP language, not the system one. */
+        private data class Ws(val title: String, val empty: String, val overdue: String)
+
+        private fun widgetStrings(context: Context): Ws {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
+            if (lang.isNullOrEmpty()) lang = Locale.getDefault().language
+            return when (lang.take(2).lowercase(Locale.ROOT)) {
+                "ru" -> Ws("Задачи", "Пока ничего нет", "просрочено")
+                "uk" -> Ws("Завдання", "Поки нічого немає", "прострочено")
+                "de" -> Ws("Aufgaben", "Noch nichts hier", "überfällig")
+                "es" -> Ws("Tareas", "Aún no hay nada", "vencido")
+                "fr" -> Ws("Tâches", "Rien pour le moment", "en retard")
+                else -> Ws("Tasks", "Nothing here yet", "overdue")
+            }
+        }
         /** Time + optional chat name for a row's meta line. */
         private fun meta(context: Context, chatName: String, time: Long): String {
             val h = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
             return if (chatName.isEmpty()) h
-            else context.getString(R.string.dw_meta_chat, h, chatName)
+            else "$h · $chatName"
         }
 
         private fun buildViews(context: Context): RemoteViews {
@@ -154,7 +175,8 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 )
             )
 
-            rv.setTextViewText(R.id.dw_title, context.getString(R.string.dw_title_tasks))
+            val ws = widgetStrings(context)
+            rv.setTextViewText(R.id.dw_title, ws.title)
             // Adjustable font size (scale, default 1.0) written by the in-app
             // widget settings screen.
             var fontScale = 1.0f
@@ -175,6 +197,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val rows = try { loadRows(context) } catch (_: Exception) { emptyList<Row>() }
             rv.removeAllViews(R.id.dw_list)
             rv.setViewVisibility(R.id.dw_empty, if (rows.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE)
+            rv.setTextViewText(R.id.dw_empty, ws.empty)
 
             // Re-render the moment the nearest deadline passes so a task
             // turns red exactly on time, not only at midnight / app saves.

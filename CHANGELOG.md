@@ -4,6 +4,16 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.17.0] - 2026-08-26
+
+- Widget period rework: "All tasks" removed, "Week" replaced by "Upcoming" (overdue + today + tomorrow + day after tomorrow); legacy saved values migrate automatically
+- The widget now follows the IN-APP language instead of the system one (fixed English widget after changing the app language)
+- Trash screen: retention buttons replaced with a slider in the shared style (1 / 7 / 30 days / forever)
+- RSS cache-size slider restyled to match the other sliders
+- "New folder" in Settings now opens the name + color dialog (color was impossible to pick from there)
+- Time picker switched to numeric input mode — the round dial mis-taps on Samsung skins; bottom sheets respect the gesture-nav bar
+- About screen: version constant is now covered by a test against pubspec (it had silently stuck at 1.16.2 for three releases — fixed)
+
 ## [1.16.5] - 2026-08-26
 
 - Fixed inverted chat order — new messages appear at the BOTTOM again, old ones stack upward (a builder-index regression from the lazy-list change)

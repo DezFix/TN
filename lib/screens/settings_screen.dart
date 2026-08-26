@@ -11,7 +11,6 @@ import 'about_screen.dart';
 import 'lock_settings_screen.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
-import '../src/models.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
@@ -88,6 +87,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _onModel() {
     if (mounted) setState(() {});
   }
+
+  String _cacheMaxLabel(int v) =>
+      v == 0 ? '∞' : v >= 1024 ? '${v ~/ 1024} GB' : '$v MB';
 
   @override
   Widget build(BuildContext context) {
@@ -220,28 +222,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 Divider(height: 24, color: p.divider),
-                Align(alignment: Alignment.centerLeft, child: Text(tr('rss_cache_max_size'), style: TextStyle(color: p.accent, fontSize: 14, fontWeight: FontWeight.w600))),
-                const SizedBox(height: 4),
-                Text(tr('rss_cache_hint'), style: TextStyle(color: p.textFaint, fontSize: 11)),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    for (final v in [1024, 3072, 5120, 0])
-                      Text(v == 0 ? '∞' : v >= 1024 ? '${v ~/ 1024} GB' : '$v MB', style: TextStyle(color: _cacheMaxGb == v ? p.accent : p.textFaint, fontSize: 13, fontWeight: _cacheMaxGb == v ? FontWeight.w700 : FontWeight.w400)),
-                  ],
-                ),
+                Text(tr('rss_cache_max_size'),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: p.textFaint)),
                 Slider(
                   value: [1024, 3072, 5120, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
                   min: 0,
                   max: 3,
                   divisions: 3,
+                  label: _cacheMaxLabel(_cacheMaxGb),
                   activeColor: p.accent,
                   inactiveColor: p.divider,
                   thumbColor: p.accent,
                   onChanged: (v) => setState(() => _cacheMaxGb = [1024, 3072, 5120, 0][v.round()]),
                   onChangeEnd: (v) => _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
                 ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(_cacheMaxLabel(_cacheMaxGb),
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: p.textSoft)),
+                ),
+                const SizedBox(height: 4),
+                Text(tr('rss_cache_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                const SizedBox(height: 8),
                 Text(tr('rss_cache_for'), style: TextStyle(fontSize: 11, color: p.textFaint)),
               ],
             ),
@@ -253,13 +262,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 InkWell(
                   onTap: () async {
-                    final name = await showFolderNameDialog(context, model);
-                    if (name == null) return;
-                    model.state.folders.add(Folder(id: uid('f'), name: name));
+                    // Same name+color dialog as the FAB flow on the main
+                    // screen — text-only here made colored folders impossible.
+                    final result = await showFolderEditDialog(context, model);
+                    if (result == null) return;
+                    model.state.folders.add(result);
                     await model.save();
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('folder_created', [name]))));
+                        SnackBar(content: Text(tr('folder_created', [result.name]))));
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Row(

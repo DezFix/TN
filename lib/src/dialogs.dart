@@ -824,7 +824,12 @@ Future<SchedulePick?> showScheduleSheet(
   }
 
   Future<void> editTime() async {
-    final t = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(dt));
+    // Numeric entry mode: the round dial mis-taps on many Samsung skins.
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(dt),
+      initialEntryMode: TimePickerEntryMode.input,
+    );
     if (t == null) return;
     dt = DateTime(dt.year, dt.month, dt.day, t.hour, t.minute);
   }
@@ -836,7 +841,9 @@ Future<SchedulePick?> showScheduleSheet(
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setSheet) => Padding(
+      builder: (ctx, setSheet) => SafeArea(
+        top: false,
+        child: Padding(
         padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(ctx).viewInsets.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -977,18 +984,19 @@ Future<SchedulePick?> showScheduleSheet(
                       ),
                     );
                   },
-                  child: Text(tr('todo_done')),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
+                   child: Text(tr('todo_done')),
+                 ),
+               ],
+             ),
+           ],
+         ),
+       ),
+       ),
+     ),
+   );
+ }
 
-Future<String?> showFolderNameDialog(
+ Future<String?> showFolderNameDialog(
   BuildContext context,
   AppModel model, {
   String? initial,

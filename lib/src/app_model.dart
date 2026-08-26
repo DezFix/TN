@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'widget_bridge.dart';
+
 import 'i18n.dart';
 import 'models.dart';
 import 'reminders.dart';
 import 'state.dart';
 import 'theme.dart';
-import 'widget_bridge.dart';
 
 class AppModel extends ChangeNotifier {
   AppModel({AppState? state}) : state = state ?? AppState() {

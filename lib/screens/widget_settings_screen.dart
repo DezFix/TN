@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
@@ -15,7 +15,7 @@ class WidgetSettingsScreen extends StatefulWidget {
 class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   double _alpha = 1.0;
   double _font = 1.0;
-  String _period = 'all'; // 'all' | 'today' | 'week'
+  String _period = 'upcoming'; // 'today' | 'upcoming'
 
   @override
   void initState() {
@@ -48,7 +48,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     setState(() {
       _alpha = alpha.clamp(0.2, 1.0);
       _font = font.clamp(0.8, 1.6);
-      _period = ['all', 'today', 'week'].contains(period) ? period : 'all';
+      _period = ['today', 'upcoming'].contains(period) ? period : 'upcoming';
     });
   }
 
@@ -93,11 +93,11 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                 ),
                 Row(
                   children: [
-                    for (final (val, key) in [('all', 'dw_period_all'), ('today', 'dw_period_today'), ('week', 'dw_period_week')]) ...[
+                    for (final (val, key) in [('today', 'dw_period_today'), ('upcoming', 'dw_period_upcoming')]) ...[
                       Expanded(
                         child: _periodButton(p, val, tr(key)),
                       ),
-                      if (key != 'dw_period_week') const SizedBox(width: 8),
+                      if (key != 'dw_period_upcoming') const SizedBox(width: 8),
                     ],
                   ],
                 ),
