@@ -2084,7 +2084,9 @@ class _ChatScreenState extends State<ChatScreen> {
               final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
               return hasSomething
                   ? GestureDetector(
-                      onLongPressStart: (d) => _sendTextWithDate(),
+                      onLongPressStart: _chat.kind == 'tasks'
+                          ? (d) => _sendTextWithDate()
+                          : null,
                       child: IconButton.filled(
                         icon: const Icon(Icons.send, color: Colors.white),
                         style: IconButton.styleFrom(backgroundColor: p.accent),
