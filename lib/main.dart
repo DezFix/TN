@@ -101,11 +101,11 @@ class _TrayWindowListener extends WindowListener {
 class _TNState extends State<TN> with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final Future<AppModel> _future = _load();
-  bool _whatsNewChecked = false;
   bool _shareInWired = false;
   bool _showWelcome = false;
   AppModel? _loadedModel;
   Timer? _pendingOpenChatTimer;
+  bool _whatsNewShown = false;
 
   @override
   void initState() {
@@ -216,15 +216,21 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
               theme: buildTheme(pl, Brightness.light),
               darkTheme: buildTheme(pd, Brightness.dark),
               builder: (context, child) {
-                // Show "What's New" ABOVE the lock gate so the changelog
-                // is visible even when the app is locked.
-                if (!_whatsNewChecked) {
-                  _whatsNewChecked = true;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    maybeShowWhatsNew(context, model);
-                  });
-                }
-                return LockGate(tr: model.tr, child: child ?? const SizedBox.shrink());
+                return LockGate(
+                  tr: model.tr,
+                  onFirstUnlock: _whatsNewShown
+                      ? null
+                      : () {
+                          if (_whatsNewShown || !mounted) return;
+                          _whatsNewShown = true;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            maybeShowWhatsNew(
+                                _navKey.currentContext!, model);
+                          });
+                        },
+                  child: child ?? const SizedBox.shrink(),
+                );
               },
               routes: {
                 '/widget-settings': (_) => WidgetSettingsScreen(model: model),

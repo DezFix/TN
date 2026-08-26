@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.18.1] - 2026-08-26
+
+- Fix: "What's new" changelog dialog was invisible when app lock was enabled — it now appears after the lock gate opens for the first time
+
 ## [1.18.0] - 2026-08-26
 
 - Samsung biometrics fix: combined prompt (biometric + device credential) is now tried first; the previous two-step cascade broke on OneUI; added a short delay before auto-prompt and cancel-on-dispose so the sheet never lingers

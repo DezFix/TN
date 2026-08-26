@@ -236,10 +236,19 @@ class AppLock {
 /// re-lock grace window: within it the app opens without prompting; past it
 /// (including background time longer than the window) the gate locks again.
 class LockGate extends StatefulWidget {
-  const LockGate({super.key, required this.child, required this.tr});
+  const LockGate({
+    super.key,
+    required this.child,
+    required this.tr,
+    this.onFirstUnlock,
+  });
 
   final Widget child;
   final TrFn tr;
+
+  /// Called once after the gate is first opened (either immediately if no
+  /// lock / within grace window, or after the user successfully unlocks).
+  final VoidCallback? onFirstUnlock;
 
   @override
   State<LockGate> createState() => _LockGateState();
@@ -248,6 +257,7 @@ class LockGate extends StatefulWidget {
 class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
   bool? _enabled; // null = still loading
   bool _open = false;
+  bool _notifiedFirstUnlock = false;
   Timer? _expiryTimer;
 
   @override
@@ -301,7 +311,17 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_enabled != true || _open) return widget.child;
+    if (_enabled != true || _open) {
+      if (!_notifiedFirstUnlock) {
+        _notifiedFirstUnlock = true;
+        if (widget.onFirstUnlock != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onFirstUnlock?.call();
+          });
+        }
+      }
+      return widget.child;
+    }
     return LockScreen(
       tr: widget.tr,
       onUnlocked: () async {
