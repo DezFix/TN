@@ -8,6 +8,24 @@ import 'package:path_provider/path_provider.dart';
 class Updater {
   static const _channel = MethodChannel('tn/install');
 
+  /// Numeric compare of "vX.Y.Z" tags against the installed version.
+  /// Pre-release suffixes ("1.2.3-beta") are ignored, missing components
+  /// count as 0, and any non-equal component decides (no equal → false).
+  static bool isNewerTag(String tag, String current) {
+    List<int> parse(String s) => s
+        .replaceFirst(RegExp('^v'), '')
+        .split('.')
+        .map((e) => int.tryParse(e.replaceAll(RegExp('[^0-9].*'), '')) ?? 0)
+        .toList();
+    final a = parse(tag), b = parse(current);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0;
+      final y = i < b.length ? b[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
+
   /// Downloads an APK from [url] to the cache directory, then triggers the
   /// Android package installer via a platform channel.
   /// [expectedSha256] (hex, from the GitHub release asset digest) is verified

@@ -1,4 +1,4 @@
-﻿name: Build releases
+name: Build releases
 
 on:
   push:
@@ -81,6 +81,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: android-apks
@@ -89,6 +90,25 @@ jobs:
         with:
           name: windows-zip
           path: out
+
+      # The app shows the release body as its "What's new" dialog — extract
+      # this tag's section from CHANGELOG.md (## [X.Y.Z] … until next ## [).
+      - name: Extract changelog for the release body
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          awk -v ver="## [$V]" '
+            index($0, ver) == 1 {flag=1; next}
+            /^## \[/ && flag {exit}
+            flag {print}
+          ' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "TN $GITHUB_REF_NAME" > release-body.md
+          fi
+          cat release-body.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*
+          body_path: release-body.md
+          fail_on_unmatched_files: true

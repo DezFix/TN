@@ -46,7 +46,7 @@ class TN extends StatefulWidget {
   State<TN> createState() => _TNState();
 }
 
-const _buildVersion = '1.15.0';
+const _buildVersion = '1.15.1';
 
 bool _quitting = false;
 
@@ -293,22 +293,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     await SyncService.instance.bind(model);
   }
 
-  /// Numeric compare of "vX.Y.Z" tags against the installed [_buildVersion].
-  static bool _isNewerTag(String tag, String current) {
-    List<int> parse(String s) => s
-        .replaceFirst(RegExp('^v'), '')
-        .split('.')
-        .map((e) => int.tryParse(e.replaceAll(RegExp('[^0-9].*'), '')) ?? 0)
-        .toList();
-    final a = parse(tag), b = parse(current);
-    for (var i = 0; i < 3; i++) {
-      final x = i < a.length ? a[i] : 0;
-      final y = i < b.length ? b[i] : 0;
-      if (x != y) return x > y;
-    }
-    return false;
-  }
-
   Future<void> _maybeShowWhatsNew(BuildContext context, AppModel model) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -332,31 +316,37 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       final tag = (rel['tag_name'] as String?) ?? '';
       final name = (rel['name'] as String?) ?? '';
       final body = ((rel['body'] as String?) ?? '').replaceFirst(RegExp(r'^\uFEFF'), '');
+      // No changelog text (e.g. a bodyless release) — nothing to show.
       if (tag.isEmpty || body.trim().isEmpty) return;
 
-      final updateAvailable = _isNewerTag(tag, _buildVersion);
+      final updateAvailable = Updater.isNewerTag(tag, _buildVersion);
 
       String? apkUrl;
       String? apkSha256;
       if (updateAvailable && Platform.isAndroid) {
         final assets = rel['assets'] as List<dynamic>?;
         if (assets != null) {
-          String? universalUrl, universalSha, lastUrl, lastSha;
+          String? universalUrl, universalSha, fallbackUrl, fallbackSha;
           for (final a in assets) {
             final map = a as Map<String, dynamic>;
             final n = (map['name'] as String?) ?? '';
-            lastUrl = map['browser_download_url'] as String? ?? lastUrl;
+            // Only APKs are installable here — the old "last asset" fallback
+            // could pick the Windows zip and then fail the magic check.
+            if (!n.toLowerCase().endsWith('.apk')) continue;
+            final u = map['browser_download_url'] as String? ?? '';
             // GitHub exposes 'sha256:<hex>' here — verified before install.
             final digest = (map['digest'] as String?) ?? '';
             final sha = digest.startsWith('sha256:') ? digest.substring(7) : '';
-            lastSha = sha.isNotEmpty ? sha : lastSha;
             if (n.contains('universal')) {
-              universalUrl = map['browser_download_url'] as String?;
+              universalUrl = u;
               universalSha = sha.isNotEmpty ? sha : null;
+            } else if (fallbackUrl == null) {
+              fallbackUrl = u;
+              fallbackSha = sha.isNotEmpty ? sha : null;
             }
           }
-          apkUrl = universalUrl ?? lastUrl;
-          apkSha256 = universalUrl != null ? universalSha : lastSha;
+          apkUrl = universalUrl ?? fallbackUrl;
+          apkSha256 = universalUrl != null ? universalSha : fallbackSha;
         }
       }
 
@@ -374,6 +364,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         return;
       }
 
+      // Already seen this changelog — still nudge once per tag when an
+      // update is pending ("Later" pressed before).
       if (updateAvailable &&
           prefs.getString('tn-update-prompted') != tag &&
           context.mounted) {
