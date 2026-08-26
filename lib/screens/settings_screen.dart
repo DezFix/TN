@@ -46,11 +46,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     var methodKey = 'biometric';
     if (v) {
       final methods = await AppLock.getEnabledMethods();
-      final keys = <String>[];
-      if (methods.contains(LockMethod.biometric)) keys.add('biometric');
-      if (methods.contains(LockMethod.pattern)) keys.add('pattern');
-      if (methods.contains(LockMethod.pin)) keys.add('pin');
-      methodKey = keys.isEmpty ? 'biometric' : keys.join('+');
+      if (methods.length > 1) {
+        methodKey = 'methods_multi';
+      } else if (methods.contains(LockMethod.pattern)) {
+        methodKey = 'pattern';
+      } else if (methods.contains(LockMethod.pin)) {
+        methodKey = 'pin';
+      } else {
+        methodKey = 'biometric';
+      }
     }
     if (mounted) setState(() => _lockOn = v);
     if (mounted) setState(() => _methodKey = methodKey);
@@ -370,7 +374,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style:
                                   TextStyle(fontSize: 14.5, color: p.text)),
                           Text(tr(_lockOn
-                                  ? 'lock_method_${_methodKey}'
+                                  ? (_methodKey == 'methods_multi'
+                                      ? 'lock_methods_multi'
+                                      : 'lock_method_${_methodKey}')
                                   : 'lock_hint'),
                               style: TextStyle(
                                   fontSize: 11, color: p.textFaint)),
