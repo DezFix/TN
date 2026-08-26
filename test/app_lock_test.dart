@@ -35,4 +35,49 @@ void main() {
       expect(await AppLock.isWithinGrace(), isFalse);
     });
   });
+
+  group('AppLock multi-method API', () {
+    test('getEnabledMethods defaults to biometric', () async {
+      final methods = await AppLock.getEnabledMethods();
+      expect(methods, contains(LockMethod.biometric));
+      expect(methods.length, 1);
+    });
+
+    test('setEnabledMethods persists and reads back', () async {
+      await AppLock.setEnabledMethods({LockMethod.pattern, LockMethod.pin});
+      final methods = await AppLock.getEnabledMethods();
+      expect(methods, contains(LockMethod.pattern));
+      expect(methods, contains(LockMethod.pin));
+      expect(methods.length, 2);
+    });
+
+    test('isMethodEnabled returns correct value', () async {
+      await AppLock.setEnabledMethods({LockMethod.pattern});
+      expect(await AppLock.isMethodEnabled(LockMethod.pattern), isTrue);
+      expect(await AppLock.isMethodEnabled(LockMethod.pin), isFalse);
+      expect(await AppLock.isMethodEnabled(LockMethod.biometric), isFalse);
+    });
+
+    test('backward compat: reads legacy single-method key', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tn-lock-mode', 'pin');
+      final methods = await AppLock.getEnabledMethods();
+      expect(methods, contains(LockMethod.pin));
+      expect(methods.length, 1);
+    });
+
+    test('setEnabledMethods writes legacy key for first method', () async {
+      await AppLock.setEnabledMethods(
+          {LockMethod.biometric, LockMethod.pattern});
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('tn-lock-mode'), isNotNull);
+    });
+
+    test('setEnabledMethods rejects empty set', () async {
+      await AppLock.setEnabledMethods({LockMethod.pin});
+      await AppLock.setEnabledMethods({});
+      final methods = await AppLock.getEnabledMethods();
+      expect(methods, contains(LockMethod.pin));
+    });
+  });
 }

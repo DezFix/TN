@@ -25,7 +25,7 @@ LockMethod lockMethodFromString(String? s) {
   }
 }
 
-/// Optional app lock. Three methods:
+/// Optional app lock. Multiple methods can be active simultaneously:
 ///   - biometric: system fingerprint/face via local_auth
 ///   - pattern / pin: TN's own in-app input, stored as salted SHA-256 hash
 ///     (the secret itself never persists).
@@ -34,7 +34,8 @@ LockMethod lockMethodFromString(String? s) {
 /// window (immediately | 5 min | 10 min); past that window the gate locks.
 class AppLock {
   static const _keyEnabled = 'tn-lock-enabled';
-  static const _keyMode = 'tn-lock-mode';
+  static const _keyMethods = 'tn-lock-methods'; // 'biometric,pattern' etc.
+  static const _keyMode = 'tn-lock-mode'; // legacy single-method, migrated
   static const _keySecret = 'tn-lock-secret'; // 'saltHex:sha256Hex'
   static const _keyGrace = 'tn-lock-grace-minutes'; // 0 | 5 | 10
 
@@ -86,6 +87,45 @@ class AppLock {
       await prefs.setString(_keyMode, m.name);
     } catch (_) {}
   }
+
+  // ---- multi-method support ----
+
+  /// Returns the set of enabled lock methods. Migrates from the legacy
+  /// single `_keyMode` key on first read.
+  static Future<Set<LockMethod>> getEnabledMethods() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keyMethods);
+      if (raw != null && raw.isNotEmpty) {
+        return raw
+            .split(',')
+            .where((s) => s.isNotEmpty)
+            .map(lockMethodFromString)
+            .toSet();
+      }
+      // Migrate from legacy single-method key.
+      final legacy = lockMethodFromString(prefs.getString(_keyMode));
+      return {legacy};
+    } catch (_) {}
+    return {LockMethod.biometric};
+  }
+
+  /// Persists the set of enabled methods. At least one method must be
+  /// provided. Also writes the legacy `_keyMode` for backward compat.
+  static Future<void> setEnabledMethods(Set<LockMethod> methods) async {
+    if (methods.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _keyMethods, methods.map((m) => m.name).join(','));
+      // Keep legacy key in sync — write the first method as primary.
+      await prefs.setString(_keyMode, methods.first.name);
+    } catch (_) {}
+  }
+
+  /// Convenience: is a specific method enabled?
+  static Future<bool> isMethodEnabled(LockMethod m) async =>
+      (await getEnabledMethods()).contains(m);
 
   /// Grace window minutes: 0 (re-lock immediately), 5 or 10.
   static Future<int> getGraceMinutes() async {
@@ -346,27 +386,42 @@ class LockScreen extends StatefulWidget {
 }
 
 class _LockScreenState extends State<LockScreen> {
-  LockMethod? _method;
+  Set<LockMethod> _methods = {LockMethod.biometric};
+  LockMethod? _activeMethod;
   bool _busy = false;
   String? _error;
   final List<int> _pattern = <int>[];
 
+  bool get _hasBiometric => _methods.contains(LockMethod.biometric);
+  bool get _hasCode => _methods.contains(LockMethod.pattern) ||
+      _methods.contains(LockMethod.pin);
+
+  LockMethod get _currentMethod =>
+      _activeMethod ??
+      (_hasCode
+          ? _methods.contains(LockMethod.pattern)
+              ? LockMethod.pattern
+              : LockMethod.pin
+          : LockMethod.biometric);
+
   @override
   void initState() {
     super.initState();
-    AppLock.getMethod().then((m) async {
-      if (!mounted) return;
-      setState(() => _method = m);
-      if (m == LockMethod.biometric) {
-        // Delay the auto-prompt so the widget tree is fully built and the
-        // activity is in the resumed state — fixes Samsung/OneUI where the
-        // biometric sheet attaches to a half-ready window and the result
-        // is silently lost.
-        await Future<void>.delayed(const Duration(milliseconds: 350));
-        if (!mounted) return;
-        await _tryBiometrics(auto: true);
-      }
+    _init();
+  }
+
+  Future<void> _init() async {
+    final methods = await AppLock.getEnabledMethods();
+    if (!mounted) return;
+    setState(() {
+      _methods = methods;
     });
+    // Auto-prompt biometric if enabled and there's no code-based fallback.
+    if (_hasBiometric && !_hasCode) {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
+      await _tryBiometrics(auto: true);
+    }
   }
 
   @override
@@ -415,11 +470,21 @@ class _LockScreenState extends State<LockScreen> {
     }
   }
 
+  void _switchMethod(LockMethod m) {
+    setState(() {
+      _activeMethod = m;
+      _error = null;
+      _pattern.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFF4EA4F6);
-    final method = _method ?? LockMethod.biometric;
     final tr = widget.tr;
+    final method = _currentMethod;
+    final multiCode =
+        _methods.contains(LockMethod.pattern) && _methods.contains(LockMethod.pin);
 
     Widget input;
     switch (method) {
@@ -456,10 +521,34 @@ class _LockScreenState extends State<LockScreen> {
         break;
     }
 
-    // Material(transparency) is REQUIRED here: the gate replaces the whole
-    // app subtree, so without a Material ancestor Flutter paints its debug
-    // fallback style — yellow underlines under every label (seen on the
-    // pattern title and the TN wordmark).
+    // Method switcher chips — shown when multiple code methods are enabled.
+    Widget? switcher;
+    if (multiCode) {
+      final methods = <LockMethod>{
+        if (_methods.contains(LockMethod.pattern)) LockMethod.pattern,
+        if (_methods.contains(LockMethod.pin)) LockMethod.pin,
+      };
+      switcher = Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final m in methods) ...[
+              _methodChip(
+                label: m == LockMethod.pattern
+                    ? tr('lock_method_pattern')
+                    : tr('lock_method_pin'),
+                active: _currentMethod == m,
+                accent: accent,
+                onTap: () => _switchMethod(m),
+              ),
+              if (m != methods.last) const SizedBox(width: 8),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Material(
       type: MaterialType.transparency,
       child: Container(
@@ -538,6 +627,27 @@ class _LockScreenState extends State<LockScreen> {
                   ),
                   child: Center(child: input),
                 ),
+                // Biometric button when code is primary input.
+                if (_hasBiometric && _hasCode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Material(
+                      color: Colors.white.withValues(alpha: .06),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _busy ? null : () => _tryBiometrics(),
+                        child: SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: Icon(Icons.fingerprint,
+                              size: 32,
+                              color: _busy ? Colors.white24 : accent),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (switcher != null) switcher,
                 const SizedBox(height: 28),
                 Text('TN',
                     style: TextStyle(
@@ -549,6 +659,30 @@ class _LockScreenState extends State<LockScreen> {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  Widget _methodChip({
+    required String label,
+    required bool active,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: active ? accent.withValues(alpha: .16) : Colors.white.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: active ? accent : Colors.white54)),
+        ),
       ),
     );
   }

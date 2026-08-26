@@ -18,7 +18,7 @@ class LockSettingsScreen extends StatefulWidget {
 class _LockSettingsScreenState extends State<LockSettingsScreen> {
   bool _enabled = false;
   bool _busy = false;
-  LockMethod _method = LockMethod.biometric;
+  Set<LockMethod> _methods = {};
   int _grace = 0;
   bool _biometricsOk = true;
 
@@ -30,13 +30,13 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
 
   Future<void> _load() async {
     final en = await AppLock.isEnabled();
-    final m = await AppLock.getMethod();
+    final m = await AppLock.getEnabledMethods();
     final g = await AppLock.getGraceMinutes();
     final bio = await AppLock.biometricsEnrolled;
     if (!mounted) return;
     setState(() {
       _enabled = en;
-      _method = m;
+      _methods = m;
       _grace = g;
       _biometricsOk = bio;
     });
@@ -59,28 +59,35 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     if (!ok) return;
     await AppLock.setEnabled(false);
     if (!mounted) return;
-    setState(() => _enabled = false);
+    setState(() {
+      _enabled = false;
+      _methods = {};
+    });
   }
 
   Future<bool> _verifyCurrent() async {
-    switch (_method) {
-      case LockMethod.biometric:
-        return AppLock.verifyAny(widget.model.tr);
-      case LockMethod.pin:
-        final code = await _promptCode(
-          title: tr('lock_enter_pin'),
-          pinMode: true,
-            );
-        if (code == null) return false;
-        return AppLock.verifyCode(code);
-      case LockMethod.pattern:
-        final code = await _promptCode(
-          title: tr('lock_draw_unlock'),
-          pinMode: false,
-            );
-        if (code == null) return false;
-        return AppLock.verifyCode(code);
+    // Try whichever method is currently active.
+    if (_methods.contains(LockMethod.biometric) && _biometricsOk) {
+      return AppLock.verifyAny(widget.model.tr);
     }
+    // For code methods, prompt for the one that's set.
+    if (_methods.contains(LockMethod.pattern)) {
+      final code = await _promptCode(
+        title: tr('lock_draw_unlock'),
+        pinMode: false,
+      );
+      if (code == null) return false;
+      return AppLock.verifyCode(code);
+    }
+    if (_methods.contains(LockMethod.pin)) {
+      final code = await _promptCode(
+        title: tr('lock_enter_pin'),
+        pinMode: true,
+      );
+      if (code == null) return false;
+      return AppLock.verifyCode(code);
+    }
+    return false;
   }
 
   Future<void> _enableWithBiometrics() async {
@@ -89,7 +96,8 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (!ok) return;
-    await AppLock.setMethod(LockMethod.biometric);
+    _methods.add(LockMethod.biometric);
+    await AppLock.setEnabledMethods(_methods);
     await AppLock.setEnabled(true);
     await _load();
     _toast(tr('lock_saved'));
@@ -123,7 +131,8 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     if (second == null) return;
 
     await AppLock.saveSecret(first);
-    await AppLock.setMethod(method);
+    _methods.add(method);
+    await AppLock.setEnabledMethods(_methods);
     await AppLock.setEnabled(true);
     await _load();
     if (mounted) _toast(tr('lock_saved'));
@@ -227,9 +236,6 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
               onTap: _busy ? null : () async {
                 if (_enabled) {
                   await _disable();
-                } else if (_method == LockMethod.biometric &&
-                    !_biometricsOk) {
-                  _toast(tr('lock_method_biometric_sub'));
                 }
               },
               borderRadius: BorderRadius.circular(12),
@@ -259,7 +265,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                         : (v) async {
                             if (v == _enabled) return;
                             if (v) {
-                              await _enableSelectedMethod();
+                              await _enableFirstAvailable();
                             } else {
                               await _disable();
                             }
@@ -271,29 +277,29 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
           ),
 
           _section(tr('lock_methods')),
-          _methodTile(
-            selected: _method == LockMethod.biometric,
+          _methodToggle(
+            selected: _methods.contains(LockMethod.biometric),
             icon: Icons.fingerprint,
             title: tr('lock_method_biometric'),
             subtitle: _biometricsOk
                 ? tr('lock_method_biometric_sub')
                 : tr('lock_failed'),
             enabled: _biometricsOk,
-            onTap: () => _selectMethod(LockMethod.biometric),
+            onTap: () => _toggleMethod(LockMethod.biometric),
           ),
-          _methodTile(
-            selected: _method == LockMethod.pattern,
+          _methodToggle(
+            selected: _methods.contains(LockMethod.pattern),
             icon: Icons.gesture,
             title: tr('lock_method_pattern'),
             subtitle: tr('lock_method_pattern_sub'),
-            onTap: () => _selectMethod(LockMethod.pattern),
+            onTap: () => _toggleMethod(LockMethod.pattern),
           ),
-          _methodTile(
-            selected: _method == LockMethod.pin,
+          _methodToggle(
+            selected: _methods.contains(LockMethod.pin),
             icon: Icons.dialpad,
             title: tr('lock_method_pin'),
             subtitle: tr('lock_method_pin_sub'),
-            onTap: () => _selectMethod(LockMethod.pin),
+            onTap: () => _toggleMethod(LockMethod.pin),
           ),
 
           _section(tr('lock_relock')),
@@ -328,30 +334,41 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
   }
 
 
-  Future<void> _enableSelectedMethod() async {
-    switch (_method) {
-      case LockMethod.biometric:
-        await _enableWithBiometrics();
-        break;
-      case LockMethod.pin:
-      case LockMethod.pattern:
-        await _setupCode(_method);
-        break;
+  /// Called by the master switch when turning ON — picks the first available
+  /// method and runs its setup.
+  Future<void> _enableFirstAvailable() async {
+    if (_biometricsOk) {
+      await _enableWithBiometrics();
+    } else {
+      await _setupCode(LockMethod.pin);
     }
   }
 
-  Future<void> _selectMethod(LockMethod m) async {
+  /// Toggle a method on/off. When enabling, runs setup. When disabling,
+  /// ensures at least one other method stays on.
+  Future<void> _toggleMethod(LockMethod m) async {
     if (_busy) return;
-    setState(() => _method = m);
-    await AppLock.setMethod(m);
-    // If the lock is already ON, switching method must immediately configure
-    // the new secret (or verify for biometrics).
-    if (_enabled) {
-      if (m == LockMethod.biometric && !_biometricsOk) {
-        _toast(tr('lock_method_biometric_sub'));
+
+    if (_methods.contains(m)) {
+      // Turning off — ensure at least one method remains.
+      if (_methods.length <= 1) {
+        _toast(tr('lock_last_method'));
         return;
       }
-      await _enableSelectedMethod();
+      _methods.remove(m);
+      await AppLock.setEnabledMethods(_methods);
+      await _load();
+    } else {
+      // Turning on — run setup flow.
+      switch (m) {
+        case LockMethod.biometric:
+          await _enableWithBiometrics();
+          break;
+        case LockMethod.pin:
+        case LockMethod.pattern:
+          await _setupCode(m);
+          break;
+      }
     }
   }
 
@@ -378,7 +395,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
         child: child,
       );
 
-  Widget _methodTile({
+  Widget _methodToggle({
     required bool selected,
     required IconData icon,
     required String title,
@@ -406,9 +423,11 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
                   color: enabled ? p.text : p.textFaint)),
           subtitle: Text(subtitle,
               style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-          trailing: selected
-              ? Icon(Icons.check_circle, size: 20, color: p.accent)
-              : null,
+          trailing: Icon(
+            selected ? Icons.check_box : Icons.check_box_outline_blank,
+            size: 22,
+            color: selected ? p.accent : p.textFaint,
+          ),
           onTap: onTap,
         ),
       );

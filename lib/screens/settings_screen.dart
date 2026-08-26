@@ -45,17 +45,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final v = await AppLock.isEnabled();
     var methodKey = 'biometric';
     if (v) {
-      switch (await AppLock.getMethod()) {
-        case LockMethod.pattern:
-          methodKey = 'pattern';
-          break;
-        case LockMethod.pin:
-          methodKey = 'pin';
-          break;
-        case LockMethod.biometric:
-          methodKey = 'biometric';
-          break;
-      }
+      final methods = await AppLock.getEnabledMethods();
+      final keys = <String>[];
+      if (methods.contains(LockMethod.biometric)) keys.add('biometric');
+      if (methods.contains(LockMethod.pattern)) keys.add('pattern');
+      if (methods.contains(LockMethod.pin)) keys.add('pin');
+      methodKey = keys.isEmpty ? 'biometric' : keys.join('+');
     }
     if (mounted) setState(() => _lockOn = v);
     if (mounted) setState(() => _methodKey = methodKey);
