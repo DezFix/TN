@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.2] - 2026-08-26
+
+- App lock: cascaded verification — biometrics first, then device PIN/pattern fallback; a failed fingerprint can no longer make the lock impossible to remove
+- New "About" section at the bottom of Settings: version, tagline, in-app changelog, manual "Check for updates" and ko-fi link
+
 ## [1.16.1] - 2026-08-26
 
 - Fixed garbled Russian/Ukrainian (and some German/Spanish/French) interface strings introduced in recent releases — all translations verified against a new audit script and regression tests

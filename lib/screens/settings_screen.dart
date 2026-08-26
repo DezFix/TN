@@ -1,11 +1,13 @@
-import 'dart:io' show Platform;
+﻿import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_lock.dart';
+import '../src/app_update.dart' show appBuildVersion;
 import '../src/app_model.dart';
+import 'about_screen.dart';
 import 'lock_settings_screen.dart';
 import '../src/dialogs.dart';
 import '../src/i18n.dart';
@@ -375,7 +377,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-           const SizedBox(height: 24),
+           const SizedBox(height: 12),
+
+          // About: version, changelog, manual update check, ko-fi.
+          _sectionLabel(tr('about_title'), p),
+          _card(
+            p,
+            child: InkWell(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => AboutScreen(model: model))),
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: p.textSoft),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('TN ' + appBuildVersion.replaceFirst('v', ''),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                        Text(tr('about_tagline'),
+                            style: TextStyle(fontSize: 11, color: p.textFaint)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: p.textFaint),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

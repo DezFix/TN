@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:async';
 import 'dart:math';
@@ -182,6 +182,34 @@ class AppLock {
     }
   }
 
+  /// Cascaded verification used everywhere a lock decision is made:
+  ///   1. strict biometrics,
+  ///   2. device credential fallback (PIN / pattern / password) — otherwise
+  ///      a user whose fingerprint stopped working could NEVER turn the
+  ///      lock off again,
+  ///   3. if the device has no screen protection at all, verification is
+  ///      impossible — allow through rather than brick the app.
+  static Future<bool> verifyAny(TrFn tr) async {
+    if (!supported) return true;
+    final secured = await _auth.isDeviceSupported();
+    if (!secured) return true;
+    if (await biometricsEnrolled) {
+      if (await unlockBiometrics(tr)) return true;
+    }
+    try {
+      return await _auth.authenticate(
+        localizedReason: tr('lock_title'),
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Whether any biometrics are actually enrolled — used to gray out the
   /// biometric option on devices without them.
   static Future<bool> get biometricsEnrolled async {
@@ -316,9 +344,7 @@ class _LockScreenState extends State<LockScreen> {
       _busy = true;
       _error = null;
     });
-    final ok = auto
-        ? await AppLock.unlockBiometrics(widget.tr)
-        : await AppLock.unlockBiometrics(widget.tr);
+    final ok = await AppLock.verifyAny(widget.tr);
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {

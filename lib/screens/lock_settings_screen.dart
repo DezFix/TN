@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../src/app_lock.dart';
 import '../src/app_model.dart';
@@ -65,7 +65,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
   Future<bool> _verifyCurrent() async {
     switch (_method) {
       case LockMethod.biometric:
-        return AppLock.unlockBiometrics(widget.model.tr);
+        return AppLock.verifyAny(widget.model.tr);
       case LockMethod.pin:
         final code = await _promptCode(
           title: tr('lock_enter_pin'),
@@ -85,7 +85,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
 
   Future<void> _enableWithBiometrics() async {
     setState(() => _busy = true);
-    final ok = await AppLock.unlockBiometrics(widget.model.tr);
+    final ok = await AppLock.verifyAny(widget.model.tr);
     if (!mounted) return;
     setState(() => _busy = false);
     if (!ok) return;
