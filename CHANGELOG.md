@@ -2,31 +2,32 @@
 
 All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
+Everything published here goes to GitHub in English only.
 
 ## [1.15.2] - 2026-08-26
 
-- Исправлено: «пакет повреждён» при обновлении — локальные сборки снова подписаны тем же ключом, что и релизы (одна подпись везде)
-- Установщик надёжнее: проверка целостности APK до установки, понятные ошибки вместо тишины, подсказка при конфликте подписи
+- Fixed: "package corrupted" during in-app updates — local builds are now signed with the same key as published releases (one signature everywhere)
+- Hardened installer: APK integrity verified before install, clear error messages instead of silent resets, reinstall hint on signing-key mismatch
 
 ## [1.15.1] - 2026-08-26
 
-- Исправлено: «Что нового» теперь приходит из этого файла — релизы CI снова с описанием
-- Обновление APK надёжнее: кандидаты на скачивание только .apk-файлы релиза
+- Fixed: the "What's new" dialog now gets its text from this file — CI releases have proper notes again
+- More reliable APK updates: only .apk assets are considered for download
 
 ## [1.15.0] - 2026-08-26
 
-- Шифрование бэкапов паролем (AES-256-GCM): локальные копии, Google Drive и Nextcloud
-- Биометрический замок приложения: отпечаток/Face/PIN при входе и после сворачивания
-- Undo удаления записей — снекбар «Вернуть» вместо подтверждений
-- Откладывание напоминаний (+10 мин / +1 час) прямо из уведомления
-- Менеджер #тегов и агенда ближайших задач на главном экране
-- Закреплённые записи вверху чата; поиск по «#тег»; экспорт чата в Markdown
+- Password-encrypted backups (AES-256-GCM): local copies, Google Drive and Nextcloud
+- Biometric app lock: fingerprint / face / device PIN on start and resume
+- Undo for deleted entries — an "Undo" snackbar instead of confirmation dialogs
+- Snooze reminders (+10 min / +1 hour) right from the notification
+- Tag manager and an agenda screen for upcoming tasks
+- Pinned entries at the top of chats; "#tag" search; Markdown chat export
 
 ## [1.14.0] - 2026-08-26
 
-- Виджет задач переосмыслен: шапка со счётчиком, карточки строк, красная точка просрочки
-- Звук галочки в виджете теперь на дорожке уведомлений (не перебивает музыку)
-- Windows: напоминания приходят собственным тостом в стиле Telegram с кнопками отложить
-- Пересылка сообщений больше не теряет дату повтора; медиа копируется при пересылке
-- Облачное восстановление объединяет данные (по updatedAt), а не затирает устройство
-- Ускорение чатов, проверка подписи обновления по SHA-256, PKCE для Google Drive
+- Redesigned tasks widget: header with a counter, card-style rows, red overdue dot
+- Widget check-off sound now plays on the notification stream (no longer interrupts music)
+- Windows: reminders arrive as own Telegram-style toast with snooze buttons
+- Forwarding no longer drops recurrence rules; media files are copied on forward
+- Cloud restore merges data by updatedAt instead of wiping the device
+- Faster chats, SHA-256 verified APK updates, PKCE for Google Drive
