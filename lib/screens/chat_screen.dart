@@ -1187,13 +1187,16 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (currentDay != null) children.add(pill(currentDay!));
 
-    // builder + reverse: index 0 is the BOTTOM (newest). Lazy building keeps
-    // long chats from materializing every row at once.
+    // builder + reverse: index 0 renders at the BOTTOM, and children[0] is
+    // the NEWEST row (entries iterate newest-first) — plain children[i] puts
+    // old messages on top and fresh ones arriving from the bottom edge.
+    // Lazy building keeps long chats from materializing every row at once.
     return ListView.builder(
+      controller: _listCtrl,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       itemCount: children.length,
-      itemBuilder: (ctx, i) => children[children.length - 1 - i],
+      itemBuilder: (ctx, i) => children[i],
     );
   }
 

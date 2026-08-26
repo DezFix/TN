@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.16.5] - 2026-08-26
+
+- Fixed inverted chat order — new messages appear at the BOTTOM again, old ones stack upward (a builder-index regression from the lazy-list change)
+- The scroll controller is now actually attached, so opening a chat and sending pins the view to the newest message
+- Removed the yellow underlines on the lock screen (it was drawn without a Material ancestor, so Flutter painted its debug fallback text style)
+
 ## [1.16.4] - 2026-08-26
 
 - One permanent release signing key generated and wired everywhere (local builds via android/key.properties, CI via updated secrets) — daily reinstalls caused by mismatched debug/local signatures are over

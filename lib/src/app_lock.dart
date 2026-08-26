@@ -414,14 +414,24 @@ class _LockScreenState extends State<LockScreen> {
         break;
     }
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF141B23), Color(0xFF1C232C), Color(0xFF22303D)],
+    // Material(transparency) is REQUIRED here: the gate replaces the whole
+    // app subtree, so without a Material ancestor Flutter paints its debug
+    // fallback style — yellow underlines under every label (seen on the
+    // pattern title and the TN wordmark).
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF141B23),
+              Color(0xFF1C232C),
+              Color(0xFF22303D)
+            ],
+          ),
         ),
-      ),
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -496,6 +506,7 @@ class _LockScreenState extends State<LockScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
