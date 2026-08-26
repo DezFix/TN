@@ -4,6 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.20.0] - 2026-08-26
+
+- Pin messages: long-press or right-click a message to pin it; pinned messages float to the top of the chat with a banner that shows the count, tap to jump to any pinned message or unpin it from the list
+- Pin icon now appears on pinned message bubbles so they're easy to spot
+- Drafts: unsent text is now saved automatically per chat and restored when you return; drafts clear on send
+- Enter key now inserts a newline instead of sending the message (Telegram-style)
+- Long-press send with date picker now only works in task chats (was also triggering in notes)
+- Settings lock subtitle correctly shows "Multiple methods" when more than one method is enabled
+
 ## [1.19.0] - 2026-08-26
 
 - Multi-lock: you can now enable several unlock methods at once (biometrics + pattern + PIN); the lock screen shows all active methods with a switcher, and settings use checkboxes so each method is configured independently
