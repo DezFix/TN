@@ -27,3 +27,4 @@ sdk_*.txt
 .DS_Store
 # Release binaries are built by CI, not committed
 dist/
+release-body.md
