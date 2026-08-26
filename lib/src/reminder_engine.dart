@@ -65,7 +65,7 @@ List<DueItem> collectDue({
     ));
   }
   for (final e in entries) {
-    if (e.type != 'todo' || e.dueAt == null) continue;
+    if (e.dueAt == null) continue;
     if (e.dueAt! > now || e.dueAt! < floor) continue;
     if (chatTrashed(e.chatId)) continue;
     add(DueItem(

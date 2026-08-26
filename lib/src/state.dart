@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,6 +67,13 @@ class AppState {
     final start =
         DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
     return start + 24 * 60 * 60 * 1000 - 1;
+  }
+
+  Chat? chatByRoomId(String roomId) {
+    for (final c in chats) {
+      if (c.p2pRoomId == roomId && !c.isTrashed) return c;
+    }
+    return null;
   }
 
   Chat? chatById(String id) {

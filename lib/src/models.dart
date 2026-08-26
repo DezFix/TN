@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 const storageKey = 'tn-notes-data-v1';
 const mediaDirName = 'tn_media';
@@ -90,6 +90,8 @@ class Chat {
     this.notificationSound,
     this.autoCollect,
     this.deletedAt,
+    this.p2pRoomId,
+    this.p2pRole,
   });
 
   final String id;
@@ -107,6 +109,11 @@ class Chat {
   AutoCollect? autoCollect;
   int? deletedAt; // millis when moved to trash; null = active
 
+  /// P2P shared chat (beta). roomId = hex of the invite's 8-byte id;
+  /// role = host | guest. The invite SECRET never lives here — only in prefs.
+  String? p2pRoomId;
+  String? p2pRole;
+
   bool get isTrashed => deletedAt != null;
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
@@ -123,6 +130,8 @@ class Chat {
         notificationsEnabled: j['notificationsEnabled'] as bool? ?? true,
         notificationSound: j['notificationSound'] as String?,
         deletedAt: (j['deletedAt'] as num?)?.toInt(),
+        p2pRoomId: j['p2pRoomId'] as String?,
+        p2pRole: j['p2pRole'] as String?,
         autoCollect: j['autoCollect'] == null
             ? null
             : AutoCollect.fromJson(j['autoCollect'] as Map<String, dynamic>),
@@ -142,6 +151,8 @@ class Chat {
         if (rssUrl != null) 'rssUrl': rssUrl,
         if (folderId != null) 'folderId': folderId,
         if (deletedAt != null) 'deletedAt': deletedAt,
+        if (p2pRoomId != null) 'p2pRoomId': p2pRoomId,
+        if (p2pRole != null) 'p2pRole': p2pRole,
         if (autoCollect != null) 'autoCollect': autoCollect!.toJson(),
       };
 }

@@ -23,6 +23,19 @@ object PendingShare {
     }
 }
 
+/// Widget row text-tap: chatId waiting for the Dart side.
+object PendingOpenChat {
+    @Volatile
+    var chatId: String? = null
+
+    @Synchronized
+    fun take(): String? {
+        val v = chatId
+        chatId = null
+        return v
+    }
+}
+
 // FlutterFragmentActivity (not FlutterActivity) — required by local_auth's
 // biometric prompt on Android.
 class MainActivity : FlutterFragmentActivity() {
@@ -38,6 +51,13 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine?.let { engine ->
                 MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
                     .invokeMethod("openSettings", null)
+            }
+        }
+        val chatId = intent.getStringExtra("open_chat")
+        if (!chatId.isNullOrEmpty()) {
+            flutterEngine?.let { engine ->
+                MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
+                    .invokeMethod("openChat", chatId)
             }
         }
         handleShareIntent(intent)?.let { share ->
@@ -56,6 +76,9 @@ class MainActivity : FlutterFragmentActivity() {
                     "update" -> {
                         TnDayWidgetProvider.updateAll(applicationContext)
                         result.success(null)
+                    }
+                    "getPendingOpenChat" -> {
+                        result.success(PendingOpenChat.take())
                     }
                     else -> result.notImplemented()
                 }
@@ -115,6 +138,9 @@ class MainActivity : FlutterFragmentActivity() {
             }
         // Cold start via a share action.
         intent?.let { handleShareIntent(it) }?.let { PendingShare.data = it.toMutableMap() }
+        // Cold start via widget text tap.
+        val openChatId = intent?.getStringExtra("open_chat")
+        if (!openChatId.isNullOrEmpty()) PendingOpenChat.chatId = openChatId
     }
 
     /** Extracts shared text/media into a map, copying streams to app storage. */

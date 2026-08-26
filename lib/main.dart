@@ -104,6 +104,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   bool _whatsNewChecked = false;
   bool _shareInWired = false;
   bool _showWelcome = false;
+  AppModel? _loadedModel;
+  Timer? _pendingOpenChatTimer;
 
   @override
   void initState() {
@@ -112,10 +114,33 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     WidgetBridge.onOpenSettings = () {
       _navKey.currentState?.pushNamed('/widget-settings');
     };
+    WidgetBridge.onOpenChat = (chatId) {
+      final m = _loadedModel;
+      if (m == null) return;
+      _navKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => ChatScreen(model: m, chatId: chatId),
+      ));
+    };
+    // Cold start: the app was launched by tapping a task text in the widget.
+    _pendingOpenChatCheck();
+  }
+
+  Future<void> _pendingOpenChatCheck() async {
+    _pendingOpenChatTimer = Timer(const Duration(milliseconds: 800), () async {
+      if (!mounted) return;
+      final chatId = await WidgetBridge.takePendingOpenChat();
+      if (chatId == null || !mounted) return;
+      final m = _loadedModel;
+      if (m == null) return;
+      _navKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => ChatScreen(model: m, chatId: chatId),
+      ));
+    });
   }
 
   @override
   void dispose() {
+    _pendingOpenChatTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -141,6 +166,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
           );
         }
         final model = snap.data!;
+        _loadedModel ??= model;
         return ListenableBuilder(
           listenable: model,
           builder: (context, _) {
@@ -189,8 +215,17 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
               themeMode: themeName == 'dark' ? ThemeMode.dark : ThemeMode.light,
               theme: buildTheme(pl, Brightness.light),
               darkTheme: buildTheme(pd, Brightness.dark),
-              builder: (context, child) =>
-                  LockGate(tr: model.tr, child: child ?? const SizedBox.shrink()),
+              builder: (context, child) {
+                // Show "What's New" ABOVE the lock gate so the changelog
+                // is visible even when the app is locked.
+                if (!_whatsNewChecked) {
+                  _whatsNewChecked = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    maybeShowWhatsNew(context, model);
+                  });
+                }
+                return LockGate(tr: model.tr, child: child ?? const SizedBox.shrink());
+              },
               routes: {
                 '/widget-settings': (_) => WidgetSettingsScreen(model: model),
               },
@@ -198,14 +233,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                 builder: (innerCtx) {
                   if (_showWelcome) {
                     return WelcomeScreen(model: model);
-                  }
-                  if (!_whatsNewChecked) {
-                    // Flag flips inside the callback — mutating state during
-                    // build is a no-no the analyzer rightly complains about.
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _whatsNewChecked = true;
-                      maybeShowWhatsNew(innerCtx, model);
-                    });
                   }
                   if (!_shareInWired) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {

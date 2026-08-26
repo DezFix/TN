@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
@@ -191,14 +192,6 @@ class _ListScreenState extends State<ListScreen> {
       _botOver = 0;
     }
     return false;
-  }
-
-  Future<void> _newFolder() async {
-    final result = await showFolderEditDialog(context, widget.model);
-    if (result == null) return;
-    widget.model.state.folders.add(result);
-    await widget.model.save();
-    if (mounted) setState(() {});
   }
 
   Future<void> _openSettings() async {
@@ -577,7 +570,11 @@ class _ListScreenState extends State<ListScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: SingleChildScrollView(
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+        ),
+        child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
@@ -629,15 +626,9 @@ class _ListScreenState extends State<ListScreen> {
                 );
               },
             ),
-            const SizedBox(width: 6),
-            chip(
-              label: tr('new_folder'),
-              icon: Icons.create_new_folder_outlined,
-              selected: false,
-              onTap: _newFolder,
-            ),
           ],
         ),
+      ),
       ),
     );
   }

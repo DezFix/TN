@@ -4,6 +4,16 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.18.0] - 2026-08-26
+
+- Samsung biometrics fix: combined prompt (biometric + device credential) is now tried first; the previous two-step cascade broke on OneUI; added a short delay before auto-prompt and cancel-on-dispose so the sheet never lingers
+- "What's New" dialog is no longer blocked by the lock screen — it appears above the lock gate so users see the changelog immediately after an update
+- Widget text tap now opens the relevant chat; only the checkbox toggles the task (previously the entire row was a toggle)
+- Long-press send now works in note chats too — creates a timed text entry that fires a notification at the chosen date/time but does NOT appear in the widget (tasks only)
+- Time presets in the schedule sheet: 07:00 / 09:00 / 12:00 / 13:00 / 15:00 / 17:00 / 19:00 / 21:00
+- Widget folder chips now scroll horizontally with a mouse on Windows
+- "New folder" chip removed from the list screen tab bar (it stays in Settings)
+
 ## [1.17.0] - 2026-08-26
 
 - Widget period rework: "All tasks" removed, "Week" replaced by "Upcoming" (overdue + today + tomorrow + day after tomorrow); legacy saved values migrate automatically

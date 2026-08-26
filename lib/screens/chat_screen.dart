@@ -234,17 +234,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Long-press send in tasks chats: create the task with an explicit
   /// due date/time instead of sending it undated.
+  /// In note chats: create a text entry with a reminder (notification only,
+  /// not shown in the widget).
   Future<void> _sendTextWithDate() async {
     final text = _text.text.trim();
     if (text.isEmpty || _pendingImagePath != null) return;
     HapticFeedback.mediumImpact();
     final sched = await _pickTaskSchedule();
+    if (sched.dueAt == null) return;
+    final isTasks = _chat.kind == 'tasks';
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
-      type: 'todo',
+      type: isTasks ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      items: [TodoItem(id: uid('t'), text: text)],
+      items: isTasks ? [TodoItem(id: uid('t'), text: text)] : null,
+      text: isTasks ? '' : text,
       tags: extractTags(text),
       dueAt: sched.dueAt,
       recurrence: sched.recurrence,
@@ -2044,9 +2049,7 @@ class _ChatScreenState extends State<ChatScreen> {
               final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
               return hasSomething
                   ? GestureDetector(
-                      onLongPressStart: _chat.kind == 'tasks'
-                          ? (d) => _sendTextWithDate()
-                          : null,
+                      onLongPressStart: (d) => _sendTextWithDate(),
                       child: IconButton.filled(
                         icon: const Icon(Icons.send, color: Colors.white),
                         style: IconButton.styleFrom(backgroundColor: p.accent),

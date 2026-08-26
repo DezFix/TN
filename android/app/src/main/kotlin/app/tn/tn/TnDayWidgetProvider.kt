@@ -51,6 +51,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
         private data class Row(
             val entryId: String,
             val itemId: String?,
+            val chatId: String,
             val title: String,
             val meta: String,
             val overdue: Boolean,
@@ -102,6 +103,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                         Row(
                             e.optString("id"),
                             it.optString("id"),
+                            chatId,
                             text.take(90),
                             meta(context, names[chatId] ?: "", time0),
                             overdue,
@@ -230,13 +232,23 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     .setClass(context, ToggleReceiver::class.java)
                     .putExtra(ToggleReceiver.EXTRA_ENTRY_ID, r.entryId)
                     .putExtra(ToggleReceiver.EXTRA_ITEM_ID, r.itemId)
-                val pi = PendingIntent.getBroadcast(
+                val togglePi = PendingIntent.getBroadcast(
                     context,
                     (r.entryId.hashCode() * 31 + (r.itemId?.hashCode() ?: 0)),
                     toggle,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                row.setOnClickPendingIntent(R.id.dr_root, pi)
+                row.setOnClickPendingIntent(R.id.dr_check, togglePi)
+                // Tap the text area → open the app on this chat.
+                val openChat = Intent(context, MainActivity::class.java)
+                    .putExtra("open_chat", r.chatId)
+                val openPi = PendingIntent.getActivity(
+                    context,
+                    (r.entryId.hashCode() * 17 + 7),
+                    openChat,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                row.setOnClickPendingIntent(R.id.dr_root, openPi)
                 rv.addView(R.id.dw_list, row)
             }
 

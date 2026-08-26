@@ -61,7 +61,7 @@ class AppModel extends ChangeNotifier {
       );
     }
     for (final e in state.entries) {
-      if (e.type != 'todo' || e.dueAt == null || e.dueAt! <= now) continue;
+      if (e.dueAt == null || e.dueAt! <= now) continue;
       final chat = state.chatById(e.chatId);
       if (chat == null || chat.isTrashed) continue;
       await RemindersService.instance.schedule(

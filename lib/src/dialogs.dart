@@ -950,6 +950,44 @@ Future<SchedulePick?> showScheduleSheet(
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final h in [7, 9, 12, 13, 15, 17, 19, 21])
+                  GestureDetector(
+                    onTap: () => setSheet(() {
+                      dt = DateTime(dt.year, dt.month, dt.day, h, 0);
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: dt.hour == h && dt.minute == 0
+                            ? p.accent.withValues(alpha: .18)
+                            : p.bgChat,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: dt.hour == h && dt.minute == 0
+                              ? p.accent
+                              : p.divider,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        '${two(h)}:00',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: dt.hour == h && dt.minute == 0
+                              ? p.accent
+                              : p.textSoft,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             if (rec != null) ...[
               const SizedBox(height: 8),
               Text(

@@ -183,31 +183,41 @@ class AppLock {
   }
 
   /// Cascaded verification used everywhere a lock decision is made:
-  ///   1. strict biometrics,
-  ///   2. device credential fallback (PIN / pattern / password) — otherwise
-  ///      a user whose fingerprint stopped working could NEVER turn the
-  ///      lock off again,
+  ///   1. combined prompt (biometric + device credential on one sheet —
+  ///      most reliable on Samsung/OneUI where two consecutive prompts break),
+  ///   2. strict biometric retry if the combined sheet was cancelled but
+  ///      a fingerprint IS enrolled (edge case: user dismissed PIN fallback),
   ///   3. if the device has no screen protection at all, verification is
   ///      impossible — allow through rather than brick the app.
   static Future<bool> verifyAny(TrFn tr) async {
     if (!supported) return true;
     final secured = await _auth.isDeviceSupported();
     if (!secured) return true;
-    if (await biometricsEnrolled) {
-      if (await unlockBiometrics(tr)) return true;
-    }
+
+    // Try combined prompt first (shows biometric + "use PIN" in one sheet).
     try {
-      return await _auth.authenticate(
+      if (await _auth.authenticate(
         localizedReason: tr('lock_title'),
         options: const AuthenticationOptions(
           biometricOnly: false,
           stickyAuth: true,
           useErrorDialogs: true,
         ),
-      );
-    } catch (_) {
-      return false;
+      )) return true;
+    } catch (_) {}
+
+    // If combined failed AND biometrics are enrolled, retry strict-only
+    // (handles rare OEMs where the combined sheet silently drops biometrics).
+    if (await biometricsEnrolled) {
+      if (await unlockBiometrics(tr)) return true;
     }
+    return false;
+  }
+
+  /// Cancels any in-progress biometric prompt (fixes Samsung where the
+  /// sheet lingers after the widget is disposed).
+  static void cancelAuth() {
+    try { _auth.stopAuthentication(); } catch (_) {}
   }
 
   /// Whether any biometrics are actually enrolled — used to gray out the
@@ -328,9 +338,21 @@ class _LockScreenState extends State<LockScreen> {
       if (!mounted) return;
       setState(() => _method = m);
       if (m == LockMethod.biometric) {
+        // Delay the auto-prompt so the widget tree is fully built and the
+        // activity is in the resumed state — fixes Samsung/OneUI where the
+        // biometric sheet attaches to a half-ready window and the result
+        // is silently lost.
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (!mounted) return;
         await _tryBiometrics(auto: true);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    AppLock.cancelAuth();
+    super.dispose();
   }
 
   Future<void> _success() async {
