@@ -915,6 +915,149 @@ class _ChatScreenState extends State<ChatScreen> {
     ));
   }
 
+  // ---------------- pinned banner ----------------
+
+  List<Entry> _pinnedEntries() =>
+      widget.model.state.entries.where((e) => e.chatId == widget.chatId && e.pinned).toList()
+        ..sort((a, b) => b.ts.compareTo(a.ts));
+
+  Widget _buildPinnedBanner() {
+    final pinned = _pinnedEntries();
+    if (pinned.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: p.accent.withValues(alpha: .08),
+      child: InkWell(
+        onTap: () => _showPinnedSheet(pinned),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            children: [
+              Icon(Icons.push_pin, size: 16, color: p.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.model.tr('pinned_count', [pinned.length.toString()]),
+                  style: TextStyle(fontSize: 13, color: p.accent, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 18, color: p.accent),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPinnedSheet(List<Entry> pinned) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: p.bgChat,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: .4,
+        minChildSize: .2,
+        maxChildSize: .7,
+        expand: false,
+        builder: (ctx, scrollCtrl) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: p.textFaint.withValues(alpha: .3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.push_pin, size: 18, color: p.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.model.tr('pinned_count', [pinned.length.toString()]),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.text),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: p.bubbleBorder),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                itemCount: pinned.length,
+                itemBuilder: (_, i) {
+                  final e = pinned[i];
+                  final preview = e.type == 'todo'
+                      ? (e.items?.map((t) => t.text).join(', ') ?? '')
+                      : e.text;
+                  return ListTile(
+                    leading: Icon(
+                      e.type == 'todo' ? Icons.check_circle_outline : Icons.article_outlined,
+                      size: 20,
+                      color: p.textSoft,
+                    ),
+                    title: Text(
+                      preview,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, color: p.text),
+                    ),
+                    subtitle: Text(
+                      _timeWithEdited(e),
+                      style: TextStyle(fontSize: 11, color: p.textFaint),
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(Icons.close, size: 18, color: p.textSoft),
+                      onPressed: () async {
+                        e.pinned = false;
+                        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+                        await widget.model.save();
+                        if (mounted) setState(() {});
+                        if (ctx.mounted) {
+                          final remaining = _pinnedEntries();
+                          if (remaining.isEmpty) {
+                            Navigator.pop(ctx);
+                          } else {
+                            Navigator.pop(ctx);
+                            _showPinnedSheet(remaining);
+                          }
+                        }
+                      },
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _jumpToEntry(e.id);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _jumpToEntry(String entryId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final ctx = _bubbleContexts[entryId];
+      if (ctx == null) return;
+      await Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          alignment: .3);
+      _highlightId = entryId;
+      if (mounted) setState(() {});
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted && _highlightId == entryId) setState(() => _highlightId = null);
+    });
+  }
+
   // ---------------- build ----------------
 
   @override
@@ -949,6 +1092,7 @@ class _ChatScreenState extends State<ChatScreen> {
               Column(
                 children: [
                   _buildTopbar(chat),
+                  _buildPinnedBanner(),
                   Expanded(child: _buildMessages(model)),
                   _buildComposer(),
                 ],
@@ -1266,7 +1410,25 @@ class _ChatScreenState extends State<ChatScreen> {
           bottomRight: Radius.circular(3),
         ),
       ),
-      child: content,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          content,
+          if (entry.pinned)
+            Positioned(
+              top: -4,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: p.bgChat,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.push_pin, size: 12, color: p.accent),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
