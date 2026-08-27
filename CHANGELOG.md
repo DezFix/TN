@@ -4,7 +4,14 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
-## [1.20.2] - 2026-08-27
+## [1.20.3] - 2026-08-27
+
+- Fix: existing pattern/PIN lock settings now migrate correctly after update (no more lockout)
+- Fix: Windows snooze from toast notifications now works
+- Fix: memory leak from gesture recognizers in message links
+- Fix: audio progress bar no longer shows wrong duration when switching tracks
+- Fix: task completion sound now uses notification volume (not media)
+- Fix: biometric failure in lock settings now falls back to code prompt
 
 - Fix: pinned messages no longer move to the top — they stay in their original position with a pin icon
 
