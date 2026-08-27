@@ -13,6 +13,11 @@ Everything published here goes to GitHub in English only.
 - Widgets & secondary screens (Agenda/Trash/Settings) now use the same card + section spec as the main list
 - Theme: Material 3 AppBar/Card/Chip/Input themes wired, predictive-back transitions on Android
 
+## [1.21.2] - 2026-08-27
+
+- Task chats: long-pressing the send button opens a list editor where you can type a parent task with several subtasks at once
+- Task chats: tap on send still opens the schedule sheet (due time + priority)
+
 ## [1.21.1] - 2026-08-27
 
 - Task chats: pressing the send button now opens the schedule sheet, where you can pick the task priority (Normal / Important / Urgent) right below the time presets — so every task typed in the chat gets its importance

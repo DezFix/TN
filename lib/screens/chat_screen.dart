@@ -302,6 +302,29 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.model.save();
   }
 
+  /// Long-press send in tasks chats: open a list editor where several
+  /// subtasks (parent + nested) can be typed at once. Creates one todo
+  /// entry carrying that whole tree.
+  Future<void> _addSubtaskGroup() async {
+    if (_pendingImagePath != null) return;
+    HapticFeedback.mediumImpact();
+    final items = await showTodoEditorDialog(context, widget.model);
+    if (!mounted || items == null || items.isEmpty) return;
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: 'todo',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: '',
+      items: items,
+    );
+    widget.model.state.entries.add(entry);
+    _text.clear();
+    _clearDraft();
+    if (mounted) setState(() {});
+    widget.model.save();
+  }
+
   Future<void> _pickImage() async {
     try {
       final file = await _imagePicker.pickImage(source: ImageSource.gallery);
@@ -2292,7 +2315,7 @@ class _ChatScreenState extends State<ChatScreen> {
               return hasSomething
                   ? GestureDetector(
                       onLongPressStart: _chat.kind == 'tasks'
-                          ? (d) => _sendTextWithDate()
+                          ? (d) => _addSubtaskGroup()
                           : null,
                       child: IconButton.filled(
                         icon: const Icon(Icons.send, color: Colors.white),
