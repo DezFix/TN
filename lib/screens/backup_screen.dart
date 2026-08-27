@@ -137,52 +137,56 @@ class _BackupScreenState extends State<BackupScreen> {
                     onPressed: _importLocal,
                   ),
                 ),
-                const SizedBox(height: 14),
-                Text(tr('bk_encrypt'),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                        color: p.textFaint)),
-                const SizedBox(height: 6),
+                Divider(height: 24, color: p.divider.withValues(alpha: 0.5)),
                 Row(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _encCtrl,
-                        obscureText: !_showEnc,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        style: TextStyle(color: p.text, fontSize: 13.5),
-                        onChanged: (v) {
-                          unawaited(BackupService.setPassword(v.trim()));
-                          setState(() {});
-                        },
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: tr('bk_pass_field'),
-                          hintStyle: TextStyle(color: p.textFaint, fontSize: 12.5),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: _encCtrl.text.isEmpty ? p.divider : p.accent)),
-                          focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: p.accent)),
-                          suffixIcon: IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: Icon(_showEnc ? Icons.visibility_off : Icons.visibility,
-                                size: 18, color: p.textFaint),
-                            onPressed: () => setState(() => _showEnc = !_showEnc),
-                          ),
-                        ),
-                      ),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.lock_outline_rounded, size: 16, color: p.accent),
                     ),
+                    const SizedBox(width: 10),
+                    Text(tr('bk_encrypt'),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _encCtrl,
+                  obscureText: !_showEnc,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: TextStyle(color: p.text, fontSize: 13.5),
+                  onChanged: (v) {
+                    unawaited(BackupService.setPassword(v.trim()));
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: p.bgList,
+                    isDense: true,
+                    hintText: tr('bk_pass_field'),
+                    hintStyle: TextStyle(color: p.textFaint, fontSize: 12.5),
+                    prefixIcon: Icon(Icons.key_rounded, size: 18, color: p.textFaint),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(TNRadii.md),
+                        borderSide: BorderSide(color: _encCtrl.text.isEmpty ? p.divider.withValues(alpha: 0.5) : p.accent)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(TNRadii.md),
+                        borderSide: BorderSide(color: p.accent, width: 1.4)),
+                    suffixIcon: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(_showEnc ? Icons.visibility_off : Icons.visibility,
+                          size: 18, color: p.textFaint),
+                      onPressed: () => setState(() => _showEnc = !_showEnc),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(tr('bk_encrypt_hint'),
-                    style: TextStyle(fontSize: 11, color: p.textFaint)),
-                const SizedBox(height: 14),
+                    style: TextStyle(fontSize: 11, color: p.textFaint, height: 1.4)),
+                Divider(height: 24, color: p.divider.withValues(alpha: 0.5)),
                 Row(
                   children: [
                     Container(
@@ -275,35 +279,48 @@ class _BackupScreenState extends State<BackupScreen> {
                 const SizedBox(height: 4),
                 Text(tr('bk_max_hint'),
                     style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-                const SizedBox(height: 14),
-                Text(tr('bk_folder'),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                        color: p.textFaint)),
-                const SizedBox(height: 6),
+                Divider(height: 24, color: p.divider.withValues(alpha: 0.5)),
                 Row(
                   children: [
-                    Icon(Icons.folder_outlined, size: 18, color: p.textSoft),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _dir ?? tr('bk_folder_default'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.textSoft),
-                      ),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.folder_outlined, size: 16, color: p.accent),
                     ),
-                    TextButton(
-                      onPressed: _pickFolder,
-                      child: Text(tr('bk_choose')),
-                    ),
+                    const SizedBox(width: 10),
+                    Text(tr('bk_folder'),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(TNRadii.md), border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder_outlined, size: 18, color: p.textSoft),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _dir ?? tr('bk_folder_default'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12.5, color: p.textSoft),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), minimumSize: Size.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.md))),
+                        onPressed: _pickFolder,
+                        child: Text(tr('bk_choose'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(tr('backup_local_hint'),
-                    style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                    style: TextStyle(fontSize: 11.5, color: p.textFaint, height: 1.4)),
               ],
             ),
           ),
