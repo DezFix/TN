@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.20.2] - 2026-08-27
+
+- Fix: pinned messages no longer move to the top — they stay in their original position with a pin icon
+
 ## [1.20.1] - 2026-08-26
 
 - Fix: setting a PIN code no longer breaks the pattern lock — secrets are now stored per method
