@@ -208,11 +208,13 @@ class _TrashScreenState extends State<TrashScreen> {
         ? _formatDeletedAgo(DateTime.now().millisecondsSinceEpoch - chat.deletedAt!)
         : '';
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: p.bgChat,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(TNRadii.md),
+        border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+        boxShadow: p.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,19 +269,18 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   Widget _sectionLabel(String label, Palette p) => Padding(
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
+        padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
         child: Text(label,
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: p.textFaint)),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: p.textFaint)),
       );
 
   Widget _card(Palette p, {required Widget child}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: p.bgChat,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(TNRadii.md),
+          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+          boxShadow: p.cardShadow,
         ),
         child: child,
       );

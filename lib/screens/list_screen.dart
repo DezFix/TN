@@ -239,26 +239,40 @@ class _ListScreenState extends State<ListScreen> {
                     child: TextField(
                       controller: _search,
                       onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-                      style: TextStyle(color: p.text),
+                      style: TextStyle(color: p.text, fontSize: 14.5),
                       decoration: InputDecoration(
                         hintText: tr('search_hint'),
-                        hintStyle: TextStyle(color: p.textFaint),
-                        prefixIcon: Icon(Icons.search, color: p.textFaint, size: 22),
+                        hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
+                        prefixIcon: Icon(Icons.search_rounded, color: p.textFaint, size: 20),
                         filled: true,
                         fillColor: p.bgChat,
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 13),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(TNRadii.lg),
                           borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(TNRadii.lg),
+                          borderSide: BorderSide(color: p.accent.withValues(alpha: 0.35), width: 1.2),
                         ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.settings, color: p.textSoft),
-                    tooltip: tr('settings'),
-                    onPressed: _openSettings,
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: p.bgChat,
+                      borderRadius: BorderRadius.circular(TNRadii.lg),
+                      border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.tune_rounded, color: p.textSoft, size: 20),
+                      tooltip: tr('settings'),
+                      onPressed: _openSettings,
+                    ),
                   ),
                 ],
                       ),
@@ -275,10 +289,15 @@ class _ListScreenState extends State<ListScreen> {
         curve: Curves.easeOutCubic,
         child: IgnorePointer(
           ignoring: _q.isNotEmpty || _selecting,
-          child: FloatingActionButton(
+          child: FloatingActionButton.extended(
             backgroundColor: p.accent,
+            foregroundColor: Colors.white,
+            elevation: 3,
+            highlightElevation: 6,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.lg)),
             onPressed: _newChat,
-            child: const Icon(Icons.edit, color: Colors.white),
+            icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+            label: Text(tr('new_chat'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.white)),
           ),
         ),
       ),
@@ -287,13 +306,13 @@ class _ListScreenState extends State<ListScreen> {
 
   Widget _buildChats(AppModel model, Palette p, String Function(String, [List<String>?]) tr) {
     if (model.state.chats.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(tr('no_chats'),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: p.textFaint, height: 1.5)),
-        ),
+      return tnEmptyState(
+        p: p,
+        icon: Icons.chat_bubble_outline_rounded,
+        title: tr('no_chats').split('\n').first,
+        subtitle: tr('no_chats').contains('\n') ? tr('no_chats').split('\n').last : tr('chat_hint'),
+        actionLabel: tr('new_chat'),
+        onAction: _newChat,
       );
     }
 
@@ -389,40 +408,56 @@ class _ListScreenState extends State<ListScreen> {
 
   Widget _buildArchiveHeader(AppModel model, Palette p,
       String Function(String, [List<String>?]) tr, int count) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _showArchive = !_showArchive);
-        if (_showArchive && _listCtrl.hasClients) {
-          _listCtrl.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: p.bgChat,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(_showArchive ? Icons.archive : Icons.archive_outlined,
-                size: 20, color: p.accent),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text('${tr('archive')} · $count',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: p.text)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      child: Material(
+        color: p.bgChat,
+        borderRadius: BorderRadius.circular(TNRadii.md),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(TNRadii.md),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _showArchive = !_showArchive);
+            if (_showArchive && _listCtrl.hasClients) {
+              _listCtrl.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(TNRadii.md),
+              border: Border.all(color: p.divider.withValues(alpha: 0.45)),
             ),
-            Icon(
-                _showArchive
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
-                size: 20,
-                color: p.textFaint),
-          ],
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), shape: BoxShape.circle),
+                  child: Icon(_showArchive ? Icons.archive_rounded : Icons.archive_outlined,
+                      size: 18, color: p.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${tr('archive')} · $count',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+                      Text(_showArchive ? tr('tap_to_edit') : tr('archive'),
+                          style: TextStyle(fontSize: 11, color: p.textFaint)),
+                    ],
+                  ),
+                ),
+                Icon(
+                    _showArchive
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: 22,
+                    color: p.textFaint),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -491,40 +526,48 @@ class _ListScreenState extends State<ListScreen> {
     final allArchived =
         model.state.chats.any((c) => _sel.contains(c.id) && !c.archived) ==
             false;
-    return Row(
-      children: [
-        IconButton(
-          icon: Icon(Icons.close, color: p.textSoft),
-          onPressed: () => setState(() => _sel.clear()),
-        ),
-        Expanded(
-          child: Text(tr('selected', ['${_sel.length}']),
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.text)),
-        ),
-        IconButton(
-          icon: Icon(Icons.push_pin_outlined, color: p.textSoft),
-          tooltip: tr('pin'),
-          onPressed: _bulkPin,
-        ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => _bulkFolder(d.globalPosition),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Icon(Icons.drive_file_move_outline, size: 24, color: p.textSoft),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: p.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(TNRadii.md),
+        border: Border.all(color: p.accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.close_rounded, color: p.accent),
+            onPressed: () => setState(() => _sel.clear()),
           ),
-        ),
-        IconButton(
-          icon: Icon(allArchived ? Icons.unarchive : Icons.archive_outlined,
-              color: p.textSoft),
-          tooltip: tr(allArchived ? 'from_archive' : 'to_archive'),
-          onPressed: () => _bulkArchive(!allArchived),
-        ),
-        IconButton(
-          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-          onPressed: _bulkDelete,
-        ),
-      ],
+          Expanded(
+            child: Text(tr('selected', ['${_sel.length}']),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
+          ),
+          IconButton(
+            icon: Icon(Icons.push_pin_outlined, color: p.textSoft),
+            tooltip: tr('pin'),
+            onPressed: _bulkPin,
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (d) => _bulkFolder(d.globalPosition),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(Icons.drive_file_move_outline, size: 24, color: p.textSoft),
+            ),
+          ),
+          IconButton(
+            icon: Icon(allArchived ? Icons.unarchive : Icons.archive_outlined,
+                color: p.textSoft),
+            tooltip: tr(allArchived ? 'from_archive' : 'to_archive'),
+            onPressed: () => _bulkArchive(!allArchived),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: _bulkDelete,
+          ),
+        ],
+      ),
     );
   }
 
@@ -537,30 +580,36 @@ class _ListScreenState extends State<ListScreen> {
       IconData? icon,
       Widget? trailing,
     }) =>
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: selected ? p.accent : p.bgChat,
-              borderRadius: BorderRadius.circular(18),
-              border: selected ? null : Border.all(color: p.divider.withValues(alpha: 0.6)),
+        AnimatedContainer(
+          duration: TNDuration.fast,
+          child: Material(
+            color: selected ? p.accent : p.bgChat,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(TNRadii.pill),
+              side: BorderSide(color: selected ? p.accent : p.divider.withValues(alpha: 0.5)),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 15, color: selected ? Colors.white : (iconColor ?? p.textSoft)),
-                  const SizedBox(width: 5),
-                ],
-                Text(label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                      color: selected ? Colors.white : p.textSoft,
-                    )),
-                if (trailing != null) ...[const SizedBox(width: 4), trailing],
-              ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(TNRadii.pill),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 15, color: selected ? Colors.white : (iconColor ?? p.textSoft)),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? Colors.white : p.textSoft,
+                        )),
+                    if (trailing != null) ...[const SizedBox(width: 4), trailing],
+                  ],
+                ),
+              ),
             ),
           ),
         );

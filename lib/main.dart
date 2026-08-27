@@ -186,20 +186,75 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                     onError: Colors.white,
                     surface: p.bgList,
                     onSurface: p.text,
+                    surfaceContainerHighest: p.bgChat,
+                    outline: p.divider,
+                    outlineVariant: p.divider.withValues(alpha: 0.5),
                   ),
                   scaffoldBackgroundColor: p.bgList,
-                  pageTransitionsTheme: PageTransitionsTheme(
+                  appBarTheme: AppBarTheme(
+                    backgroundColor: p.bgList,
+                    foregroundColor: p.text,
+                    elevation: 0,
+                    scrolledUnderElevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                    centerTitle: false,
+                    titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.text),
+                    iconTheme: IconThemeData(color: p.textSoft),
+                  ),
+                  cardTheme: CardThemeData(
+                    color: p.bgChat,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.md),
+                      side: BorderSide(color: p.divider.withValues(alpha: 0.45)),
+                    ),
+                    margin: EdgeInsets.zero,
+                  ),
+                  chipTheme: ChipThemeData(
+                    backgroundColor: p.bgChat,
+                    selectedColor: p.accent,
+                    disabledColor: p.bgChat,
+                    labelStyle: TextStyle(fontSize: 13, color: p.textSoft),
+                    secondaryLabelStyle: const TextStyle(fontSize: 13, color: Colors.white),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.pill)),
+                    side: BorderSide(color: p.divider.withValues(alpha: 0.6)),
+                  ),
+                  inputDecorationTheme: InputDecorationTheme(
+                    filled: true,
+                    fillColor: p.bgChat,
+                    hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.md),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.md),
+                      borderSide: BorderSide(color: p.accent, width: 1.4),
+                    ),
+                  ),
+                  pageTransitionsTheme: const PageTransitionsTheme(
                     builders: {
-                      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                      TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
                       TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
                     },
                   ),
                   snackBarTheme: SnackBarThemeData(
                     backgroundColor: p.bgChat,
                     contentTextStyle: TextStyle(color: p.text),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.md)),
+                    behavior: SnackBarBehavior.floating,
                   ),
-                  dialogTheme: DialogThemeData(backgroundColor: p.modalBg),
-                  bottomSheetTheme: BottomSheetThemeData(backgroundColor: p.modalBg),
+                  dialogTheme: DialogThemeData(
+                    backgroundColor: p.modalBg,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.lg)),
+                  ),
+                  bottomSheetTheme: BottomSheetThemeData(
+                    backgroundColor: p.modalBg,
+                    shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(TNRadii.sheet))),
+                  ),
+                  dividerTheme: DividerThemeData(color: p.divider.withValues(alpha: 0.6), thickness: 1),
                 );
             return MaterialApp(
               title: 'TN',

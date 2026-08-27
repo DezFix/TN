@@ -16,14 +16,25 @@ class ChatAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final letter = chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?';
+    final bg = _hex(chat.color);
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: _hex(chat.color), shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: bg,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: bg.withValues(alpha: 0.22),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       alignment: Alignment.center,
       child: chat.icon != null && chat.icon!.isNotEmpty
           ? Text(chat.icon!, style: TextStyle(fontSize: iconSize))
-          : Text(letter, style: TextStyle(fontSize: iconSize, color: Colors.white, fontWeight: FontWeight.w700)),
+          : Text(letter, style: TextStyle(fontSize: iconSize * 0.72, color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.2)),
     );
   }
 }
@@ -38,9 +49,13 @@ class DayPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(10)),
-        child: Text(label, style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: p.bgChat,
+          borderRadius: BorderRadius.circular(TNRadii.pill),
+          border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.textFaint, letterSpacing: 0.2)),
       ),
     );
   }
@@ -74,7 +89,7 @@ class ChatRow extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           child: Row(
             children: [
               ChatAvatar(chat: chat),
@@ -86,26 +101,37 @@ class ChatRow extends StatelessWidget {
                     Row(
                       children: [
                         if (chat.pinned) ...[
-                          Icon(Icons.push_pin, size: 13, color: p.textFaint),
-                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), shape: BoxShape.circle),
+                            child: Icon(Icons.push_pin, size: 10, color: p.accent),
+                          ),
+                          const SizedBox(width: 6),
                         ],
                         Text(chatKinds.firstWhere((k) => k.$1 == chat.kind, orElse: () => ('note', '📝')).$2, style: const TextStyle(fontSize: 13)),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 5),
                         Expanded(
                           child: Text(chat.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: p.text)),
+                              style: TNTypography.chatTitle.copyWith(color: p.text)),
                         ),
                         if (time.isNotEmpty)
-                          Text(time, style: TextStyle(fontSize: 11, color: p.textFaint)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: p.bgChat,
+                              borderRadius: BorderRadius.circular(TNRadii.pill),
+                            ),
+                            child: Text(time, style: TNTypography.time.copyWith(color: p.textFaint)),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(preview,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, color: p.textSoft)),
+                        style: TNTypography.chatPreview.copyWith(color: p.textSoft)),
                   ],
                 ),
               ),
@@ -138,7 +164,7 @@ class SearchResultRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           child: Row(
             children: [
               ChatAvatar(chat: chat, size: 38, iconSize: 18),
@@ -151,14 +177,15 @@ class SearchResultRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.text)),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(snippet,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.textSoft)),
+                        style: TextStyle(fontSize: 12.5, color: p.textSoft, height: 1.3)),
                   ],
                 ),
               ),
+              Icon(Icons.chevron_right, size: 16, color: p.textFaint.withValues(alpha: 0.6)),
             ],
           ),
         ),

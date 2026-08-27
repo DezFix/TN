@@ -103,15 +103,16 @@ class AgendaScreen extends StatelessWidget {
     final items = e.items ?? const <TodoItem>[];
     final chat = model.state.chatById(e.chatId);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: p.bgChat,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(TNRadii.md),
         border: Border.all(
             color: overdue
                 ? p.danger.withValues(alpha: .45)
-                : Colors.transparent),
+                : p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+        boxShadow: p.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
