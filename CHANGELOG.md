@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.23.2] - 2026-08-28
+
+- Rebaked the 1.23.1 release with the official signing key so existing installs update cleanly (previous build used a different key)
+
 ## [1.23.1] - 2026-08-28
 
 - Fix: updating from beta `1.23.0-beta.*` to stable `1.23.0` inside the app now works (version compare treated `1.23.0-beta` == `1.23.0` — fixed to treat stable as newer)
