@@ -745,7 +745,9 @@ class SchedulePick {
   final String? recurrence;
   final List<int>? recurrenceDays;
   final int? monthDay;
-  const SchedulePick({this.dueAt, this.recurrence, this.recurrenceDays, this.monthDay});
+  final int priority;
+  const SchedulePick(
+      {this.dueAt, this.recurrence, this.recurrenceDays, this.monthDay, this.priority = 0});
 }
 
 /// Aligns the first occurrence of a recurring rule with the chosen days.
@@ -786,6 +788,8 @@ Future<SchedulePick?> showScheduleSheet(
   String? initialRecurrence,
   List<int>? initialRecurrenceDays,
   int? initialMonthDay,
+  int initialPriority = 0,
+  bool showPriority = false,
 }) {
   final p = model.p;
   final tr = model.tr;
@@ -795,6 +799,7 @@ Future<SchedulePick?> showScheduleSheet(
   String? rec = initialRecurrence;
   List<int> days = List.of(initialRecurrenceDays ?? const <int>[]);
   int md = initialMonthDay ?? dt.day;
+  var priority = initialPriority;
 
   bool sel(String v) {
     switch (v) {
@@ -1003,6 +1008,38 @@ Future<SchedulePick?> showScheduleSheet(
                 style: TextStyle(fontSize: 11.5, color: p.textFaint),
               ),
             ],
+            if (showPriority) ...[
+              const SizedBox(height: 14),
+              Text(tr('priority'),
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: p.textFaint,
+                      letterSpacing: 0.6)),
+              const SizedBox(height: 8),
+              Row(children: [
+                for (final pr in [0, 1, 2])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      selected: priority == pr,
+                      onSelected: (_) => setSheet(() => priority = pr),
+                      label: Text(tr('priority_$pr'),
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              color: priority == pr ? Colors.white : p.textSoft,
+                              fontWeight: FontWeight.w600)),
+                      selectedColor: p.priority(pr),
+                      backgroundColor: p.bgChat,
+                      checkmarkColor: Colors.white,
+                      side: BorderSide(
+                          color: priority == pr ? p.priority(pr) : p.divider),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+              ]),
+            ],
             const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -1023,13 +1060,14 @@ Future<SchedulePick?> showScheduleSheet(
                         recurrence: rec,
                         recurrenceDays: rec == 'weekly' ? List.of(days) : null,
                         monthDay: rec == 'monthly' ? md : null,
+                        priority: priority,
                       ),
                     );
                   },
                    child: Text(tr('todo_done')),
                  ),
                ],
-             ),
+              ),
            ],
          ),
        ),

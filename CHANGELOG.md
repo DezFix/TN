@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.21.1] - 2026-08-27
+
+- Task chats: pressing the send button now opens the schedule sheet, where you can pick the task priority (Normal / Important / Urgent) right below the time presets — so every task typed in the chat gets its importance
+
 ## [1.21.0] - 2026-08-27
 
 - Task importance: each task now has a priority profile (Normal / Important / Urgent) — pick it when creating or editing a task, a small colored dot marks it in the chat

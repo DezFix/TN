@@ -241,15 +241,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
-  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays, int? monthDay})>
+  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays, int? monthDay, int priority})>
       _pickTaskSchedule() async {
-    if (!mounted) return (dueAt: null, recurrence: null, recurrenceDays: null, monthDay: null);
-    final res = await showScheduleSheet(context, widget.model);
+    if (!mounted) {
+      return (dueAt: null, recurrence: null, recurrenceDays: null, monthDay: null, priority: 0);
+    }
+    final res = await showScheduleSheet(context, widget.model, showPriority: true);
     return (
       dueAt: res?.dueAt,
       recurrence: res?.recurrence,
       recurrenceDays: res?.recurrenceDays,
       monthDay: res?.monthDay,
+      priority: res?.priority ?? 0,
     );
   }
 
@@ -267,10 +270,10 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Long-press send in tasks chats: create the task with an explicit
-  /// due date/time instead of sending it undated.
-  /// In note chats: create a text entry with a reminder (notification only,
-  /// not shown in the widget).
+  /// Task-chat send: opens the schedule sheet (with a priority picker below
+  /// the time presets) and creates the task with the chosen due time,
+  /// recurrence and priority. In note chats it creates a text entry with a
+  /// reminder (notification only, not shown in the widget).
   Future<void> _sendTextWithDate() async {
     final text = _text.text.trim();
     if (text.isEmpty || _pendingImagePath != null) return;
@@ -283,7 +286,7 @@ class _ChatScreenState extends State<ChatScreen> {
       chatId: widget.chatId,
       type: isTasks ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      items: isTasks ? [TodoItem(id: uid('t'), text: text)] : null,
+      items: isTasks ? [TodoItem(id: uid('t'), text: text, priority: sched.priority)] : null,
       text: isTasks ? '' : text,
       tags: extractTags(text),
       dueAt: sched.dueAt,
@@ -412,6 +415,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _submitComposer() async {
     if (_pendingImagePath != null) {
       await _sendPendingImage();
+      return;
+    }
+    if (_chat.kind == 'tasks') {
+      await _sendTextWithDate();
       return;
     }
     await _sendText();
