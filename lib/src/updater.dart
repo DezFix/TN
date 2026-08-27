@@ -14,9 +14,10 @@ class Updater {
   static String lastError = '';
 
   /// Numeric compare of "vX.Y.Z" tags against the installed version.
-  /// Pre-release suffixes ("1.2.3-beta") are ignored, missing components
-  /// count as 0, and any non-equal component decides (no equal → false).
+  /// Pre-release suffixes ("1.2.3-beta") are handled: same numeric version
+  /// but tag is stable and current is pre-release → stable is newer.
   static bool isNewerTag(String tag, String current) {
+    bool isPre(String s) => s.contains('-');
     List<int> parse(String s) => s
         .replaceFirst(RegExp('^v'), '')
         .split('.')
@@ -28,6 +29,8 @@ class Updater {
       final y = i < b.length ? b[i] : 0;
       if (x != y) return x > y;
     }
+    // Numeric equal → stable > pre-release.
+    if (isPre(current) && !isPre(tag)) return true;
     return false;
   }
 
