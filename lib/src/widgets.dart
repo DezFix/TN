@@ -150,12 +150,14 @@ class SearchResultRow extends StatelessWidget {
     required this.p,
     required this.snippet,
     required this.onTap,
+    this.query,
   });
 
   final Chat chat;
   final Palette p;
   final String snippet;
   final VoidCallback onTap;
+  final String? query;
 
   @override
   Widget build(BuildContext context) {
@@ -173,15 +175,9 @@ class SearchResultRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(chat.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.text)),
+                    _highlightedText(chat.name, query, TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.text), p.accent),
                     const SizedBox(height: 3),
-                    Text(snippet,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.textSoft, height: 1.3)),
+                    _highlightedText(snippet, query, TextStyle(fontSize: 12.5, color: p.textSoft, height: 1.3), p.accent),
                   ],
                 ),
               ),
@@ -189,6 +185,26 @@ class SearchResultRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _highlightedText(String text, String? q, TextStyle style, Color hl) {
+    if (q == null || q.isEmpty) return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    final low = text.toLowerCase();
+    final qlow = q.toLowerCase();
+    final idx = low.indexOf(qlow);
+    if (idx < 0) return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: style,
+        children: [
+          if (idx > 0) TextSpan(text: text.substring(0, idx)),
+          TextSpan(text: text.substring(idx, idx + q.length), style: TextStyle(backgroundColor: hl.withValues(alpha: 0.18), color: hl, fontWeight: FontWeight.w700)),
+          if (idx + q.length < text.length) TextSpan(text: text.substring(idx + q.length)),
+        ],
       ),
     );
   }

@@ -183,50 +183,94 @@ class _BackupScreenState extends State<BackupScreen> {
                 Text(tr('bk_encrypt_hint'),
                     style: TextStyle(fontSize: 11, color: p.textFaint)),
                 const SizedBox(height: 14),
-                Text(tr('bk_freq'),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                        color: p.textFaint)),
-                Slider(
-                  value: _daysIdx.toDouble(),
-                  min: 0,
-                  max: 4,
-                  divisions: 4,
-                  label: _daysLabel(_daysIdx),
-                  activeColor: p.accent,
-                  onChanged: (v) => setState(() => _daysIdx = v.round()),
-                  onChangeEnd: (v) async =>
-                      await BackupService.setDays(_daysValues[v.round()]),
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.schedule_outlined, size: 16, color: p.accent),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(tr('bk_freq'),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(TNRadii.pill)),
+                      child: Text(_daysLabel(_daysIdx),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent)),
+                    ),
+                  ],
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(_daysLabel(_daysIdx),
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textSoft)),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderThemeData(
+                    activeTrackColor: p.accent,
+                    inactiveTrackColor: p.divider.withValues(alpha: 0.35),
+                    thumbColor: p.accent,
+                    overlayColor: p.accent.withValues(alpha: 0.14),
+                    valueIndicatorColor: p.accent,
+                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                    showValueIndicator: ShowValueIndicator.always,
+                  ),
+                  child: Slider(
+                    value: _daysIdx.toDouble(),
+                    min: 0,
+                    max: 4,
+                    divisions: 4,
+                    label: _daysLabel(_daysIdx),
+                    onChanged: (v) => setState(() => _daysIdx = v.round()),
+                    onChangeEnd: (v) async => await BackupService.setDays(_daysValues[v.round()]),
+                  ),
                 ),
-                const SizedBox(height: 14),
-                Text(tr('bk_max'),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                        color: p.textFaint)),
-                Slider(
-                  value: _maxIdx.toDouble(),
-                  min: 0,
-                  max: 2,
-                  divisions: 2,
-                  label: '${_maxValues[_maxIdx]}',
-                  activeColor: p.accent,
-                  onChanged: (v) => setState(() => _maxIdx = v.round()),
-                  onChangeEnd: (v) async =>
-                      await BackupService.setMaxBackups(_maxValues[v.round()]),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(Icons.filter_none_rounded, size: 16, color: p.accent),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(tr('bk_max'),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(TNRadii.pill), border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+                      child: Text('${_maxValues[_maxIdx]}',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSoft)),
+                    ),
+                  ],
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text('${_maxValues[_maxIdx]}',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textSoft)),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderThemeData(
+                    activeTrackColor: p.accent,
+                    inactiveTrackColor: p.divider.withValues(alpha: 0.35),
+                    thumbColor: p.accent,
+                    overlayColor: p.accent.withValues(alpha: 0.14),
+                    valueIndicatorColor: p.accent,
+                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                    showValueIndicator: ShowValueIndicator.always,
+                  ),
+                  child: Slider(
+                    value: _maxIdx.toDouble(),
+                    min: 0,
+                    max: 2,
+                    divisions: 2,
+                    label: '${_maxValues[_maxIdx]}',
+                    onChanged: (v) => setState(() => _maxIdx = v.round()),
+                    onChangeEnd: (v) async => await BackupService.setMaxBackups(_maxValues[v.round()]),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(tr('bk_max_hint'),
@@ -502,20 +546,18 @@ class _BackupScreenState extends State<BackupScreen> {
   // ---------------- nextcloud ----------------
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.fromLTRB(6, 18, 6, 8),
+        padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
         child: Text(title,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: p.textFaint)),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: p.textFaint)),
       );
 
   Widget _card({required Widget child}) => Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: p.bgChat,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(TNRadii.md),
+          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+          boxShadow: p.cardShadow,
         ),
         child: child,
       );

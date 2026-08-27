@@ -10,7 +10,7 @@ import '../src/theme.dart';
 
 /// Agenda: every undone todo with a deadline, grouped by day — today first,
 /// then the coming days. Items toggle right here, mirroring the chat.
-class AgendaScreen extends StatelessWidget {
+class AgendaScreen extends StatefulWidget {
   const AgendaScreen({super.key, required this.model});
 
   final AppModel model;
@@ -38,6 +38,13 @@ class AgendaScreen extends StatelessWidget {
         out.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
   }
 
+  @override
+  State<AgendaScreen> createState() => _AgendaScreenState();
+}
+
+class _AgendaScreenState extends State<AgendaScreen> {
+  String _filter = 'all'; // all | overdue | today | week | high
+
   String _dayLabel(int dayMs, String Function(String, [List<String>?]) tr) {
     final dt = DateTime.fromMillisecondsSinceEpoch(dayMs);
     final now = DateTime.now();
@@ -52,9 +59,33 @@ class AgendaScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = model.p;
-    final tr = model.tr;
-    final groups = groupByDay(model.state, DateTime.now());
+    final p = widget.model.p;
+    final tr = widget.model.tr;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final allGroups = AgendaScreen.groupByDay(widget.model.state, DateTime.now());
+    // Apply filter
+    final filtered = <int, List<Entry>>{};
+    for (final entry in allGroups.entries) {
+      final list = entry.value.where((e) {
+        final overdue = e.dueAt! < nowMs;
+        final isToday = entry.key == DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).millisecondsSinceEpoch;
+        final isWeek = entry.key <= DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+        final isHigh = (e.items ?? const <TodoItem>[]).any((i) => i.priority == 2 && !i.done);
+        switch (_filter) {
+          case 'overdue':
+            return overdue;
+          case 'today':
+            return isToday;
+          case 'week':
+            return isWeek;
+          case 'high':
+            return isHigh;
+          default:
+            return true;
+        }
+      }).toList();
+      if (list.isNotEmpty) filtered[entry.key] = list;
+    }
 
     return Scaffold(
       backgroundColor: p.bgList,
@@ -70,29 +101,59 @@ class AgendaScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: groups.isEmpty
-          ? Center(
-              child: Text(tr('nothing_found'),
-                  style: TextStyle(fontSize: 13.5, color: p.textFaint)),
-            )
-          : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: [
-                for (final entry in groups.entries) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
-                    child: Text(_dayLabel(entry.key, tr),
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: .3,
-                            color: p.textFaint)),
+      body: Column(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(children: [
+              for (final f in [
+                ('all', tr('widget_all')),
+                ('overdue', tr('overdue') == 'overdue' ? 'Overdue' : 'Просрочено'),
+                ('today', tr('today')),
+                ('week', 'Week'),
+                ('high', tr('priority_2')),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(f.$2),
+                    selected: _filter == f.$1,
+                    onSelected: (_) => setState(() => _filter = f.$1),
+                    selectedColor: p.accent,
+                    backgroundColor: p.bgChat,
+                    labelStyle: TextStyle(fontSize: 13, color: _filter == f.$1 ? Colors.white : p.textSoft, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.pill), side: BorderSide(color: _filter == f.$1 ? p.accent : p.divider)),
                   ),
-                  for (final e in entry.value)
-                    _taskCard(context, p, tr, e),
-                ],
-              ],
-            ),
+                ),
+            ]),
+          ),
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: tnEmptyState(p: p, icon: Icons.event_available_outlined, title: tr('nothing_found'), subtitle: 'Try another filter'),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    children: [
+                      for (final entry in filtered.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
+                          child: Text(_dayLabel(entry.key, tr),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: .3,
+                                  color: p.textFaint)),
+                        ),
+                        for (final e in entry.value)
+                          _taskCard(context, p, tr, e),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -101,7 +162,7 @@ class AgendaScreen extends StatelessWidget {
     final overdue =
         e.dueAt! < DateTime.now().millisecondsSinceEpoch;
     final items = e.items ?? const <TodoItem>[];
-    final chat = model.state.chatById(e.chatId);
+    final chat = widget.model.state.chatById(e.chatId);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -118,7 +179,7 @@ class AgendaScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.schedule,
+            Icon(overdue ? Icons.warning_amber_rounded : Icons.schedule,
                 size: 13,
                 color: overdue ? p.danger : p.accent),
             const SizedBox(width: 5),
@@ -137,7 +198,7 @@ class AgendaScreen extends StatelessWidget {
               ),
             ],
           ]),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           for (final it in items)
             InkWell(
               borderRadius: BorderRadius.circular(6),
@@ -172,6 +233,13 @@ class AgendaScreen extends StatelessWidget {
                                 : null,
                             decorationColor: p.textFaint)),
                   ),
+                  if (it.priority > 0)
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(left: 6),
+                      decoration: BoxDecoration(color: p.priority(it.priority), shape: BoxShape.circle),
+                    ),
                 ]),
               ),
             ),
@@ -184,7 +252,8 @@ class AgendaScreen extends StatelessWidget {
     toggleTodoCascade(e.items ??= <TodoItem>[], it.id);
     e.updatedAt = DateTime.now().millisecondsSinceEpoch;
     if (it.done) unawaited(Sounds.taskDone());
-    await model.save();
-    model.refresh();
+    await widget.model.save();
+    widget.model.refresh();
+    if (mounted) setState(() {});
   }
 }

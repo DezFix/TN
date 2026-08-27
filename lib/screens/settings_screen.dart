@@ -127,6 +127,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 4),
           Text(tr('chat_hint'),
               style: TextStyle(fontSize: 12, color: p.textFaint)),
+          _sectionLabel('MATERIAL YOU', p),
+          _card(
+            p,
+            child: Row(
+              children: [
+                Icon(Icons.palette_outlined, color: p.accent, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Dynamic Color', style: TextStyle(fontSize: 14.5, color: p.text, fontWeight: FontWeight.w600)),
+                    Text('Android 12+ берёт цвет из обоев', style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                  ]),
+                ),
+                Switch(
+                  value: false,
+                  activeThumbColor: p.accent,
+                  onChanged: (v) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(v ? 'Dynamic Color вкл — перезапусти приложение' : 'Dynamic Color выкл'), backgroundColor: p.bgChat));
+                  },
+                ),
+              ],
+            ),
+          ),
           _sectionLabel(tr('section_language'), p),
           _card(
             p,
