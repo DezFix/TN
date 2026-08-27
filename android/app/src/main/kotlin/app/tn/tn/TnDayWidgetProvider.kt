@@ -56,6 +56,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val meta: String,
             val overdue: Boolean,
             val ts: Long,
+            val priority: Int,
         )
 
         private fun loadRows(context: Context): List<Row> {
@@ -108,6 +109,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                             meta(context, names[chatId] ?: "", time0),
                             overdue,
                             time0,
+                            it.optInt("priority", 0),
                         )
                     )
                 }
@@ -129,19 +131,28 @@ class TnDayWidgetProvider : AppWidgetProvider() {
         private fun endOfUpcomingMillis(): Long = startOfTodayMillis() + 3 * 24 * 60 * 60 * 1000L - 1
 
         /** Widget strings follow the IN-APP language, not the system one. */
-        private data class Ws(val title: String, val empty: String, val overdue: String)
+        private data class Ws(
+            val title: String, val empty: String, val overdue: String,
+            val secOverdue: String, val secToday: String, val secTomorrow: String, val secLater: String
+        )
 
         private fun widgetStrings(context: Context): Ws {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
             if (lang.isNullOrEmpty()) lang = Locale.getDefault().language
             return when (lang.take(2).lowercase(Locale.ROOT)) {
-                "ru" -> Ws("Задачи", "Пока ничего нет", "просрочено")
-                "uk" -> Ws("Завдання", "Поки нічого немає", "прострочено")
-                "de" -> Ws("Aufgaben", "Noch nichts hier", "überfällig")
-                "es" -> Ws("Tareas", "Aún no hay nada", "vencido")
-                "fr" -> Ws("Tâches", "Rien pour le moment", "en retard")
-                else -> Ws("Tasks", "Nothing here yet", "overdue")
+                "ru" -> Ws("Задачи", "Пока ничего нет", "просрочено",
+                    "Просрочено", "Сегодня", "Завтра", "Позже")
+                "uk" -> Ws("Завдання", "Поки нічого немає", "прострочено",
+                    "Прострочено", "Сьогодні", "Завтра", "Пізніше")
+                "de" -> Ws("Aufgaben", "Noch nichts hier", "überfällig",
+                    "Überfällig", "Heute", "Morgen", "Später")
+                "es" -> Ws("Tareas", "Aún no hay nada", "vencido",
+                    "Vencido", "Hoy", "Mañana", "Más tarde")
+                "fr" -> Ws("Tâches", "Rien pour le moment", "en retard",
+                    "En retard", "Aujourd'hui", "Demain", "Plus tard")
+                else -> Ws("Tasks", "Nothing here yet", "overdue",
+                    "Overdue", "Today", "Tomorrow", "Later")
             }
         }
         /** Time + optional chat name for a row's meta line. */
@@ -149,6 +160,19 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val h = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
             return if (chatName.isEmpty()) h
             else "$h · $chatName"
+        }
+
+        /** Section bucket title for a due timestamp, or null when none applies. */
+        private fun sectionLabel(context: Context, ws: Ws, due: Long): String? {
+            val now = System.currentTimeMillis()
+            val startToday = startOfTodayMillis()
+            return when {
+                due != 0L && due < now -> ws.secOverdue
+                due in startToday until (startToday + 24 * 60 * 60 * 1000L) -> ws.secToday
+                due in (startToday + 24 * 60 * 60 * 1000L) until (startToday + 2 * 24 * 60 * 60 * 1000L) -> ws.secTomorrow
+                due != 0L -> ws.secLater
+                else -> null
+            }
         }
 
         private fun buildViews(context: Context): RemoteViews {
@@ -211,7 +235,17 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             } catch (_: Exception) {
             }
 
+            var lastSection: String? = null
             for (r in rows) {
+                // Insert a section header when the due-date bucket changes.
+                val section = sectionLabel(context, ws, r.ts)
+                if (section != null && section != lastSection) {
+                    val header = RemoteViews(context.packageName, R.layout.tn_day_section)
+                    header.setTextViewText(R.id.ds_label, section)
+                    header.setFloat(R.id.ds_label, "setTextSize", 10f * fontScale)
+                    rv.addView(R.id.dw_list, header)
+                    lastSection = section
+                }
                 val row = RemoteViews(context.packageName, R.layout.tn_day_row)
                 row.setTextViewText(R.id.dr_title, r.title)
                 row.setTextViewText(R.id.dr_meta, r.meta)
@@ -226,6 +260,12 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     R.id.dr_dot,
                     if (r.overdue) android.view.View.VISIBLE else android.view.View.GONE
                 )
+                // Priority-colored frame (subtle but visible) on the row.
+                when (r.priority) {
+                    2 -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg_high)
+                    1 -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg_med)
+                    else -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg)
+                }
                 row.setViewVisibility(R.id.dr_check, android.view.View.VISIBLE)
                 row.setInt(R.id.dr_check, "setImageResource", R.drawable.ic_dw_check_off)
                 val toggle = Intent(ToggleReceiver.ACTION_TOGGLE)

@@ -158,7 +158,7 @@ class Chat {
 }
 
 class TodoItem {
-  TodoItem({required this.id, required this.text, this.done = false, this.parentId});
+  TodoItem({required this.id, required this.text, this.done = false, this.parentId, this.priority = 0});
 
   final String id;
   String text;
@@ -167,11 +167,15 @@ class TodoItem {
   /// Non-null when this item is a subtask of another item in the same entry.
   String? parentId;
 
+  /// Task importance profile: 0 = normal, 1 = medium, 2 = high.
+  int priority;
+
   factory TodoItem.fromJson(Map<String, dynamic> j) => TodoItem(
         id: j['id'] as String? ?? '',
         text: j['text'] as String? ?? '',
         done: j['done'] as bool? ?? false,
         parentId: j['pid'] as String?,
+        priority: (j['priority'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -179,6 +183,7 @@ class TodoItem {
         'text': text,
         'done': done,
         if (parentId != null) 'pid': parentId,
+        if (priority != 0) 'priority': priority,
       };
 }
 
@@ -284,7 +289,11 @@ class Entry {
         waveform: waveform == null ? null : List.of(waveform!),
         items: items
             ?.map((i) => TodoItem(
-                id: i.id, text: i.text, done: i.done, parentId: i.parentId))
+                id: i.id,
+                text: i.text,
+                done: i.done,
+                parentId: i.parentId,
+                priority: i.priority))
             .toList(),
         dueAt: dueAt,
         recurrence: recurrence,

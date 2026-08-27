@@ -190,18 +190,34 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     // Mirrors the native widget layout (tn_day_widget.xml): dark rounded
     // card, header pill with count badge + gear, task rows as inner cards.
     Widget row(String time, String chat, String text,
-        {bool overdue = false}) {
+        {bool overdue = false, int priority = 0}) {
       final color = overdue ? const Color(0xFFFF6B6B) : const Color(0xFFEAECEF);
+      final priColor = switch (priority) {
+        1 => const Color(0xFFF0B429),
+        2 => const Color(0xFFF07575),
+        _ => const Color(0xFF6BCE6F),
+      };
       return Container(
         margin: const EdgeInsets.only(top: 4),
         padding: const EdgeInsets.fromLTRB(9, 7, 10, 7),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(10),
+          border: priority == 0
+              ? null
+              : Border.all(color: priColor.withValues(alpha: .45), width: 1),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            if (priority > 0) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: priColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 7),
+            ],
             Container(
               width: 18,
               height: 18,
@@ -293,8 +309,10 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          row('09:30', model.tr('dw_period_today'), 'Купить кофе', overdue: true),
-          row('12:00', model.tr('today'), 'Позвонить маме'),
+          Text(model.tr('today'),
+              style: TextStyle(fontSize: 10 * _font, fontWeight: FontWeight.w700, color: const Color(0xFF8A9BA8))),
+          row('09:30', model.tr('dw_period_today'), 'Купить кофе', overdue: true, priority: 2),
+          row('12:00', model.tr('today'), 'Позвонить маме', priority: 1),
           row('18:45', model.tr('tags_title'), '#идеи записать мысль'),
         ],
       ),

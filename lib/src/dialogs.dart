@@ -359,8 +359,12 @@ Future<List<TodoItem>?> showTodoEditorDialog(
   final tr = model.tr;
   final items = <TodoItem>[
     if (entry != null)
-      ...entry.items!.map((i) =>
-          TodoItem(id: i.id, text: i.text, done: i.done, parentId: i.parentId)),
+      ...entry.items!.map((i) => TodoItem(
+          id: i.id,
+          text: i.text,
+          done: i.done,
+          parentId: i.parentId,
+          priority: i.priority)),
   ];
   final field = TextEditingController();
   String? addUnder;

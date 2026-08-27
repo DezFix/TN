@@ -17,6 +17,9 @@ class Palette {
     required this.danger,
     required this.rowActive,
     required this.modalBg,
+    required this.priLow,
+    required this.priMed,
+    required this.priHigh,
   });
 
   final String name;
@@ -34,6 +37,16 @@ class Palette {
   final Color danger;
   final Color rowActive;
   final Color modalBg;
+  final Color priLow;
+  final Color priMed;
+  final Color priHigh;
+
+  /// Color for the given task priority profile (0 = normal, 1 = medium, 2 = high).
+  Color priority(int p) => switch (p) {
+        1 => priMed,
+        2 => priHigh,
+        _ => priLow,
+      };
 }
 
 const lightPalette = Palette(
@@ -52,6 +65,9 @@ const lightPalette = Palette(
   danger: Color(0xFFE05353),
   rowActive: Color(0xFFF5F7F9),
   modalBg: Color(0xFFFFFFFF),
+  priLow: Color(0xFF4CAF50),
+  priMed: Color(0xFFF5A623),
+  priHigh: Color(0xFFE24A4A),
 );
 
 const darkPalette = Palette(
@@ -70,6 +86,9 @@ const darkPalette = Palette(
   danger: Color(0xFFF07575),
   rowActive: Color(0xFF28313C),
   modalBg: Color(0xFF262E39),
+  priLow: Color(0xFF6BCE6F),
+  priMed: Color(0xFFF0B429),
+  priHigh: Color(0xFFF07575),
 );
 
 Palette paletteFor(String theme) => theme == 'dark' ? darkPalette : lightPalette;

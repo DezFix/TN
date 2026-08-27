@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.21.0] - 2026-08-27
+
+- Task importance: each task now has a priority profile (Normal / Important / Urgent) — pick it when creating or editing a task, a small colored dot marks it in the chat
+- Home-screen widget now groups tasks into Overdue / Today / Tomorrow / Later sections
+- Home-screen widget task rows get a subtle colored frame matching their importance
+- Welcome screen now asks for microphone permission so voice notes work right away
+
 ## [1.20.3] - 2026-08-27
 
 - Fix: existing pattern/PIN lock settings now migrate correctly after update (no more lockout)

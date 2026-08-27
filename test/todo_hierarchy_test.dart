@@ -18,6 +18,21 @@ void main() {
     test('toJson omits pid for roots', () {
       expect(TodoItem(id: 'a', text: 'x').toJson().containsKey('pid'), isFalse);
     });
+
+    test('priority json round-trips', () {
+      final restored =
+          TodoItem.fromJson(TodoItem(id: 't', text: 'x', priority: 2).toJson());
+      expect(restored.priority, 2);
+    });
+
+    test('legacy json without priority defaults to normal', () {
+      final restored = TodoItem.fromJson({'id': 't', 'text': 'x'});
+      expect(restored.priority, 0);
+    });
+
+    test('toJson omits priority when normal', () {
+      expect(TodoItem(id: 'a', text: 'x').toJson().containsKey('priority'), isFalse);
+    });
   });
 
   group('toggleTodoCascade', () {

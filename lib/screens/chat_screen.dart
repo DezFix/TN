@@ -1929,6 +1929,18 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (item.priority > 0 && !isSub)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, right: 4),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: item.done ? p.textFaint.withValues(alpha: .4) : p.priority(item.priority),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
           InkWell(
             customBorder: const CircleBorder(),
             onTap: () => _toggleTodoItem(model, entry, item),
@@ -2001,12 +2013,13 @@ class _ChatScreenState extends State<ChatScreen> {
   /// [parentId] starts a new subtask under that parent.
   Future<void> _showTaskItemSheet(AppModel model, Entry entry, {TodoItem? item, String? parentId}) async {
     final ctrl = TextEditingController(text: item?.text ?? '');
+    var priority = item?.priority ?? 0;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: p.modalBg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => SafeArea(
         top: false,
         child: Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
@@ -2034,6 +2047,24 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 12),
             Row(children: [
+              Text(model.tr('priority'), style: TextStyle(fontSize: 12, color: p.textSoft, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              for (final pr in [0, 1, 2])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    selected: priority == pr,
+                    onSelected: (_) => setSheetState(() => priority = pr),
+                    label: Text(model.tr('priority_$pr'), style: TextStyle(fontSize: 12, color: priority == pr ? Colors.white : p.text)),
+                    selectedColor: p.priority(pr),
+                    backgroundColor: p.bgChat,
+                    visualDensity: VisualDensity.compact,
+                    showCheckmark: false,
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            Row(children: [
               if (item != null)
                 TextButton.icon(
                   onPressed: () => Navigator.pop(ctx, 'delete'),
@@ -2052,7 +2083,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
-      ),
+      )),
     );
     if (action == null) return;
     final items = entry.items ?? <TodoItem>[];
@@ -2063,8 +2094,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (text.isEmpty) return;
       if (item != null) {
         item.text = text;
+        item.priority = priority;
       } else {
-        items.insert(_insertAfterSubtree(items, parentId), TodoItem(id: uid('t'), text: text, parentId: parentId));
+        items.insert(_insertAfterSubtree(items, parentId), TodoItem(id: uid('t'), text: text, parentId: parentId, priority: priority));
       }
     }
     await model.save();

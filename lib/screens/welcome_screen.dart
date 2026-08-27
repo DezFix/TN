@@ -1,6 +1,8 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import '../src/app_model.dart';
 import '../src/backup.dart';
 import '../src/backup_crypto.dart';
@@ -8,6 +10,8 @@ import '../src/i18n.dart';
 import '../src/reminders.dart';
 import '../src/theme.dart';
 import 'list_screen.dart';
+
+final _welRecorder = AudioRecorder();
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key, required this.model});
@@ -22,6 +26,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   String _theme = 'dark';
   bool _notifOk = false;
   bool _alarmsOk = false;
+  bool _micOk = false;
 
   @override
   void initState() {
@@ -31,11 +36,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _theme = widget.model.state.theme;
     if (_theme != 'light' && _theme != 'dark') _theme = 'dark';
     _checkPerms();
+    _checkMic();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _welRecorder.dispose();
     super.dispose();
   }
 
@@ -63,6 +70,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Future<void> _grantAlarms() async {
     await RemindersService.instance.requestExactAlarmsPermissionPage();
     await _checkPerms();
+  }
+
+  Future<void> _checkMic() async {
+    if (!Platform.isAndroid) return;
+    bool ok;
+    try {
+      ok = await _welRecorder.hasPermission();
+    } catch (_) {
+      ok = false;
+    }
+    if (!mounted) return;
+    setState(() => _micOk = ok);
+  }
+
+  Future<void> _grantMic() async {
+    await _checkMic();
   }
 
   Future<void> _finish() async {
@@ -261,6 +284,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 granted: _alarmsOk,
                 grantLabel: tr('perm_grant'),
                 onGrant: _grantAlarms,
+              ),
+              const SizedBox(height: 8),
+              _permCard(
+                p,
+                icon: Icons.mic_none_outlined,
+                title: tr('perm_mic'),
+                desc: tr('perm_mic_desc'),
+                granted: _micOk,
+                grantLabel: tr('perm_grant'),
+                onGrant: _grantMic,
               ),
               if (!_notifOk || !_alarmsOk) ...[
                 const SizedBox(height: 8),
