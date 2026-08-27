@@ -9,7 +9,7 @@ import 'package:tn/src/app_update.dart';
 void main() {
   test('appBuildVersion matches pubspec.yaml version', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    final m = RegExp(r'^version:\s*(\d+\.\d+\.\d+)\+', multiLine: true)
+    final m = RegExp(r'^version:\s*([^\s\+]+)\+', multiLine: true)
         .firstMatch(pubspec);
     expect(m, isNotNull, reason: 'pubspec.yaml must declare a version');
     expect(appBuildVersion, m!.group(1),

@@ -426,19 +426,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _sectionLabel(String label, Palette p) => Padding(
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
+        padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
         child: Text(label,
             style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
                 color: p.textFaint)),
       );
 
   Widget _card(Palette p, {required Widget child}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: p.bgChat,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(TNRadii.md),
+          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+          boxShadow: p.cardShadow,
         ),
         child: child,
       );

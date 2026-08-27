@@ -302,6 +302,29 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.model.save();
   }
 
+  /// Long-press send in tasks chats: open a list editor where several
+  /// subtasks (parent + nested) can be typed at once. Creates one todo
+  /// entry carrying that whole tree.
+  Future<void> _addSubtaskGroup() async {
+    if (_pendingImagePath != null) return;
+    HapticFeedback.mediumImpact();
+    final items = await showTodoEditorDialog(context, widget.model);
+    if (!mounted || items == null || items.isEmpty) return;
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: 'todo',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: '',
+      items: items,
+    );
+    widget.model.state.entries.add(entry);
+    _text.clear();
+    _clearDraft();
+    if (mounted) setState(() {});
+    widget.model.save();
+  }
+
   Future<void> _pickImage() async {
     try {
       final file = await _imagePicker.pickImage(source: ImageSource.gallery);
@@ -1406,6 +1429,30 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // Unified bubble metrics — every message type shares one radius/shadow spec.
+  BoxDecoration _bubbleDeco({bool overdue = false, bool highlight = false}) => BoxDecoration(
+        color: p.bubbleOwn,
+        border: Border.all(
+          color: highlight
+              ? p.accent
+              : overdue
+                  ? p.danger.withValues(alpha: 0.45)
+                  : p.bubbleBorder,
+          width: highlight || overdue ? 1.4 : 1,
+        ),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(TNRadii.bubble),
+          topRight: Radius.circular(TNRadii.bubble),
+          bottomLeft: Radius.circular(TNRadii.bubble),
+          bottomRight: Radius.circular(3),
+        ),
+        boxShadow: p.isDark
+            ? []
+            : [
+                BoxShadow(color: const Color(0x0A0F1721), blurRadius: 8, offset: const Offset(0, 1)),
+              ],
+      );
+
   Widget _buildBubble(AppModel model, Entry entry, {required bool highlight, bool selected = false}) {
     final Widget content = switch (entry.type) {
       'text' => _buildTextBubble(model, entry),
@@ -1417,35 +1464,36 @@ class _ChatScreenState extends State<ChatScreen> {
       _ => const SizedBox(),
     };
 
+    final isHl = highlight || selected;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: highlight ? p.accent : Colors.transparent,
-          width: 2,
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(14),
-          topRight: Radius.circular(14),
-          bottomLeft: Radius.circular(14),
-          bottomRight: Radius.circular(3),
-        ),
-      ),
+      margin: const EdgeInsets.symmetric(vertical: 3.5),
+      decoration: isHl
+          ? BoxDecoration(
+              border: Border.all(color: p.accent, width: 1.6),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(TNRadii.bubble),
+                topRight: Radius.circular(TNRadii.bubble),
+                bottomLeft: Radius.circular(TNRadii.bubble),
+                bottomRight: Radius.circular(3),
+              ),
+            )
+          : null,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           content,
           if (entry.pinned)
             Positioned(
-              top: -4,
-              right: 8,
+              top: -5,
+              right: 6,
               child: Container(
-                padding: const EdgeInsets.all(2),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: p.bgChat,
+                  color: p.accent,
                   shape: BoxShape.circle,
+                  border: Border.all(color: p.bubbleOwn, width: 1.5),
                 ),
-                child: Icon(Icons.push_pin, size: 12, color: p.accent),
+                child: const Icon(Icons.push_pin, size: 10, color: Colors.white),
               ),
             ),
         ],
@@ -1468,16 +1516,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       return Container(
         width: 320,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: p.bubbleOwn,
-          border: Border.all(color: p.bubbleBorder),
-          borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(14),
-              topRight: Radius.circular(14),
-              bottomLeft: Radius.circular(14),
-              bottomRight: Radius.circular(3)),
-        ),
+        padding: const EdgeInsets.all(10),
+        decoration: _bubbleDeco(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -1505,17 +1545,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final isMd = _isMarkdown(entry.text);
     return Container(
-      constraints: const BoxConstraints(maxWidth: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: p.bubbleOwn,
-        border: Border.all(color: p.bubbleBorder),
-        borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(3)),
-      ),
+      constraints: const BoxConstraints(maxWidth: 320),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: _bubbleDeco(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -1681,16 +1713,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return GestureDetector(
       onTap: () => _showImage(entry),
       child: Container(
-        width: 260,
-        decoration: BoxDecoration(
-          color: p.bubbleOwn,
-          border: Border.all(color: p.bubbleBorder),
-          borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(14),
-              topRight: Radius.circular(14),
-              bottomLeft: Radius.circular(14),
-              bottomRight: Radius.circular(3)),
-        ),
+        width: 268,
+        decoration: _bubbleDeco(),
         clipBehavior: Clip.antiAlias,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1738,17 +1762,9 @@ class _ChatScreenState extends State<ChatScreen> {
     String two(int v) => v.toString().padLeft(2, '0');
     final posLabel = '${_playPos.inMinutes}:${two(_playPos.inSeconds % 60)}';
     return Container(
-      width: 250,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: p.bubbleOwn,
-        border: Border.all(color: p.bubbleBorder),
-        borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(3)),
-      ),
+      width: 270,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: _bubbleDeco(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1784,17 +1800,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildVideoBubble(AppModel model, Entry entry) {
     return Container(
-      width: 260,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: p.bubbleOwn,
-        border: Border.all(color: p.bubbleBorder),
-        borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(3)),
-      ),
+      width: 270,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: _bubbleDeco(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1832,17 +1840,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final progress = allItems.isEmpty ? 0.0 : doneCount / allItems.length;
     final rows = _todoRows(model, entry, allItems);
     return Container(
-      width: 300,
-      padding: const EdgeInsets.fromLTRB(10, 9, 12, 7),
-      decoration: BoxDecoration(
-        color: p.bubbleOwn,
-        border: Border.all(color: overdue ? p.danger.withValues(alpha: .5) : p.bubbleBorder),
-        borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(3)),
-      ),
+      width: 310,
+      padding: const EdgeInsets.fromLTRB(11, 10, 12, 8),
+      decoration: _bubbleDeco(overdue: overdue),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -1850,13 +1850,18 @@ class _ChatScreenState extends State<ChatScreen> {
             GestureDetector(
               onTap: () => _editEntrySchedule(entry),
               child: Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: overdue ? p.danger.withValues(alpha: .12) : p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: overdue ? p.danger.withValues(alpha: .12) : p.accent.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(TNRadii.pill),
+                  border: Border.all(color: overdue ? p.danger.withValues(alpha: 0.22) : p.accent.withValues(alpha: 0.18)),
+                ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.schedule, size: 13, color: overdue ? p.danger : p.accent),
-                  const SizedBox(width: 4),
-                  Text(_fmtDue(entry.dueAt!, model.tr), style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w600)),
+                  Icon(overdue ? Icons.warning_amber_rounded : Icons.schedule_rounded,
+                      size: 13, color: overdue ? p.danger : p.accent),
+                  const SizedBox(width: 5),
+                  Text(_fmtDue(entry.dueAt!, model.tr), style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w700)),
                 ]),
               ),
             ),
@@ -2157,18 +2162,12 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildDocBubble(AppModel model, Entry entry) {
     final ext = (entry.mediaName?.split('.').last ?? '').toUpperCase();
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(TNRadii.bubble),
       onTap: () => _showDocument(entry),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 300),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: p.bubbleOwn,
-          border: Border.all(color: p.bubbleBorder),
-          borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(14), topRight: Radius.circular(14),
-              bottomLeft: Radius.circular(14), bottomRight: Radius.circular(3)),
-        ),
+        constraints: const BoxConstraints(maxWidth: 310),
+        padding: const EdgeInsets.all(13),
+        decoration: _bubbleDeco(),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
@@ -2260,39 +2259,50 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     return Container(
-      padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
-      color: p.bgList,
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+      decoration: BoxDecoration(
+        color: p.bgList,
+        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.5))),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_pendingImagePath != null) _buildPendingImageBar(model),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconButton(
-                icon: Icon(Icons.attach_file, color: p.textSoft),
-                tooltip: model.tr('attach'),
-                onPressed: () => _showAttachSheet(model),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: p.bgChat, shape: BoxShape.circle, border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+                child: IconButton(
+                  icon: Icon(Icons.attach_file_rounded, color: p.textSoft, size: 20),
+                  tooltip: model.tr('attach'),
+                  onPressed: () => _showAttachSheet(model),
+                ),
               ),
+              const SizedBox(width: 8),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: p.bgChat,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(TNRadii.pill),
+                border: Border.all(color: p.divider.withValues(alpha: 0.45)),
               ),
               child: TextField(
                 controller: _text,
                 style: TextStyle(color: p.text, fontSize: 14.5),
                 minLines: 1,
-                maxLines: 4,
+                maxLines: 5,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
-                  hintStyle: TextStyle(color: p.textFaint),
+                  hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
                   border: InputBorder.none,
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 13),
                 ),
               ),
             ),
@@ -2305,7 +2315,7 @@ class _ChatScreenState extends State<ChatScreen> {
               return hasSomething
                   ? GestureDetector(
                       onLongPressStart: _chat.kind == 'tasks'
-                          ? (d) => _sendTextWithDate()
+                          ? (d) => _addSubtaskGroup()
                           : null,
                       child: IconButton.filled(
                         icon: const Icon(Icons.send, color: Colors.white),
