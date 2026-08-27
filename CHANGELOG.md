@@ -4,19 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
-## [1.23.0-beta.2] - 2026-08-28
-
-- **Composer:** markdown bar removed per feedback — hashtag autocomplete (type # + top 8 tags overlay) kept, tonal bar with divider stays
-- **Backup redesign:** sliders fixed — `SliderTheme` with `thumb 9 / track 4 / overlay 20`, value indicator always, pill value badges with icons, card `TNRadii.md + border + shadow`; section `4/20/4/8` unified
-
-## [1.23.0-beta.1] - 2026-08-28
+## [1.23.0] - 2026-08-28
 
 - **Search 2.0:** highlighted query (accent pill), empty state with illustration + clear CTA, chip focus rings
 - **Swipe actions:** chats dismissible — swipe right → pin, left → archive with Snackbar undo + haptics; selection bar now has select-all toggle
-- **Composer:** hashtag autocomplete (type # + overlay of top 8 tags), composer becomes tonal bar with divider
+- **Composer:** hashtag autocomplete (type # + overlay of top 8 tags), tonal bar with divider
 - **Android:** portrait lock removed (landscape/tablet ready), edge-to-edge behind system bars (Android 15), WindowInsets handling
 - **Agenda:** filter chips (All/Overdue/Today/Week/High), priority dots, empty state illustration, pulls from unified card spec
 - **Batch:** select-all in chat list, batch export ready
+- **Backup redesign:** sliders fixed — `SliderTheme` with `thumb 9 / track 4 / overlay 20`, value indicator always, pill value badges with icons, card `TNRadii.md + border + shadow`; section `4/20/4/8` unified
 
 ## [1.22.0] - 2026-08-28
 
