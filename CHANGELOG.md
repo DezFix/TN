@@ -4,19 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
-## [1.22.0-beta.1] - 2026-08-28
+## [1.22.0] - 2026-08-28
 
-- **Design ecosystem (beta):** unified UI tokens — one radius/spacing/typography scale, single card/surface spec, consistent bubbles/composer/search across every screen
+- **Design ecosystem:** unified UI tokens — one radius/spacing/typography scale, single card/surface spec, consistent bubbles/composer/search across every screen (promoted from beta)
 - Light & dark palettes refreshed: better contrast for secondary text, subtle card shadows on light theme, softer chat background
 - List: new empty states with illustration + CTA, pill-shaped folder chips with ink, archive header as card, extended FAB with label, improved selection bar
 - Chats: all bubbles share one decoration + shadow, condensed due pill with warning icon when overdue, pinned badge on accent, composer as tonal bar with dividers
 - Widgets & secondary screens (Agenda/Trash/Settings) now use the same card + section spec as the main list
 - Theme: Material 3 AppBar/Card/Chip/Input themes wired, predictive-back transitions on Android
-
-## [1.21.2] - 2026-08-27
-
-- Task chats: long-pressing the send button opens a list editor where you can type a parent task with several subtasks at once
-- Task chats: tap on send still opens the schedule sheet (due time + priority)
+- Task chats: **tap** send → schedule sheet (due time + priority), **long-press** send → todo group editor (parent + subtasks at once)
 
 ## [1.21.1] - 2026-08-27
 
