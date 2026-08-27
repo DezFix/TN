@@ -109,9 +109,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
             child: Row(children: [
               for (final f in [
                 ('all', tr('widget_all')),
-                ('overdue', tr('overdue') == 'overdue' ? 'Overdue' : 'Просрочено'),
+                ('overdue', tr('overdue')),
                 ('today', tr('today')),
-                ('week', 'Week'),
+                ('week', tr('filter_week')),
                 ('high', tr('priority_2')),
               ])
                 Padding(

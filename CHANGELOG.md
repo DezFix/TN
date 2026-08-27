@@ -7,6 +7,10 @@ Everything published here goes to GitHub in English only.
 ## [1.23.1] - 2026-08-28
 
 - Fix: updating from beta `1.23.0-beta.*` to stable `1.23.0` inside the app now works (version compare treated `1.23.0-beta` == `1.23.0` — fixed to treat stable as newer)
+- Fix: dynamic color toggle removed (was non-functional)
+- Fix: composer input field radius `pill → lg` (less rounded)
+- Fix: backup screen redesign — sliders now `SliderTheme thumb9/track4/overlay20/valueIndicator always` with pill badges & icons, cards `TNRadii.md + shadow`, sections unified
+- Fix: missing translations added (`overdue/deselect/filter_week` for 6 languages) — agenda filters & selection bar now fully localized
 
 ## [1.23.0] - 2026-08-28
 
