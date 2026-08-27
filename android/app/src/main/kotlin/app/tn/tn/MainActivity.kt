@@ -40,6 +40,17 @@ object PendingOpenChat {
 // biometric prompt on Android.
 class MainActivity : FlutterFragmentActivity() {
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // Edge-to-edge on Android 15: draw behind system bars, Flutter handles insets via WindowInsets.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        }
+        super.onCreate(savedInstanceState)
+    }
+
     override fun getInitialRoute(): String {
         if (intent?.getBooleanExtra("open_settings", false) == true) return "/widget-settings"
         return super.getInitialRoute() ?: "/"

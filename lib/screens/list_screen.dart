@@ -467,7 +467,8 @@ class _ListScreenState extends State<ListScreen> {
       String Function(String, [List<String>?]) tr,
       {required String preview, required String time}) {
     final selected = _sel.contains(chat.id);
-    return GestureDetector(
+    // Swipe actions: right → pin, left → archive (haptics + undo).
+    Widget rowContent = GestureDetector(
       onTap: () => _onRowTap(chat),
       onLongPressStart: (_) => _onRowLongPress(chat),
       child: Container(
@@ -519,6 +520,53 @@ class _ListScreenState extends State<ListScreen> {
         ),
       ),
     );
+    if (_selecting) return rowContent;
+    return Dismissible(
+      key: ValueKey('chat-${chat.id}'),
+      direction: DismissDirection.horizontal,
+      confirmDismiss: (dir) async {
+        if (dir == DismissDirection.startToEnd) {
+          HapticFeedback.lightImpact();
+          chat.pinned = !chat.pinned;
+          await widget.model.save();
+          if (mounted) setState(() {});
+        } else if (dir == DismissDirection.endToStart) {
+          HapticFeedback.mediumImpact();
+          final prev = chat.archived;
+          chat.archived = !chat.archived;
+          if (chat.archived) chat.pinned = false;
+          await widget.model.save();
+          if (mounted) setState(() {});
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(chat.archived ? widget.model.tr('to_archive') : widget.model.tr('from_archive')),
+              action: SnackBarAction(
+                label: widget.model.tr('undo'),
+                onPressed: () async {
+                  chat.archived = prev;
+                  await widget.model.save();
+                  if (mounted) setState(() {});
+                },
+              ),
+            ));
+          }
+        }
+        return false;
+      },
+      background: Container(
+        color: p.accent.withValues(alpha: 0.14),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Icon(chat.pinned ? Icons.push_pin : Icons.push_pin_outlined, color: p.accent),
+      ),
+      secondaryBackground: Container(
+        color: p.accent.withValues(alpha: 0.10),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Icon(chat.archived ? Icons.unarchive : Icons.archive_outlined, color: p.accent),
+      ),
+      child: rowContent,
+    );
   }
 
   Widget _buildSelectionBar(AppModel model, Palette p,
@@ -526,6 +574,8 @@ class _ListScreenState extends State<ListScreen> {
     final allArchived =
         model.state.chats.any((c) => _sel.contains(c.id) && !c.archived) ==
             false;
+    final allIds = model.state.chats.where((c) => !c.isTrashed).map((c) => c.id).toSet();
+    final allSelected = _sel.length == allIds.length && allIds.isNotEmpty;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
@@ -542,6 +592,17 @@ class _ListScreenState extends State<ListScreen> {
           Expanded(
             child: Text(tr('selected', ['${_sel.length}']),
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
+          ),
+          IconButton(
+            icon: Icon(allSelected ? Icons.deselect : Icons.select_all, color: p.textSoft),
+            tooltip: allSelected ? tr('deselect') : tr('select'),
+            onPressed: () => setState(() {
+              if (allSelected) {
+                _sel.clear();
+              } else {
+                _sel.addAll(allIds);
+              }
+            }),
           ),
           IconButton(
             icon: Icon(Icons.push_pin_outlined, color: p.textSoft),
@@ -695,9 +756,13 @@ class _ListScreenState extends State<ListScreen> {
     }
 
     if (matchedChats.isEmpty && matchedEntries.isEmpty) {
-      return Center(
-        child: Text(tr('no_search_results', [q]),
-            textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: p.textFaint)),
+      return tnEmptyState(
+        p: p,
+        icon: Icons.search_off_rounded,
+        title: tr('no_search_results', [q]).replaceAll('«', '').replaceAll('»', ''),
+        subtitle: tr('nothing_found'),
+        actionLabel: tr('close'),
+        onAction: () => setState(() { _q = ''; _search.clear(); }),
       );
     }
 
@@ -707,6 +772,7 @@ class _ListScreenState extends State<ListScreen> {
         chat: c,
         p: p,
         snippet: tr('chat_subtitle'),
+        query: q,
         onTap: () => _openChat(c),
       ));
     }
@@ -717,6 +783,7 @@ class _ListScreenState extends State<ListScreen> {
         chat: chat,
         p: p,
         snippet: snippetFor(e, q, tr),
+        query: q,
         onTap: () => _openChat(chat, scrollTo: e.id, highlight: true),
       ));
     }

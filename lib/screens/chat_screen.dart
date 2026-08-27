@@ -91,6 +91,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<LinkPreviewData?> _previewFor(String url) => _previewFutures
       .putIfAbsent(url, () => LinkPreview.fetch(url));
 
+  String? _tagQuery;
+
+  void _updateTagQuery() {
+    final txt = _text.text;
+    final sel = _text.selection.baseOffset;
+    if (sel < 0 || txt.isEmpty) { _tagQuery = null; return; }
+    final before = txt.substring(0, sel);
+    final m = RegExp(r'#([\wа-яёіїєґА-ЯЁІЇЄҐ]*)$').firstMatch(before);
+    if (m != null) {
+      _tagQuery = m.group(1)!.toLowerCase();
+    } else {
+      _tagQuery = null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -98,6 +113,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _highlightId = widget.highlightEntryId;
     _loadDraft();
     _text.addListener(_saveDraft);
+    _text.addListener(_updateTagQuery);
     _audioPlayer.onPlayerStateChanged.listen((s) {
       if (s == PlayerState.completed && _playingId != null) {
         _playingId = null;
@@ -128,6 +144,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     widget.model.removeListener(_onModel);
     _text.removeListener(_saveDraft);
+    _text.removeListener(_updateTagQuery);
     _text.dispose();
     _editText.dispose();
     _searchCtrl.dispose();
@@ -2268,6 +2285,24 @@ class _ChatScreenState extends State<ChatScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_pendingImagePath != null) _buildPendingImageBar(model),
+          // Quick markdown bar — wraps selection with **, _, `, [](), - [ ]
+          if (_pendingImagePath == null)
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _mdBtn(p, '**', 'B', () => _wrapSelection('**', '**')),
+                  _mdBtn(p, '_', 'I', () => _wrapSelection('_', '_')),
+                  _mdBtn(p, '`', 'code', () => _wrapSelection('`', '`')),
+                  _mdBtn(p, 'link', 'Link', () => _wrapSelection('[', '](url)')),
+                  _mdBtn(p, 'check', '☑', () => _insertAtCursor('- [ ] ')),
+                  _mdBtn(p, 'h', 'H', () => _insertAtCursor('## ')),
+                  _mdBtn(p, 'tag', '#', () => _insertAtCursor('#')),
+                ],
+              ),
+            ),
+          if (_tagQuery != null) _buildTagSuggestions(p),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -2365,6 +2400,88 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => setState(() => _pendingImagePath = null),
           ),
         ],
+      ),
+    );
+  }
+
+  void _wrapSelection(String left, String right) {
+    final sel = _text.selection;
+    final txt = _text.text;
+    if (!sel.isValid || sel.isCollapsed) {
+      final pos = sel.baseOffset >= 0 ? sel.baseOffset : txt.length;
+      final ins = '$left$right';
+      _text.value = TextEditingValue(text: txt.replaceRange(pos, pos, ins), selection: TextSelection.collapsed(offset: pos + left.length));
+    } else {
+      final s = sel.start, e = sel.end;
+      final selected = txt.substring(s, e);
+      final replaced = '$left$selected$right';
+      _text.value = TextEditingValue(text: txt.replaceRange(s, e, replaced), selection: TextSelection.collapsed(offset: s + replaced.length));
+    }
+  }
+
+  void _insertAtCursor(String snippet) {
+    final sel = _text.selection;
+    final txt = _text.text;
+    final pos = sel.isValid ? sel.baseOffset : txt.length;
+    final p = pos < 0 ? txt.length : pos;
+    _text.value = TextEditingValue(text: txt.replaceRange(p, p, snippet), selection: TextSelection.collapsed(offset: p + snippet.length));
+  }
+
+  Widget _mdBtn(Palette p, String key, String label, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(TNRadii.pill),
+          onTap: () { HapticFeedback.selectionClick(); onTap(); },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(TNRadii.pill), border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+            child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSoft)),
+          ),
+        ),
+      );
+
+  Widget _buildTagSuggestions(Palette p) {
+    // Collect all tags, filter by _tagQuery, show up to 8.
+    final all = <String, int>{};
+    final trashed = widget.model.state.chats.where((c) => c.isTrashed).map((c) => c.id).toSet();
+    for (final e in widget.model.state.entries) {
+      if (trashed.contains(e.chatId)) continue;
+      for (final t in e.tags) all[t] = (all[t] ?? 0) + 1;
+    }
+    final q = _tagQuery ?? '';
+    var tags = all.keys.where((t) => q.isEmpty || t.contains(q)).toList();
+    tags.sort((a, b) => (all[b] ?? 0).compareTo(all[a] ?? 0));
+    if (tags.length > 8) tags = tags.sublist(0, 8);
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tags.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final t = tags[i];
+          return InkWell(
+            borderRadius: BorderRadius.circular(TNRadii.pill),
+            onTap: () {
+              final txt = _text.text;
+              final sel = _text.selection.baseOffset;
+              final before = txt.substring(0, sel);
+              final m = RegExp(r'#([\wа-яёіїєґА-ЯЁІЇЄҐ]*)$').firstMatch(before);
+              if (m != null) {
+                final start = m.start;
+                final newText = txt.replaceRange(start, sel, '#$t ');
+                _text.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: start + t.length + 2));
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(TNRadii.pill), border: Border.all(color: p.accent.withValues(alpha: 0.22))),
+              child: Text('#$t', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.accent)),
+            ),
+          );
+        },
       ),
     );
   }
