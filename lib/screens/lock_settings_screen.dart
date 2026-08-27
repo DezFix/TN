@@ -77,7 +77,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
         pinMode: false,
       );
       if (code == null) return false;
-      return AppLock.verifyCode(code);
+      return AppLock.verifyCode(code, LockMethod.pattern);
     }
     if (_methods.contains(LockMethod.pin)) {
       final code = await _promptCode(
@@ -85,7 +85,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
         pinMode: true,
       );
       if (code == null) return false;
-      return AppLock.verifyCode(code);
+      return AppLock.verifyCode(code, LockMethod.pin);
     }
     return false;
   }
@@ -130,7 +130,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     }
     if (second == null) return;
 
-    await AppLock.saveSecret(first);
+    await AppLock.saveSecret(first, method);
     _methods.add(method);
     await AppLock.setEnabledMethods(_methods);
     await AppLock.setEnabled(true);
@@ -356,6 +356,9 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
         return;
       }
       _methods.remove(m);
+      if (m == LockMethod.pin || m == LockMethod.pattern) {
+        await AppLock.clearSecret(m);
+      }
       await AppLock.setEnabledMethods(_methods);
       await _load();
     } else {

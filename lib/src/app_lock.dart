@@ -36,7 +36,9 @@ class AppLock {
   static const _keyEnabled = 'tn-lock-enabled';
   static const _keyMethods = 'tn-lock-methods'; // 'biometric,pattern' etc.
   static const _keyMode = 'tn-lock-mode'; // legacy single-method, migrated
-  static const _keySecret = 'tn-lock-secret'; // 'saltHex:sha256Hex'
+  static const _keySecret = 'tn-lock-secret'; // legacy shared key
+  static const _keySecretPin = 'tn-lock-secret-pin'; // 'saltHex:sha256Hex'
+  static const _keySecretPattern = 'tn-lock-secret-pattern'; // 'saltHex:sha256Hex'
   static const _keyGrace = 'tn-lock-grace-minutes'; // 0 | 5 | 10
 
   static final LocalAuthentication _auth = LocalAuthentication();
@@ -68,6 +70,8 @@ class AppLock {
       await prefs.setBool(_keyEnabled, v);
       if (!v) {
         await prefs.remove(_keySecret);
+        await prefs.remove(_keySecretPin);
+        await prefs.remove(_keySecretPattern);
         _lastUnlock = null;
       }
     } catch (_) {}
@@ -148,10 +152,18 @@ class AppLock {
   static Future<bool> hasSecret() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return (prefs.getString(_keySecret) ?? '').contains(':');
+      return (prefs.getString(_keySecretPin) ?? '').contains(':') ||
+          (prefs.getString(_keySecretPattern) ?? '').contains(':');
     } catch (_) {}
     return false;
   }
+
+  /// Per-method secret key.
+  static String _secretKey(LockMethod m) => switch (m) {
+        LockMethod.pin => _keySecretPin,
+        LockMethod.pattern => _keySecretPattern,
+        _ => _keySecret,
+      };
 
   // ---- secret hashing ----
 
@@ -173,16 +185,27 @@ class AppLock {
   }
 
   /// Saves a freshly confirmed PIN/pattern code.
-  static Future<void> saveSecret(String code) async {
+  static Future<void> saveSecret(String code, LockMethod method) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keySecret, hashSecret(code, randomSalt()));
+    await prefs.setString(_secretKey(method), hashSecret(code, randomSalt()));
+    // Migrate legacy shared key so old installs still verify.
+    if (method == LockMethod.pattern) {
+      await prefs.setString(_keySecret, prefs.getString(_secretKey(method)) ?? '');
+    }
   }
 
-  /// Checks user input against the stored secret. Pure-ish, tested.
-  static Future<bool> verifyCode(String code) async {
+  /// Clears the stored secret for a specific code method.
+  static Future<void> clearSecret(LockMethod method) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_secretKey(method));
+    if (method == LockMethod.pattern) await prefs.remove(_keySecret);
+  }
+
+  /// Checks user input against the stored secret for [method].
+  static Future<bool> verifyCode(String code, LockMethod method) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getString(_keySecret) ?? '';
+      final stored = prefs.getString(_secretKey(method)) ?? '';
       return stored.isNotEmpty && verifyAgainst(code, stored);
     } catch (_) {}
     return false;
@@ -457,7 +480,7 @@ class _LockScreenState extends State<LockScreen> {
       _busy = true;
       _error = null;
     });
-    final ok = await AppLock.verifyCode(code);
+    final ok = await AppLock.verifyCode(code, _currentMethod);
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {

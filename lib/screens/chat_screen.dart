@@ -1131,6 +1131,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else if (v == 'edit' && one != null) {
                   if (mounted) setState(() => _selectedIds.clear());
                   await _onCtxAction(one, EntryAction.edit);
+                } else if (v == 'pin') {
+                  for (final e in matches) {
+                    e.pinned = !e.pinned;
+                    e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+                  }
+                  await widget.model.save();
+                  if (mounted) setState(() => _selectedIds.clear());
                 } else if (v == 'copy') {
                   await _copySelected();
                 } else if (v == 'forward') {
@@ -1153,6 +1160,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     enabled: one != null && (one.type == 'text' || one.type == 'todo'),
                     height: 42,
                     child: Row(children: [Icon(Icons.edit, size: 18, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.textSoft : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.text : p.textFaint))])),
+                PopupMenuItem(
+                    value: 'pin',
+                    height: 42,
+                    child: Row(children: [Icon(Icons.push_pin_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('pin'), style: TextStyle(fontSize: 14, color: p.text))])),
                 const PopupMenuDivider(),
                 PopupMenuItem(value: 'copy', height: 42, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('copy'), style: TextStyle(fontSize: 14, color: p.text))])),
                 PopupMenuItem(value: 'forward', height: 42, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('forward'), style: TextStyle(fontSize: 14, color: p.text))])),
