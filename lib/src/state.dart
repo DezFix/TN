@@ -40,10 +40,7 @@ class AppState {
         }
       }
     }
-    own.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-      return a.ts.compareTo(b.ts);
-    });
+    own.sort((a, b) => a.ts.compareTo(b.ts));
     return own;
   }
 

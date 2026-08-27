@@ -75,7 +75,7 @@ void main() {
     expect(s2.entries.single.pinned, isTrue);
   });
 
-  test('entriesFor floats pinned entries above newer ones', () {
+  test('entriesFor keeps chronological order regardless of pinned', () {
     final s = AppState();
     s.chats.add(Chat(id: 'c1', name: 'chat', color: '#FFFFFF'));
     s.entries
