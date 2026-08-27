@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.20.1] - 2026-08-26
+
+- Fix: setting a PIN code no longer breaks the pattern lock — secrets are now stored per method
+- Removing a code method now properly clears its stored secret
+- "Pin" action is now available in the selection mode menu (long-press a message → menu → Pin) for mobile users
+
 ## [1.20.0] - 2026-08-26
 
 - Pin messages: long-press or right-click a message to pin it; pinned messages float to the top of the chat with a banner that shows the count, tap to jump to any pinned message or unpin it from the list
