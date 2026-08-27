@@ -102,6 +102,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (s == PlayerState.completed && _playingId != null) {
         _playingId = null;
         _playPos = Duration.zero;
+        _playDur = null;
         if (mounted) setState(() {});
       }
     });
@@ -275,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty || _pendingImagePath != null) return;
     HapticFeedback.mediumImpact();
     final sched = await _pickTaskSchedule();
-    if (sched.dueAt == null) return;
+    if (!mounted || sched.dueAt == null) return;
     final isTasks = _chat.kind == 'tasks';
     final entry = Entry(
       id: uid('e'),
@@ -563,12 +564,14 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _playingId = null;
         _playPos = Duration.zero;
+        _playDur = null;
       });
       return;
     }
     setState(() {
       _playingId = entry.id;
       _playPos = Duration.zero;
+      _playDur = null;
     });
     await _audioPlayer.play(DeviceFileSource(path));
   }
@@ -1567,6 +1570,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   List<TextSpan> _highlightTags(String text, Palette p) {
+    // Dispose recognizers from the previous build to prevent native resource leak.
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
     final spans = <TextSpan>[];
     // Combined regex: #tag OR https URL.
     final re = RegExp(r'(#[\wа-яёіїєґА-ЯЁІЇЄҐ]+|https?://[^\s<>")\]]+)');

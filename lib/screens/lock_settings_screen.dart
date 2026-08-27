@@ -68,7 +68,8 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
   Future<bool> _verifyCurrent() async {
     // Try whichever method is currently active.
     if (_methods.contains(LockMethod.biometric) && _biometricsOk) {
-      return AppLock.verifyAny(widget.model.tr);
+      if (await AppLock.verifyAny(widget.model.tr)) return true;
+      // Biometric failed — fall through to code methods below.
     }
     // For code methods, prompt for the one that's set.
     if (_methods.contains(LockMethod.pattern)) {

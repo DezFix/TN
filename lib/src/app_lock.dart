@@ -109,6 +109,16 @@ class AppLock {
       }
       // Migrate from legacy single-method key.
       final legacy = lockMethodFromString(prefs.getString(_keyMode));
+      // Also migrate the secret from legacy shared key to per-method key.
+      if (legacy == LockMethod.pattern || legacy == LockMethod.pin) {
+        final perMethodKey = _secretKey(legacy);
+        if ((prefs.getString(perMethodKey) ?? '').isEmpty) {
+          final legacySecret = prefs.getString(_keySecret);
+          if (legacySecret != null && legacySecret.isNotEmpty) {
+            await prefs.setString(perMethodKey, legacySecret);
+          }
+        }
+      }
       return {legacy};
     } catch (_) {}
     return {LockMethod.biometric};
@@ -153,7 +163,8 @@ class AppLock {
     try {
       final prefs = await SharedPreferences.getInstance();
       return (prefs.getString(_keySecretPin) ?? '').contains(':') ||
-          (prefs.getString(_keySecretPattern) ?? '').contains(':');
+          (prefs.getString(_keySecretPattern) ?? '').contains(':') ||
+          (prefs.getString(_keySecret) ?? '').contains(':');
     } catch (_) {}
     return false;
   }

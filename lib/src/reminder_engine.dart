@@ -157,7 +157,7 @@ class ReminderEngine {
         onAction: (actionKey) {
           final parts = actionKey.split('|');
           final minutes = int.tryParse(parts.last);
-          if (parts.length == 2 && minutes != null) {
+          if (parts.length >= 2 && minutes != null) {
             // key format here is `<dueKey>|<minutes>`; rebuild the due key.
             final dueKey =
                 parts.sublist(0, parts.length - 1).join('|');
