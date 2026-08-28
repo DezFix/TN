@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Comparator
 import java.util.Date
 import java.util.Locale
 
@@ -122,12 +123,15 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // Внутри одного приоритета — ближайший дедлайн первым. Это
             // профили "обычно / важно / срочно" из настроек задачи.
             val sortMode = try {
-                val p = prefs.getString("flutter.tn-widget-sort")
-                    ?: prefs.getString("tn-widget-sort") ?: "priority"
+                val p = prefs.getString("flutter.tn-widget-sort", null)
+                    ?: prefs.getString("tn-widget-sort", null) ?: "priority"
                 p
             } catch (_: Exception) { "priority" }
             if (sortMode == "priority") {
-                rows.sortWith(compareByDescending<Row> { it.priority }.thenBy { it.ts })
+                rows.sortWith(Comparator { a, b ->
+                    val pr = b.priority.compareTo(a.priority)
+                    if (pr != 0) pr else a.ts.compareTo(b.ts)
+                })
             } else {
                 rows.sortBy { it.ts }
             }
