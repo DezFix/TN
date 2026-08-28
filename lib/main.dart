@@ -108,6 +108,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   bool _showWelcome = false;
   AppModel? _loadedModel;
   Timer? _pendingOpenChatTimer;
+  Timer? _pendingHotAddTimer;
   bool _whatsNewShown = false;
 
   @override
@@ -148,7 +149,8 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   }
 
   Future<void> _pendingHotAddCheck() async {
-    Timer(const Duration(milliseconds: 900), () async {
+    if (_isTestEnv) return;
+    _pendingHotAddTimer = Timer(const Duration(milliseconds: 900), () async {
       if (!mounted) return;
       final pending = await WidgetBridge.takePendingHotAdd();
       if (!pending || !mounted) return;
@@ -215,6 +217,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   @override
   void dispose() {
     _pendingOpenChatTimer?.cancel();
+    _pendingHotAddTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
