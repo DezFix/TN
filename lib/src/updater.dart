@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
@@ -60,10 +61,13 @@ class Updater {
     String? expectedSha256,
   }) async {
     lastError = '';
-    if (expectedSha256 == null || expectedSha256.trim().isEmpty) {
+    final shaTrim = expectedSha256?.trim() ?? '';
+    if (shaTrim.isEmpty || shaTrim.length != 64) {
       lastError = 'no_sha';
       return null;
     }
+    // Keep normalized for later compare
+    expectedSha256 = shaTrim.toLowerCase();
     try {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}${Platform.pathSeparator}tn-update.apk');
@@ -78,9 +82,11 @@ class Updater {
       String currentUrl = url;
       List<int>? bytes;
       const maxRedirects = 10;
-      for (var i = 0; i < maxRedirects; i++) {
-        final req = http.Request('GET', Uri.parse(currentUrl));
-        final resp = await http.Client().send(req);
+      final client = http.Client();
+      try {
+        for (var i = 0; i < maxRedirects; i++) {
+          final req = http.Request('GET', Uri.parse(currentUrl));
+          final resp = await client.send(req);
 
         if (resp.statusCode >= 300 && resp.statusCode < 400) {
           final location = resp.headers['location'];
@@ -100,16 +106,19 @@ class Updater {
         // Stream the body with progress reporting.
         final total = resp.contentLength ?? 0;
         int received = 0;
-        final chunks = <int>[];
+        final builder = BytesBuilder(copy: false);
         await for (final chunk in resp.stream) {
-          chunks.addAll(chunk);
+          builder.add(chunk);
           received += chunk.length;
           if (total > 0 && onProgress != null) {
             onProgress(received / total);
           }
         }
-        bytes = chunks;
+        bytes = builder.takeBytes();
         break;
+        }
+      } finally {
+        client.close();
       }
 
       if (bytes == null || bytes.isEmpty) {

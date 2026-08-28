@@ -502,6 +502,7 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
       );
     }
     e.dueAt = next;
+    e.updatedAt = DateTime.now().millisecondsSinceEpoch;
     for (final i in items) {
       i.done = false;
     }
@@ -533,6 +534,7 @@ bool snapCompletedRecurring(Entry e, DateTime now) {
       e.dueAt =
           DateTime(now.year, now.month, now.day, due.hour, due.minute)
               .millisecondsSinceEpoch;
+      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
       return true;
     }
     e.dueAt = nextOccurrence(
@@ -542,5 +544,6 @@ bool snapCompletedRecurring(Entry e, DateTime now) {
       fromMs: e.dueAt!,
       after: now,
     );
+    e.updatedAt = DateTime.now().millisecondsSinceEpoch;
     return true;
   }

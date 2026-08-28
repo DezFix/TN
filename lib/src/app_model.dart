@@ -29,9 +29,13 @@ class AppModel extends ChangeNotifier {
     state
       ..theme = loaded.theme
       ..lang = loaded.lang
+      ..folders.clear()
       ..folders.addAll(loaded.folders)
+      ..chats.clear()
       ..chats.addAll(loaded.chats)
+      ..entries.clear()
       ..entries.addAll(loaded.entries)
+      ..reminders.clear()
       ..reminders.addAll(loaded.reminders);
     _reloadLanguage();
     _stamp = DateTime.now().millisecondsSinceEpoch;
@@ -85,7 +89,7 @@ class AppModel extends ChangeNotifier {
     final target =
         DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
     var hit = false;
-    for (final r in state.reminders) {
+    for (final r in List.of(state.reminders)) {
       if (r.id == id && r.when == when) {
         state.reminders.remove(r);
         state.reminders.add(Reminder(id: r.id, chatId: r.chatId, when: target));
