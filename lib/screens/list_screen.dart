@@ -8,6 +8,7 @@ import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
+import '../src/support_banner.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'agenda_screen.dart';
@@ -40,6 +41,7 @@ class _ListScreenState extends State<ListScreen> {
   bool _smartTasksOn = true;
   bool _smartNotesOn = true;
   Map<String, String> _drafts = {};
+  bool _showSupportBanner = false;
 
   bool get _selecting => _sel.isNotEmpty;
 
@@ -53,6 +55,13 @@ class _ListScreenState extends State<ListScreen> {
     }
     _loadSmartFolders();
     _loadDrafts();
+    _loadSupportBanner();
+  }
+
+  Future<void> _loadSupportBanner() async {
+    final show = await shouldShowSupportBanner();
+    if (!mounted) return;
+    setState(() => _showSupportBanner = show);
   }
 
   Future<void> _loadSmartFolders() async {
@@ -414,6 +423,12 @@ class _ListScreenState extends State<ListScreen> {
 
     return Column(
       children: [
+        if (_showSupportBanner && !_selecting)
+          SupportBanner(
+            p: p,
+            tr: tr,
+            onDismiss: () => setState(() => _showSupportBanner = false),
+          ),
         _buildFolderTabs(model, p, tr),
         Expanded(
           child: NotificationListener<ScrollNotification>(

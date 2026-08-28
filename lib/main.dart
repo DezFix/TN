@@ -18,6 +18,7 @@ import 'src/models.dart';
 import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
 import 'src/share_in.dart';
+import 'src/support_banner.dart';
 import 'src/sync.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
@@ -405,6 +406,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     await RemindersService.instance.requestNotificationsPermission();
     _purgeExpiredTrash(model);
     unawaited(MediaStore().purgeTrash());
+    unawaited(ensureFirstLaunch());
     try {
       final prefs = await SharedPreferences.getInstance();
       _showWelcome = !(prefs.getBool('tn-welcome-done') ?? false);
