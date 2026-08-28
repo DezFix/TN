@@ -276,6 +276,18 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             }
             rv.setRemoteAdapter(R.id.dw_list, adapterIntent)
             rv.setEmptyView(R.id.dw_list, R.id.dw_empty)
+            // Collection click handling must use fillInIntents (per-item PendingIntents
+            // are ignored after scrolling). Single broadcast template handles both
+            // toggle (checkbox) and open-chat (row) via action in fillInIntent.
+            try {
+                val tmpl = Intent(context, ToggleReceiver::class.java)
+                val tmplPi = PendingIntent.getBroadcast(
+                    context, 100,
+                    tmpl,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                )
+                rv.setPendingIntentTemplate(R.id.dw_list, tmplPi)
+            } catch (_: Exception) {}
 
             // Task-count badge in the header.
             rv.setViewVisibility(

@@ -19,6 +19,17 @@ import java.util.Calendar
 class ToggleReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            ACTION_OPEN_CHAT -> {
+                val chatId = intent.getStringExtra(EXTRA_CHAT_ID) ?: return
+                val launch = Intent(context, MainActivity::class.java).apply {
+                    putExtra("open_chat", chatId)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                try { context.startActivity(launch) } catch (_: Exception) {}
+                return
+            }
+        }
         val entryId = intent.getStringExtra(EXTRA_ENTRY_ID) ?: return
         val itemId = intent.getStringExtra(EXTRA_ITEM_ID)
         val result = goAsync()
@@ -44,7 +55,9 @@ class ToggleReceiver : BroadcastReceiver() {
     companion object {
         const val EXTRA_ENTRY_ID = "entry"
         const val EXTRA_ITEM_ID = "item"
+        const val EXTRA_CHAT_ID = "chatId"
         const val ACTION_TOGGLE = "app.tn.tn.ACTION_TOGGLE_ENTRY"
+        const val ACTION_OPEN_CHAT = "app.tn.tn.ACTION_OPEN_CHAT"
 
         private fun toggleEntry(context: Context, entryId: String): Boolean {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)

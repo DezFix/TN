@@ -110,27 +110,19 @@ class TnDayWidgetViewsFactory(
         row.setViewVisibility(R.id.dr_check, android.view.View.VISIBLE)
         row.setInt(R.id.dr_check, "setImageResource", R.drawable.ic_dw_check_off)
 
-        val toggle = Intent(ToggleReceiver.ACTION_TOGGLE)
-            .setClass(context, ToggleReceiver::class.java)
-            .putExtra(ToggleReceiver.EXTRA_ENTRY_ID, r.entryId)
-            .putExtra(ToggleReceiver.EXTRA_ITEM_ID, r.itemId)
-        val togglePi = PendingIntent.getBroadcast(
-            context,
-            r.entryId.hashCode() * 31 + (r.itemId?.hashCode() ?: 0),
-            toggle,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        row.setOnClickPendingIntent(R.id.dr_check, togglePi)
+        // Collection widgets must use fillInIntent + template (per-item PendingIntents are ignored after scroll)
+        val toggleFill = Intent().apply {
+            action = ToggleReceiver.ACTION_TOGGLE
+            putExtra(ToggleReceiver.EXTRA_ENTRY_ID, r.entryId)
+            putExtra(ToggleReceiver.EXTRA_ITEM_ID, r.itemId)
+        }
+        row.setOnClickFillInIntent(R.id.dr_check, toggleFill)
 
-        val openChat = Intent(context, MainActivity::class.java)
-            .putExtra("open_chat", r.chatId)
-        val openPi = PendingIntent.getActivity(
-            context,
-            r.entryId.hashCode() * 17 + 7,
-            openChat,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        row.setOnClickPendingIntent(R.id.dr_root, openPi)
+        val openFill = Intent().apply {
+            action = ToggleReceiver.ACTION_OPEN_CHAT
+            putExtra(ToggleReceiver.EXTRA_CHAT_ID, r.chatId)
+        }
+        row.setOnClickFillInIntent(R.id.dr_root, openFill)
         return row
     }
 
