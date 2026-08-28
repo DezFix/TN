@@ -4,6 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.26.1] - 2026-08-28
+
+- **Widget:** one task per entry (subtasks aggregated as "+N"), parent cannot be checked until subtasks done
+- **Widget header:** attached to window (no floating gap), larger +/gear hitboxes (32dp) for reliable taps
+- **Shortcuts:** long-press app icon now shows Quick note and Upcoming tasks (dynamic ShortcutManager)
+- **Updater:** picks APK matching installed variant (arm64 vs universal) — no more downgrade on auto-update
+- **Composer:** single outline, full-width `lg` radius — no double blue corners
+- **Potato PC:** `tool/potato_retry.dart` with 3× retry and culprit reporting
+
 ## [1.26.0] - 2026-08-28
 
 - **Cache:** RSS and trash/media merged into one "Cache & Trash" card with auto-clean info (trash + temp cleared every 48h) and live size
