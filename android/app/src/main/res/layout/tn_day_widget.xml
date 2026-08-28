@@ -68,20 +68,33 @@
             android:contentDescription="widget settings" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/dw_list"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginTop="6dp"
-        android:orientation="vertical" />
+        android:layout_weight="1">
 
-    <TextView
-        android:id="@+id/dw_empty"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:text="@string/dw_empty"
-        android:textColor="#8A9BA8"
-        android:textSize="13sp" />
+        <ListView
+            android:id="@+id/dw_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none"
+            android:clipToPadding="false"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp" />
+
+        <TextView
+            android:id="@+id/dw_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/dw_empty"
+            android:textColor="#8A9BA8"
+            android:textSize="13sp" />
+    </FrameLayout>
 
 </LinearLayout>

@@ -2305,7 +2305,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: p.bgChat,
-                borderRadius: BorderRadius.circular(TNRadii.lg),
+                borderRadius: BorderRadius.circular(TNRadii.md),
                 border: Border.all(color: p.divider.withValues(alpha: 0.45)),
               ),
               child: TextField(

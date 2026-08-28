@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.24.0] - 2026-08-28
+
+- **Flatter, cleaner UI:** removed card shadows and soft-faded tints, tightened section spacing and empty states, reduced input-field rounding — a more compact, Telegram-style look
+- **Android widget:** the task list now scrolls, so it can show many more tasks (20-row limit lifted — every undone task is reachable)
+
 ## [1.23.2] - 2026-08-28
 
 - Rebaked the 1.23.1 release with the official signing key so existing installs update cleanly (previous build used a different key)

@@ -54,13 +54,13 @@ class Palette {
 // Keep Palette thin — tokens live here so every screen uses one source.
 
 abstract class TNRadii {
-  static const double sm = 8;
-  static const double md = 12;
-  static const double lg = 16;
-  static const double xl = 20;
+  static const double sm = 6;
+  static const double md = 8;
+  static const double lg = 10;
+  static const double xl = 12;
   static const double pill = 999;
-  static const double bubble = 14;
-  static const double sheet = 18;
+  static const double bubble = 12;
+  static const double sheet = 12;
 }
 
 abstract class TNSpacing {
@@ -96,17 +96,17 @@ const lightPalette = Palette(
   name: 'light',
   accent: Color(0xFF2AABEE),
   accentDk: Color(0xFF1E96D6),
-  bg: Color(0xFFF8FAFB),
-  bgList: Color(0xFFF8FAFB),
-  bgChat: Color(0xFFEAF0F4),
+  bg: Color(0xFFFFFFFF),
+  bgList: Color(0xFFFFFFFF),
+  bgChat: Color(0xFFEDF2F5),
   bubbleOwn: Color(0xFFE4F3FF),
   bubbleBorder: Color(0xFFD3EAFB),
   text: Color(0xFF0F1721),
-  textSoft: Color(0xFF6E7F8F),
-  textFaint: Color(0xFF7A8A9A),
-  divider: Color(0xFFE2E7EB),
+  textSoft: Color(0xFF7C8A97),
+  textFaint: Color(0xFFA9B4BE),
+  divider: Color(0xFFE6E9EC),
   danger: Color(0xFFE05353),
-  rowActive: Color(0xFFEEF2F5),
+  rowActive: Color(0xFFF5F7F9),
   modalBg: Color(0xFFFFFFFF),
   priLow: Color(0xFF4CAF50),
   priMed: Color(0xFFF5A623),
@@ -117,18 +117,18 @@ const darkPalette = Palette(
   name: 'dark',
   accent: Color(0xFF4EA4F6),
   accentDk: Color(0xFF71B8F8),
-  bg: Color(0xFF151B22),
-  bgList: Color(0xFF151B22),
-  bgChat: Color(0xFF222C37),
-  bubbleOwn: Color(0xFF2B445C),
-  bubbleBorder: Color(0xFF354F68),
+  bg: Color(0xFF1C232C),
+  bgList: Color(0xFF1C232C),
+  bgChat: Color(0xFF262E39),
+  bubbleOwn: Color(0xFF2F4A63),
+  bubbleBorder: Color(0xFF3A5772),
   text: Color(0xFFEDF1F5),
-  textSoft: Color(0xFF9AA8B6),
-  textFaint: Color(0xFF7B8693),
-  divider: Color(0xFF2E3845),
+  textSoft: Color(0xFFA2ACB6),
+  textFaint: Color(0xFF717B85),
+  divider: Color(0xFF323B46),
   danger: Color(0xFFF07575),
-  rowActive: Color(0xFF252F3B),
-  modalBg: Color(0xFF222C37),
+  rowActive: Color(0xFF28313C),
+  modalBg: Color(0xFF262E39),
   priLow: Color(0xFF6BCE6F),
   priMed: Color(0xFFF0B429),
   priHigh: Color(0xFFF07575),
@@ -148,20 +148,12 @@ extension PaletteX on Palette {
   Color get surfaceVariant => bgChat;
   Color get outline => divider;
   Color get onAccent => Colors.white;
-  // Subtle card shadow — light only; dark uses border only.
-  List<BoxShadow> get cardShadow => isDark
-      ? const []
-      : [
-          BoxShadow(
-            color: Color(0x0D0F1721),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ];
+  // Flat cards — no drop shadow, matching the compact Telegram look.
+  List<BoxShadow> get cardShadow => const [];
 }
 
 Widget tnSectionLabel(String text, Palette p, {Widget? trailing}) => Padding(
-      padding: const EdgeInsets.only(top: 18, bottom: 8, left: 4, right: 4),
+      padding: const EdgeInsets.only(top: 14, bottom: 6, left: 4, right: 4),
       child: Row(
         children: [
           Expanded(
@@ -205,36 +197,36 @@ Widget tnEmptyState({
 }) =>
     Center(
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: p.accent.withValues(alpha: 0.10),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 36, color: p.accent),
+              child: Icon(icon, size: 28, color: p.accent),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(title,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text, height: 1.3)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text, height: 1.3)),
             if (subtitle != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(subtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+                  style: TextStyle(fontSize: 13, color: p.textSoft, height: 1.4)),
             ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: p.accent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.md)),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 ),
                 onPressed: onAction,
                 icon: const Icon(Icons.add, size: 18, color: Colors.white),

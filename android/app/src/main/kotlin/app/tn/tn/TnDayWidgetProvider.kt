@@ -31,8 +31,10 @@ import java.util.Locale
 class TnDayWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        val views = buildViews(context)
-        for (id in ids) manager.updateAppWidget(id, views)
+        for (id in ids) {
+            val views = buildViews(context, id)
+            manager.updateAppWidget(id, views)
+        }
         TnMidnightReceiver.scheduleNext(context)
     }
 
@@ -44,11 +46,13 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, TnDayWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val views = buildViews(context)
-            for (id in ids) manager.updateAppWidget(id, views)
+            for (id in ids) {
+                val views = buildViews(context, id)
+                manager.updateAppWidget(id, views)
+            }
         }
 
-        private data class Row(
+        data class Row(
             val entryId: String,
             val itemId: String?,
             val chatId: String,
@@ -59,7 +63,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val priority: Int,
         )
 
-        private fun loadRows(context: Context): List<Row> {
+        fun loadRows(context: Context): List<Row> {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return emptyList()
             // Legacy values ('all', 'week') map to 'upcoming' — the "All tasks"
@@ -114,9 +118,10 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     )
                 }
             }
-            // Nearest deadline first.
+            // Nearest deadline first. The widget list is scrollable, so no
+            // arbitrary cap: every undone task is reachable by scrolling.
             rows.sortBy { it.ts }
-            return rows.take(20)
+            return rows
         }
 
         private fun startOfTodayMillis(): Long {
@@ -131,12 +136,12 @@ class TnDayWidgetProvider : AppWidgetProvider() {
         private fun endOfUpcomingMillis(): Long = startOfTodayMillis() + 3 * 24 * 60 * 60 * 1000L - 1
 
         /** Widget strings follow the IN-APP language, not the system one. */
-        private data class Ws(
+        data class Ws(
             val title: String, val empty: String, val overdue: String,
             val secOverdue: String, val secToday: String, val secTomorrow: String, val secLater: String
         )
 
-        private fun widgetStrings(context: Context): Ws {
+        fun widgetStrings(context: Context): Ws {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
             if (lang.isNullOrEmpty()) lang = Locale.getDefault().language
@@ -155,15 +160,33 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     "Overdue", "Today", "Tomorrow", "Later")
             }
         }
+
+        /**
+         * Adjustable widget font size (scale, default 1.0) written by the
+         * in-app widget settings screen. Shared by the provider (header) and
+         * the RemoteViewsFactory (task rows) so the whole widget stays in sync.
+         */
+        fun readFontScale(context: Context): Float {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            var rawFont: Any? = prefs.all["flutter.tn-widget-font"]
+            if (rawFont == null) rawFont = prefs.all["tn-widget-font"]
+            var fontScale = when (rawFont) {
+                is Number -> rawFont.toFloat()
+                is String -> rawFont.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
+                else -> 1.0f
+            }
+            if (!fontScale.isFinite() || fontScale < 0.5f || fontScale > 2.0f) fontScale = 1.0f
+            return fontScale.coerceIn(0.8f, 1.6f)
+        }
         /** Time + optional chat name for a row's meta line. */
-        private fun meta(context: Context, chatName: String, time: Long): String {
+        fun meta(context: Context, chatName: String, time: Long): String {
             val h = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
             return if (chatName.isEmpty()) h
             else "$h · $chatName"
         }
 
         /** Section bucket title for a due timestamp, or null when none applies. */
-        private fun sectionLabel(context: Context, ws: Ws, due: Long): String? {
+        fun sectionLabel(context: Context, ws: Ws, due: Long): String? {
             val now = System.currentTimeMillis()
             val startToday = startOfTodayMillis()
             return when {
@@ -175,7 +198,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun buildViews(context: Context): RemoteViews {
+        private fun buildViews(context: Context, appWidgetId: Int): RemoteViews {
             val rv = RemoteViews(context.packageName, R.layout.tn_day_widget)
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
@@ -203,25 +226,13 @@ class TnDayWidgetProvider : AppWidgetProvider() {
 
             val ws = widgetStrings(context)
             rv.setTextViewText(R.id.dw_title, ws.title)
-            // Adjustable font size (scale, default 1.0) written by the in-app
-            // widget settings screen.
-            var fontScale = 1.0f
-            try {
-                var rawFont: Any? = prefs.all["flutter.tn-widget-font"]
-                if (rawFont == null) rawFont = prefs.all["tn-widget-font"]
-                when (rawFont) {
-                    is Number -> fontScale = rawFont.toFloat()
-                    is String -> fontScale = rawFont.removePrefix(PREF_DOUBLE_PREFIX).toFloatOrNull() ?: 1.0f
-                }
-                if (!fontScale.isFinite() || fontScale < 0.5f || fontScale > 2.0f) fontScale = 1.0f
-                fontScale = fontScale.coerceIn(0.8f, 1.6f)
-            } catch (_: Exception) {
-            }
+            // Adjustable font size, read through the same helper used by the
+            // RemoteViewsFactory so list rows match the widget header.
+            val fontScale = readFontScale(context)
             rv.setFloat(R.id.dw_title, "setTextSize", 13f * fontScale)
             rv.setFloat(R.id.dw_empty, "setTextSize", 13f * fontScale)
 
             val rows = try { loadRows(context) } catch (_: Exception) { emptyList<Row>() }
-            rv.removeAllViews(R.id.dw_list)
             rv.setViewVisibility(R.id.dw_empty, if (rows.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE)
             rv.setTextViewText(R.id.dw_empty, ws.empty)
 
@@ -235,62 +246,14 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             } catch (_: Exception) {
             }
 
-            var lastSection: String? = null
-            for (r in rows) {
-                // Insert a section header when the due-date bucket changes.
-                val section = sectionLabel(context, ws, r.ts)
-                if (section != null && section != lastSection) {
-                    val header = RemoteViews(context.packageName, R.layout.tn_day_section)
-                    header.setTextViewText(R.id.ds_label, section)
-                    header.setFloat(R.id.ds_label, "setTextSize", 10f * fontScale)
-                    rv.addView(R.id.dw_list, header)
-                    lastSection = section
-                }
-                val row = RemoteViews(context.packageName, R.layout.tn_day_row)
-                row.setTextViewText(R.id.dr_title, r.title)
-                row.setTextViewText(R.id.dr_meta, r.meta)
-                row.setFloat(R.id.dr_title, "setTextSize", 13f * fontScale)
-                row.setFloat(R.id.dr_meta, "setTextSize", 11f * fontScale)
-                // Overdue: red title + red dot; normal: white title, no dot.
-                row.setInt(
-                    R.id.dr_title, "setTextColor",
-                    if (r.overdue) Color.rgb(255, 107, 107) else Color.WHITE
-                )
-                row.setViewVisibility(
-                    R.id.dr_dot,
-                    if (r.overdue) android.view.View.VISIBLE else android.view.View.GONE
-                )
-                // Priority-colored frame (subtle but visible) on the row.
-                when (r.priority) {
-                    2 -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg_high)
-                    1 -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg_med)
-                    else -> row.setInt(R.id.dr_root, "setBackgroundResource", R.drawable.dw_row_bg)
-                }
-                row.setViewVisibility(R.id.dr_check, android.view.View.VISIBLE)
-                row.setInt(R.id.dr_check, "setImageResource", R.drawable.ic_dw_check_off)
-                val toggle = Intent(ToggleReceiver.ACTION_TOGGLE)
-                    .setClass(context, ToggleReceiver::class.java)
-                    .putExtra(ToggleReceiver.EXTRA_ENTRY_ID, r.entryId)
-                    .putExtra(ToggleReceiver.EXTRA_ITEM_ID, r.itemId)
-                val togglePi = PendingIntent.getBroadcast(
-                    context,
-                    (r.entryId.hashCode() * 31 + (r.itemId?.hashCode() ?: 0)),
-                    toggle,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                row.setOnClickPendingIntent(R.id.dr_check, togglePi)
-                // Tap the text area → open the app on this chat.
-                val openChat = Intent(context, MainActivity::class.java)
-                    .putExtra("open_chat", r.chatId)
-                val openPi = PendingIntent.getActivity(
-                    context,
-                    (r.entryId.hashCode() * 17 + 7),
-                    openChat,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                row.setOnClickPendingIntent(R.id.dr_root, openPi)
-                rv.addView(R.id.dw_list, row)
+            // Scrollable task list: a ListView fed by a RemoteViewsService.
+            // When the rows outgrow the widget's height the user can swipe to
+            // see the rest (previously the list was clipped at the widget edge).
+            val adapterIntent = Intent(context, TnDayWidgetService::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             }
+            rv.setRemoteAdapter(R.id.dw_list, adapterIntent)
+            rv.setEmptyView(R.id.dw_list, R.id.dw_empty)
 
             // Task-count badge in the header.
             rv.setViewVisibility(

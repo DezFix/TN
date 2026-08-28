@@ -249,11 +249,11 @@ class _ListScreenState extends State<ListScreen> {
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(vertical: 13),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(TNRadii.lg),
+                          borderRadius: BorderRadius.circular(TNRadii.md),
                           borderSide: BorderSide.none,
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(TNRadii.lg),
+                          borderRadius: BorderRadius.circular(TNRadii.md),
                           borderSide: BorderSide(color: p.accent.withValues(alpha: 0.35), width: 1.2),
                         ),
                       ),
