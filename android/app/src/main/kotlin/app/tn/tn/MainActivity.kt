@@ -36,6 +36,18 @@ object PendingOpenChat {
     }
 }
 
+object PendingHotAdd {
+    @Volatile
+    var pending = false
+
+    @Synchronized
+    fun take(): Boolean {
+        val v = pending
+        pending = false
+        return v
+    }
+}
+
 // FlutterFragmentActivity (not FlutterActivity) — required by local_auth's
 // biometric prompt on Android.
 class MainActivity : FlutterFragmentActivity() {
@@ -64,6 +76,12 @@ class MainActivity : FlutterFragmentActivity() {
                     .invokeMethod("openSettings", null)
             }
         }
+        if (intent.getBooleanExtra("hot_add", false)) {
+            flutterEngine?.let { engine ->
+                MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
+                    .invokeMethod("hotAdd", null)
+            } ?: run { PendingHotAdd.pending = true }
+        }
         val chatId = intent.getStringExtra("open_chat")
         if (!chatId.isNullOrEmpty()) {
             flutterEngine?.let { engine ->
@@ -90,6 +108,9 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "getPendingOpenChat" -> {
                         result.success(PendingOpenChat.take())
+                    }
+                    "getPendingHotAdd" -> {
+                        result.success(PendingHotAdd.take())
                     }
                     else -> result.notImplemented()
                 }
@@ -152,6 +173,7 @@ class MainActivity : FlutterFragmentActivity() {
         // Cold start via widget text tap.
         val openChatId = intent?.getStringExtra("open_chat")
         if (!openChatId.isNullOrEmpty()) PendingOpenChat.chatId = openChatId
+        if (intent?.getBooleanExtra("hot_add", false) == true) PendingHotAdd.pending = true
     }
 
     /** Extracts shared text/media into a map, copying streams to app storage. */

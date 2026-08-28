@@ -72,6 +72,9 @@ class AppLock {
         await prefs.remove(_keySecret);
         await prefs.remove(_keySecretPin);
         await prefs.remove(_keySecretPattern);
+        // Clear legacy method keys so UI doesn't show "pattern" ghost after disable
+        await prefs.remove(_keyMethods);
+        await prefs.remove(_keyMode);
         _lastUnlock = null;
       }
     } catch (_) {}

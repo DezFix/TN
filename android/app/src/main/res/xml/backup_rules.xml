@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TN: полный отказ от Google Auto Backup.
+  Почему: старый бэкап тянулся после "удалить -> установить заново" и
+  восстанавливал tn-welcome-done / tn-notes-data, из-за чего welcome
+  не показывался и старый мусор возвращался. allowBackup=false в манифесте
+  уже отключает, эти правила — страховка для старых API.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" />
+    <exclude domain="database" />
+    <exclude domain="file" />
+    <exclude domain="external" />
+    <exclude domain="root" />
+</full-backup-content>

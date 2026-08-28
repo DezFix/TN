@@ -118,9 +118,19 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                     )
                 }
             }
-            // Nearest deadline first. The widget list is scrollable, so no
-            // arbitrary cap: every undone task is reachable by scrolling.
-            rows.sortBy { it.ts }
+            // Priority-first then deadline: срочно (2) → важно (1) → обычно (0).
+            // Внутри одного приоритета — ближайший дедлайн первым. Это
+            // профили "обычно / важно / срочно" из настроек задачи.
+            val sortMode = try {
+                val p = prefs.getString("flutter.tn-widget-sort")
+                    ?: prefs.getString("tn-widget-sort") ?: "priority"
+                p
+            } catch (_: Exception) { "priority" }
+            if (sortMode == "priority") {
+                rows.sortWith(compareByDescending<Row> { it.priority }.thenBy { it.ts })
+            } else {
+                rows.sortBy { it.ts }
+            }
             return rows
         }
 
@@ -220,6 +230,18 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 R.id.dw_settings,
                 PendingIntent.getActivity(
                     context, 3, settings,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+
+            // + hot add: quick task from widget
+            val hotAdd = Intent(context, MainActivity::class.java).apply {
+                putExtra("hot_add", true)
+            }
+            rv.setOnClickPendingIntent(
+                R.id.dw_hot_add,
+                PendingIntent.getActivity(
+                    context, 4, hotAdd,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )

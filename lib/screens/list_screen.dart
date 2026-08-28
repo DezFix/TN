@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
 import '../src/models.dart';
@@ -30,11 +32,14 @@ class _ListScreenState extends State<ListScreen> {
   final _search = TextEditingController();
   final _listCtrl = ScrollController();
   String _q = '';
-  String? _folderFilter; // null = all chats
+  String? _folderFilter; // null = all, 'smart_tasks' | 'smart_notes' | folderId
   final Set<String> _sel = {};
   bool _showArchive = false;
   double _topOver = 0;
   double _botOver = 0;
+  bool _smartTasksOn = true;
+  bool _smartNotesOn = true;
+  Map<String, String> _drafts = {};
 
   bool get _selecting => _sel.isNotEmpty;
 
@@ -46,6 +51,36 @@ class _ListScreenState extends State<ListScreen> {
       _q = widget.initialQuery!.trim().toLowerCase();
       _search.text = widget.initialQuery!;
     }
+    _loadSmartFolders();
+    _loadDrafts();
+  }
+
+  Future<void> _loadSmartFolders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _smartTasksOn = prefs.getBool('tn-smartfolder-tasks') ?? true;
+        _smartNotesOn = prefs.getBool('tn-smartfolder-notes') ?? true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadDrafts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final map = <String, String>{};
+      for (final k in prefs.getKeys()) {
+        if (k.startsWith('tn-draft-')) {
+          final v = prefs.getString(k);
+          if (v != null && v.trim().isNotEmpty) {
+            map[k.substring('tn-draft-'.length)] = v.trim();
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() => _drafts = map);
+    } catch (_) {}
   }
 
   @override
@@ -65,6 +100,7 @@ class _ListScreenState extends State<ListScreen> {
       builder: (_) => ChatScreen(model: widget.model, chatId: chat.id,
           scrollToEntryId: scrollTo, highlightEntryId: highlight ? scrollTo : null),
     ));
+    await _loadDrafts();
     if (mounted) setState(() {});
   }
 
@@ -197,6 +233,10 @@ class _ListScreenState extends State<ListScreen> {
   Future<void> _openSettings() async {
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => SettingsScreen(model: widget.model)));
+    await _loadSmartFolders();
+    // If smart folder was disabled while active, reset filter
+    if (_folderFilter == 'smart_tasks' && !_smartTasksOn) _folderFilter = null;
+    if (_folderFilter == 'smart_notes' && !_smartNotesOn) _folderFilter = null;
     if (mounted) setState(() {});
   }
 
@@ -325,8 +365,14 @@ class _ListScreenState extends State<ListScreen> {
 
     final lastByChat = _lastEntryByChat(model);
 
+    bool isSmartMatch(Chat c) {
+      if (_folderFilter == 'smart_tasks') return c.kind == 'tasks';
+      if (_folderFilter == 'smart_notes') return c.kind == 'note';
+      return c.folderId == _folderFilter;
+    }
+
     final visible = active
-        .where((c) => _folderFilter == null || c.folderId == _folderFilter)
+        .where((c) => _folderFilter == null || isSmartMatch(c))
         .toList()
       ..sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -401,6 +447,15 @@ class _ListScreenState extends State<ListScreen> {
       String Function(String, [List<String>?]) tr, Chat chat,
       {required Map<String, Entry> lastByChat}) {
     final last = lastByChat[chat.id];
+    final draft = _drafts[chat.id];
+    if (draft != null && draft.isNotEmpty) {
+      // Show draft inline, Telegram-style, in accent color.
+      final short = draft.length > 40 ? '${draft.substring(0, 40)}…' : draft;
+      return _buildChatRow(chat, p, tr,
+          preview: '${tr('draft')}: $short',
+          time: last == null ? '' : fmtTime(last.ts),
+          isDraft: true);
+    }
     return _buildChatRow(chat, p, tr,
         preview: last == null ? tr('no_entries') : entryPreview(last, tr),
         time: last == null ? '' : fmtTime(last.ts));
@@ -465,7 +520,7 @@ class _ListScreenState extends State<ListScreen> {
 
   Widget _buildChatRow(Chat chat, Palette p,
       String Function(String, [List<String>?]) tr,
-      {required String preview, required String time}) {
+      {required String preview, required String time, bool isDraft = false}) {
     final selected = _sel.contains(chat.id);
     // Swipe actions: right → pin, left → archive (haptics + undo).
     Widget rowContent = GestureDetector(
@@ -481,6 +536,7 @@ class _ListScreenState extends State<ListScreen> {
               p: p,
               preview: preview,
               time: time,
+              isDraft: isDraft,
               onTap: () => _onRowTap(chat),
             ),
             Positioned.fill(
@@ -697,6 +753,30 @@ class _ListScreenState extends State<ListScreen> {
                 setState(() => _folderFilter = null);
               },
             ),
+            if (_smartTasksOn) ...[
+              const SizedBox(width: 6),
+              chip(
+                label: tr('smart_tasks'),
+                icon: Icons.check_circle_outline,
+                selected: _folderFilter == 'smart_tasks',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _folderFilter = 'smart_tasks');
+                },
+              ),
+            ],
+            if (_smartNotesOn) ...[
+              const SizedBox(width: 6),
+              chip(
+                label: tr('smart_notes'),
+                icon: Icons.note_alt_outlined,
+                selected: _folderFilter == 'smart_notes',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _folderFilter = 'smart_notes');
+                },
+              ),
+            ],
             for (final f in folders) ...[
               const SizedBox(width: 6),
               chip(

@@ -5,6 +5,7 @@ class WidgetBridge {
   static const _channel = MethodChannel('tn/widget');
   static void Function()? _onOpenSettings;
   static void Function(String chatId)? _onOpenChat;
+  static void Function()? _onHotAdd;
 
   /// Register a callback invoked when the user taps the gear on the widget.
   static set onOpenSettings(void Function()? cb) {
@@ -14,6 +15,7 @@ class WidgetBridge {
       if (call.method == 'openChat') {
         _onOpenChat?.call(call.arguments as String);
       }
+      if (call.method == 'hotAdd') _onHotAdd?.call();
       return null;
     });
   }
@@ -23,6 +25,10 @@ class WidgetBridge {
     _onOpenChat = cb;
   }
 
+  static set onHotAdd(void Function()? cb) {
+    _onHotAdd = cb;
+  }
+
   /// Poll for a pending open-chat request from a cold-start widget tap.
   static Future<String?> takePendingOpenChat() async {
     try {
@@ -30,6 +36,15 @@ class WidgetBridge {
       return result as String?;
     } catch (_) {
       return null;
+    }
+  }
+
+  static Future<bool> takePendingHotAdd() async {
+    try {
+      final result = await _channel.invokeMethod('getPendingHotAdd');
+      return result as bool? ?? false;
+    } catch (_) {
+      return false;
     }
   }
 

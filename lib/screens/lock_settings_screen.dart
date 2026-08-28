@@ -36,7 +36,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     if (!mounted) return;
     setState(() {
       _enabled = en;
-      _methods = m;
+      _methods = en ? m : <LockMethod>{};
       _grace = g;
       _biometricsOk = bio;
     });

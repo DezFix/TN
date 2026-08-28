@@ -7,6 +7,7 @@ import '../src/models.dart';
 import '../src/sound.dart';
 import '../src/state.dart';
 import '../src/theme.dart';
+import 'chat_screen.dart';
 
 /// Agenda: every undone todo with a deadline, grouped by day — today first,
 /// then the coming days. Items toggle right here, mirroring the chat.
@@ -163,8 +164,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
         e.dueAt! < DateTime.now().millisecondsSinceEpoch;
     final items = e.items ?? const <TodoItem>[];
     final chat = widget.model.state.chatById(e.chatId);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+    return InkWell(
+      borderRadius: BorderRadius.circular(TNRadii.md),
+      onTap: () {
+        final c = chat;
+        if (c == null) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => _AgendaChatPage(model: widget.model, chat: c, entryId: e.id),
+        ));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: p.bgChat,
@@ -200,50 +210,67 @@ class _AgendaScreenState extends State<AgendaScreen> {
           ]),
           const SizedBox(height: 6),
           for (final it in items)
-            InkWell(
-              borderRadius: BorderRadius.circular(6),
-              onTap: () => _toggle(e, it),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: it.done ? p.accent : Colors.transparent,
-                      border: Border.all(
-                          color: it.done
-                              ? p.accent
-                              : p.textFaint.withValues(alpha: .55),
-                          width: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => _toggle(e, it),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: it.done ? p.accent : Colors.transparent,
+                        border: Border.all(
+                            color: it.done
+                                ? p.accent
+                                : p.textFaint.withValues(alpha: .55),
+                            width: 2),
+                      ),
+                      child:
+                          it.done ? Icon(Icons.check, size: 11, color: Colors.white) : null,
                     ),
-                    child:
-                        it.done ? Icon(Icons.check, size: 11, color: Colors.white) : null,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(it.text,
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            color: it.done ? p.textFaint : p.text,
-                            decoration: it.done
-                                ? TextDecoration.lineThrough
-                                : null,
-                            decorationColor: p.textFaint)),
-                  ),
-                  if (it.priority > 0)
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(left: 6),
-                      decoration: BoxDecoration(color: p.priority(it.priority), shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () {
+                      final c = chat;
+                      if (c == null) return;
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => _AgendaChatPage(model: widget.model, chat: c, entryId: e.id),
+                      ));
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Text(it.text,
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              color: it.done ? p.textFaint : p.text,
+                              decoration: it.done
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              decorationColor: p.textFaint)),
                     ),
-                ]),
-              ),
+                  ),
+                ),
+                if (it.priority > 0)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.only(left: 6),
+                    decoration: BoxDecoration(color: p.priority(it.priority), shape: BoxShape.circle),
+                  ),
+              ]),
             ),
         ],
+      ),
       ),
     );
   }
@@ -256,4 +283,13 @@ class _AgendaScreenState extends State<AgendaScreen> {
     widget.model.refresh();
     if (mounted) setState(() {});
   }
+}
+
+class _AgendaChatPage extends StatelessWidget {
+  const _AgendaChatPage({required this.model, required this.chat, required this.entryId});
+  final AppModel model;
+  final Chat chat;
+  final String entryId;
+  @override
+  Widget build(BuildContext context) => ChatScreen(model: model, chatId: chat.id, scrollToEntryId: entryId, highlightEntryId: entryId);
 }

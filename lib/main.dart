@@ -12,13 +12,16 @@ import 'src/app_lock.dart';
 import 'src/app_model.dart';
 import 'src/app_update.dart';
 import 'src/backup.dart';
+import 'src/dialogs.dart';
 import 'src/media.dart';
+import 'src/models.dart';
 import 'src/reminder_engine.dart';
 import 'src/reminders.dart';
 import 'src/share_in.dart';
 import 'src/sync.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
+import 'src/widgets.dart';
 import 'screens/chat_screen.dart';
 import 'screens/list_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -121,8 +124,14 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         builder: (_) => ChatScreen(model: m, chatId: chatId),
       ));
     };
+    WidgetBridge.onHotAdd = () {
+      final m = _loadedModel;
+      if (m == null) return;
+      _handleHotAdd(m);
+    };
     // Cold start: the app was launched by tapping a task text in the widget.
     _pendingOpenChatCheck();
+    _pendingHotAddCheck();
   }
 
   Future<void> _pendingOpenChatCheck() async {
@@ -136,6 +145,71 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         builder: (_) => ChatScreen(model: m, chatId: chatId),
       ));
     });
+  }
+
+  Future<void> _pendingHotAddCheck() async {
+    Timer(const Duration(milliseconds: 900), () async {
+      if (!mounted) return;
+      final pending = await WidgetBridge.takePendingHotAdd();
+      if (!pending || !mounted) return;
+      final m = _loadedModel;
+      if (m == null) return;
+      _handleHotAdd(m);
+    });
+  }
+
+  Future<void> _handleHotAdd(AppModel model) async {
+    final ctx = _navKey.currentContext;
+    if (ctx == null) return;
+    // Pick a tasks chat
+    final tasksChats = model.state.chats.where((c) => c.kind == 'tasks' && !c.isTrashed && !c.archived).toList();
+    if (tasksChats.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(model.tr('need_chat'))));
+      return;
+    }
+    String? pickedId;
+    if (tasksChats.length == 1) {
+      pickedId = tasksChats.first.id;
+    } else {
+      pickedId = await showDialog<String>(
+        context: ctx,
+        builder: (dctx) => AlertDialog(
+          backgroundColor: model.p.modalBg,
+          title: Text(model.tr('hot_add_pick'), style: TextStyle(color: model.p.text, fontWeight: FontWeight.w700)),
+          content: SizedBox(
+            width: 300,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: tasksChats.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: model.p.divider),
+              itemBuilder: (_, i) {
+                final c = tasksChats[i];
+                return ListTile(
+                  leading: ChatAvatar(chat: c, size: 32, iconSize: 16),
+                  title: Text(c.name, style: TextStyle(color: model.p.text)),
+                  onTap: () => Navigator.pop(dctx, c.id),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+    if (pickedId == null) return;
+    final items = await showTodoEditorDialog(ctx, model);
+    if (items == null || items.isEmpty) return;
+    final entry = Entry(
+      id: uid('e'),
+      chatId: pickedId,
+      type: 'todo',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: '',
+      items: items,
+    );
+    model.state.entries.add(entry);
+    await model.save();
+    if (!ctx.mounted) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(model.tr('todo_added', [tasksChats.firstWhere((c) => c.id == pickedId).name]))));
   }
 
   @override

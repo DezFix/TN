@@ -71,6 +71,7 @@ class ChatRow extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.highlight = false,
+    this.isDraft = false,
   });
 
   final Chat chat;
@@ -80,6 +81,7 @@ class ChatRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool highlight;
+  final bool isDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -128,10 +130,24 @@ class ChatRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TNTypography.chatPreview.copyWith(color: p.textSoft)),
+                    isDraft
+                        ? RichText(
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(
+                              style: TNTypography.chatPreview.copyWith(color: p.textSoft),
+                              children: [
+                                TextSpan(
+                                    text: preview.split(':').first + ': ',
+                                    style: TNTypography.chatPreview.copyWith(color: p.accent, fontWeight: FontWeight.w700)),
+                                TextSpan(text: preview.substring(preview.indexOf(':') + 2)),
+                              ],
+                            ),
+                          )
+                        : Text(preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TNTypography.chatPreview.copyWith(color: p.textSoft)),
                   ],
                 ),
               ),

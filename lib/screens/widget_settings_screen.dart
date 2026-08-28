@@ -16,6 +16,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   double _alpha = 1.0;
   double _font = 1.0;
   String _period = 'upcoming'; // 'today' | 'upcoming'
+  String _sort = 'priority'; // 'priority' | 'time'
 
   @override
   void initState() {
@@ -44,11 +45,13 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
       } catch (_) {}
     }
     final period = prefs.getString('tn-daywidget-period') ?? 'all';
+    final sort = prefs.getString('tn-widget-sort') ?? 'priority';
     if (!mounted) return;
     setState(() {
       _alpha = alpha.clamp(0.2, 1.0);
       _font = font.clamp(0.8, 1.6);
       _period = ['today', 'upcoming'].contains(period) ? period : 'upcoming';
+      _sort = ['priority', 'time'].contains(sort) ? sort : 'priority';
     });
   }
 
@@ -57,6 +60,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     await prefs.setDouble('tn-widget-alpha', _alpha);
     await prefs.setDouble('tn-widget-font', _font);
     await prefs.setString('tn-daywidget-period', _period);
+    await prefs.setString('tn-widget-sort', _sort);
     await WidgetBridge.refresh();
   }
 
@@ -101,7 +105,24 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                     ],
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
+                Text(tr('dw_sort_hint'),
+                    style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final (val, key) in [('priority', 'dw_sort_priority'), ('time', 'dw_sort_time')]) ...[
+                      Expanded(
+                        child: _sortButton(p, val, tr(key)),
+                      ),
+                      if (key != 'dw_sort_time') const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(tr('dw_sort_sub'),
+                    style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+                const SizedBox(height: 6),
               ],
             ),
           ),
@@ -164,6 +185,31 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     final selected = _period == value;
     return InkWell(
       onTap: () async { setState(() => _period = value); await _save(); },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: selected ? p.accent.withValues(alpha: .18) : p.bgList,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? p.accent : p.divider, width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: Text(title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? p.accent : p.textSoft)),
+      ),
+    );
+  }
+
+  Widget _sortButton(Palette p, String value, String title) {
+    final selected = _sort == value;
+    return InkWell(
+      onTap: () async { setState(() => _sort = value); await _save(); },
       borderRadius: BorderRadius.circular(10),
       child: Container(
         height: 40,

@@ -4,6 +4,17 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.25.0] - 2026-08-28
+
+- **Widget:** priority sorting — tasks sort by importance (Urgent/Important/Normal) then by time; new sort switch in widget settings (priority vs time)
+- **Chat composer:** input field stretched to full width with larger corners, better use of horizontal space
+- **Voice:** redesigned recording panel (Telegram-style with lock/cancel hints) and scrubbing — drag the waveform to seek, thumb follows progress
+- **Smart folders:** auto folders "Tasks" and "Notes" (all chats by type) — toggle in Settings → Folders
+- **Drafts:** chat list now shows "Draft: ..." instead of last message when you have unsent text
+- **Widget hot add:** `+` next to gear — quick task — pick a Tasks chat and the todo editor opens immediately
+- **Tasks long-press:** draft text you already typed is now prefilled as the first todo item
+- **Bug fixes:** widget/agenda tap now opens the chat for editing (text tap → chat, checkbox → toggle); lock screen no longer shows ghost pattern after disable; fresh install no longer restores old Google backup (allowBackup disabled); Settings shows cache weight (media/trash/temp) and one-tap trash clear
+
 ## [1.24.0] - 2026-08-28
 
 - **Flatter, cleaner UI:** removed card shadows and soft-faded tints, tightened section spacing and empty states, reduced input-field rounding — a more compact, Telegram-style look

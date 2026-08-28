@@ -14,7 +14,7 @@ import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.24.0';
+const appBuildVersion = '1.25.0';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoLatest = 'https://api.github.com/repos/DezFix/TN/releases/latest';
@@ -345,7 +345,7 @@ Future<void> showReleaseDialog(
                           }
                         } else {
                           Navigator.pop(ctx);
-                          _launch(updateUrl);
+                          _launch(updateUrl!);
                         }
                       },
                 label: Text(model.tr('update_now')),

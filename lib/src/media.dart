@@ -174,10 +174,107 @@ class MediaStore {
       return null;
     }
   }
+
+  // ---- cache weight helpers (for Settings) ----
+
+  Future<int> _dirBytes(Directory d) async {
+    var total = 0;
+    try {
+      if (!await d.exists()) return 0;
+      await for (final e in d.list(recursive: true, followLinks: false)) {
+        if (e is File) {
+          try {
+            total += await e.length();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    return total;
+  }
+
+  /// Bytes in the main media dir (without _trash) — фото/голос/файлы.
+  Future<int> mediaBytes() async {
+    final d = await dir();
+    var total = await _dirBytes(d);
+    // _dirBytes includes _trash, subtract it to keep them separate
+    try {
+      final t = await trashDir();
+      total -= await _dirBytes(t);
+      if (total < 0) total = 0;
+    } catch (_) {}
+    return total;
+  }
+
+  /// Bytes in _trash — мусор который ещё можно отменить, но уже жрёт место.
+  Future<int> trashBytes() async => _dirBytes(await trashDir());
+
+  /// Bytes in temp (tn-update.apk + system cache). The downloaded APK alone
+  /// is ~68 MB, so users see where the "мусор" comes from.
+  Future<int> tempBytes() async {
+    try {
+      final tmp = await getTemporaryDirectory();
+      return _dirBytes(tmp);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Total cache + trash + temp for the Settings header.
+  Future<({int media, int trash, int temp, int total})> cacheStats() async {
+    final m = await mediaBytes();
+    final tr = await trashBytes();
+    final tm = await tempBytes();
+    return (media: m, trash: tr, temp: tm, total: m + tr + tm);
+  }
+
+  /// Wipe only trash + temp (safe: не трогает актуальную медиа).
+  Future<int> clearTrashAndTemp() async {
+    var cleared = 0;
+    cleared += await purgeTrash(maxAge: Duration.zero);
+    // extra pass: any file in _trash regardless of age
+    try {
+      final t = await trashDir();
+      if (await t.exists()) {
+        await for (final e in t.list()) {
+          if (e is File) {
+            try {
+              await e.delete();
+              cleared++;
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      final tmp = await getTemporaryDirectory();
+      if (await tmp.exists()) {
+        await for (final e in tmp.list()) {
+          if (e is File) {
+            try {
+              final n = e.path.toLowerCase();
+              if (n.endsWith('.apk') || n.contains('tn-update')) {
+                await e.delete();
+                cleared++;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    return cleared;
+  }
 }
 
 String humanSize(int bytes) {
   final mb = bytes / (1024 * 1024);
   if (mb >= 100) return mb.toStringAsFixed(0);
   return mb.toStringAsFixed(1);
+}
+
+String humanBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  final mb = bytes / (1024 * 1024);
+  if (mb < 1024) return '${mb.toStringAsFixed(mb >= 100 ? 0 : 1)} MB';
+  return '${(mb / 1024).toStringAsFixed(2)} GB';
 }

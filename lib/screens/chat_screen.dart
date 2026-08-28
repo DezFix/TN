@@ -325,7 +325,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _addSubtaskGroup() async {
     if (_pendingImagePath != null) return;
     HapticFeedback.mediumImpact();
-    final items = await showTodoEditorDialog(context, widget.model);
+    final draft = _text.text.trim();
+    Entry? seed;
+    if (draft.isNotEmpty) {
+      seed = Entry(
+        id: 'seed',
+        chatId: widget.chatId,
+        type: 'todo',
+        ts: 0,
+        items: [TodoItem(id: uid('t'), text: draft)],
+      );
+    }
+    final items = await showTodoEditorDialog(context, widget.model, entry: seed);
     if (!mounted || items == null || items.isEmpty) return;
     final entry = Entry(
       id: uid('e'),
@@ -1773,11 +1784,28 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildAudioBubble(AppModel model, Entry entry) {
     final playing = _playingId == entry.id;
     final dur = entry.duration ?? 0;
-    final total = _playDur?.inMilliseconds ?? dur * 1000;
-    final progress =
-        playing && total > 0 ? (_playPos.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
+    final totalMs = _playDur?.inMilliseconds ?? (dur > 0 ? dur * 1000 : 0);
+    final progress = totalMs > 0
+        ? (_playPos.inMilliseconds / totalMs).clamp(0.0, 1.0)
+        : 0.0;
+    // When not playing we still show 0 progress but allow scrubbing to seek & start.
     String two(int v) => v.toString().padLeft(2, '0');
-    final posLabel = '${_playPos.inMinutes}:${two(_playPos.inSeconds % 60)}';
+    final posLabel = playing
+        ? '${_playPos.inMinutes}:${two(_playPos.inSeconds % 60)}'
+        : '${dur ~/ 60}:${two(dur % 60)}';
+    void seekFromDx(double dx, double width) {
+      if (totalMs <= 0 || width <= 0) return;
+      final p = (dx / width).clamp(0.0, 1.0);
+      final target = Duration(milliseconds: (totalMs * p).round());
+      _audioPlayer.seek(target);
+      if (_playingId != entry.id) {
+        // Start playback from scrub position if not playing.
+        _playAudioFrom(entry, target);
+      } else {
+        setState(() => _playPos = target);
+      }
+    }
+
     return Container(
       width: 270,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1794,25 +1822,73 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: _StaticWaveform(
-                  samples: entry.waveform ?? const <int>[],
-                  progress: progress,
-                  playedColor: p.accent,
-                  restColor: p.textFaint.withValues(alpha: .45),
+                child: LayoutBuilder(
+                  builder: (ctx, cts) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      onHorizontalDragUpdate: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      onHorizontalDragStart: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          _StaticWaveform(
+                            samples: entry.waveform ?? const <int>[],
+                            progress: progress,
+                            playedColor: p.accent,
+                            restColor: p.textFaint.withValues(alpha: .45),
+                          ),
+                          // Thumb at progress
+                          if (totalMs > 0)
+                            Positioned(
+                              left: (progress * (cts.maxWidth - 8)).clamp(0.0, cts.maxWidth - 8),
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: p.accent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 1.2),
+                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 3)],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
-          Text(
-            playing
-                ? '$posLabel · ${model.tr('playing')}'
-                : '${entry.duration ?? 0} ${model.tr('sec')} ·',
-            style: TextStyle(fontSize: 11, color: p.textFaint),
+          const SizedBox(height: 4),
+          // Duration / position + time label on same line for compactness
+          Row(
+            children: [
+              Text(
+                playing
+                    ? '$posLabel / ${dur ~/ 60}:${two(dur % 60)}'
+                    : '${dur ~/ 60}:${two(dur % 60)} ${model.tr('sec')}',
+                style: TextStyle(fontSize: 11, color: p.textFaint),
+              ),
+              const Spacer(),
+              _timeLabel(entry),
+            ],
           ),
-          if (!playing) _timeLabel(entry),
         ],
       ),
     );
+  }
+
+  Future<void> _playAudioFrom(Entry entry, Duration pos) async {
+    if (entry.media == null) return;
+    final path = await _pathOf(entry.media!);
+    setState(() {
+      _playingId = entry.id;
+      _playPos = pos;
+    });
+    await _audioPlayer.play(DeviceFileSource(path));
+    await _audioPlayer.seek(pos);
   }
 
   Widget _buildVideoBubble(AppModel model, Entry entry) {
@@ -2276,7 +2352,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 10),
       decoration: BoxDecoration(
         color: p.bgList,
         border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.5))),
@@ -2299,13 +2375,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   onPressed: () => _showAttachSheet(model),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: p.bgChat,
-                borderRadius: BorderRadius.circular(TNRadii.md),
+                borderRadius: BorderRadius.circular(TNRadii.lg),
                 border: Border.all(color: p.divider.withValues(alpha: 0.45)),
               ),
               child: TextField(
@@ -2325,7 +2401,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           ListenableBuilder(
             listenable: _text,
             builder: (context, _) {
@@ -2442,88 +2518,168 @@ class _ChatScreenState extends State<ChatScreen> {
     final timeLabel = '${(_recordSec / 60).floor()}:${two(_recordSec % 60)}';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      color: p.bgList,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+      decoration: BoxDecoration(
+        color: p.bgChat,
+        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.6))),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -2)),
+        ],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!_recLocked) ...[
-            Opacity(
-              opacity: lockProgress,
-              child: Column(
+          // Top hint: slide up to lock
+          if (!_recLocked)
+            AnimatedOpacity(
+              opacity: lockProgress > 0.05 ? 1 : 0.45,
+              duration: const Duration(milliseconds: 120),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.lock, color: p.accent, size: 22),
+                  Icon(Icons.keyboard_arrow_up_rounded,
+                      color: lockProgress > 0.5 ? p.accent : p.textFaint, size: 18),
+                  const SizedBox(width: 4),
                   Text(model.tr('rec_lock_hint'),
-                      style: TextStyle(fontSize: 11, color: p.textSoft)),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: lockProgress > 0.5 ? p.accent : p.textSoft)),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: p.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: lockProgress,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: p.accent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
-          ],
+          if (!_recLocked) const SizedBox(height: 10),
           Row(
             children: [
+              // Left: cancel
               if (_recLocked)
-                IconButton(
-                  icon: Icon(Icons.delete_outline, color: p.danger, size: 26),
-                  tooltip: model.tr('rec_cancel'),
-                  onPressed: () => _finishRecord(send: false),
+                Material(
+                  color: p.danger.withValues(alpha: 0.12),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _finishRecord(send: false),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(Icons.delete_outline, color: p.danger, size: 22),
+                    ),
+                  ),
                 )
               else
-                Opacity(
-                  opacity: cancelProgress,
+                AnimatedOpacity(
+                  opacity: (0.4 + cancelProgress * 0.6).clamp(0.0, 1.0),
+                  duration: const Duration(milliseconds: 80),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.delete_outline, color: p.danger, size: 24),
+                      Icon(Icons.chevron_left_rounded, color: p.danger, size: 20),
+                      Icon(Icons.delete_outline, color: p.danger, size: 20),
                       const SizedBox(width: 4),
                       Text(model.tr('rec_cancel'),
-                          style: TextStyle(fontSize: 12.5, color: p.danger)),
+                          style: TextStyle(fontSize: 13, color: p.danger, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
-              const Spacer(),
-              Icon(Icons.fiber_manual_record, color: p.danger, size: 14),
-              const SizedBox(width: 6),
-              Text(timeLabel,
-                  style: TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: p.text)),
               const SizedBox(width: 10),
-              _LiveWaveform(levels: _recLevels, color: p.accent),
-              const Spacer(),
+              // Center: timer + live waveform (expands)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: p.bgList,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(color: Color(0xFFF04438), shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(timeLabel,
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700, color: p.text, fontFeatures: const [FontFeature.tabularFigures()])),
+                      const SizedBox(width: 10),
+                      Expanded(child: _LiveWaveform(levels: _recLevels, color: p.accent)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Right: send / hint
               if (_recLocked)
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: p.accent),
-                  icon: const Icon(Icons.send, size: 18, color: Colors.white),
-                  label: Text(model.tr('record_stop')),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: p.accent,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                  ),
+                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                  label: Text(model.tr('send'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                   onPressed: () => _finishRecord(send: true),
                 )
               else
-                Opacity(
-                  opacity: .9,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.mic, color: p.textFaint, size: 20),
-                      const SizedBox(width: 4),
-                      Text(model.tr('record_start'),
-                          style: TextStyle(fontSize: 12, color: p.textFaint)),
-                    ],
-                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.mic_rounded, color: p.accent, size: 22),
+                    const SizedBox(height: 2),
+                    Text(model.tr('rec_locked').isNotEmpty ? '↑' : '',
+                        style: TextStyle(fontSize: 10, color: p.textFaint)),
+                  ],
                 ),
             ],
           ),
           if (_recLocked) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.lock, color: p.accent, size: 13),
-                const SizedBox(width: 4),
-                Text(model.tr('rec_locked'),
-                    style: TextStyle(fontSize: 11.5, color: p.textSoft)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock, color: p.accent, size: 13),
+                      const SizedBox(width: 4),
+                      Text(model.tr('rec_locked'),
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.accent)),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ],
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('< ${model.tr('rec_cancel')}  •  ${model.tr('rec_lock_hint')} ↑',
+                  style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+            ),
         ],
       ),
     );

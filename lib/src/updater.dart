@@ -9,8 +9,15 @@ class Updater {
   static const _channel = MethodChannel('tn/install');
 
   /// Machine-readable reason of the last failed [downloadAndInstall]:
-  /// 'sha_mismatch' | 'truncated' | 'not_apk' | 'network' | 'empty'
+  /// 'no_sha' (no digest to verify against) | 'sha_mismatch' | 'truncated'
+  /// | 'not_apk' | 'network' | 'empty'
   /// | 'INSTALL_FAILED' (native installer rejected the package).
+  ///
+  /// `no_sha` is the safety case we never swallow: the package is NOT shipped
+  /// to the installer unless we could verify its SHA-256, because an
+  /// unverified file is exactly what produced the recurring "package
+  /// corrupted" update failures. If no digest is available the update simply
+  /// refuses to install and asks the user to retry.
   static String lastError = '';
 
   /// Numeric compare of "vX.Y.Z" tags against the installed version.
@@ -39,6 +46,12 @@ class Updater {
   /// [expectedSha256] (hex, from the GitHub release asset digest) is verified
   /// before anything is handed to the package installer — the old magic-bytes
   /// check only proved the payload was *a* zip, not *our* APK.
+  ///
+  /// [expectedSha256] is REQUIRED: without a digest to verify against the
+  /// package is never downloaded nor installed (lastError = 'no_sha'). This
+  /// guarantees a truncated/mid-corrupted download can never reach the system
+  /// installer and surface as "package corrupted".
+  ///
   /// Returns the path of the downloaded file, or null on error (see
   /// [lastError]).
   static Future<String?> downloadAndInstall(
@@ -47,6 +60,10 @@ class Updater {
     String? expectedSha256,
   }) async {
     lastError = '';
+    if (expectedSha256 == null || expectedSha256.trim().isEmpty) {
+      lastError = 'no_sha';
+      return null;
+    }
     try {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}${Platform.pathSeparator}tn-update.apk');
@@ -111,12 +128,12 @@ class Updater {
         return null;
       }
 
-      // Integrity: compare against the release asset digest when known.
-      if (expectedSha256 != null && expectedSha256.isNotEmpty) {
-        if (!verifySha256(bytes, expectedSha256)) {
-          lastError = 'sha_mismatch';
-          return null;
-        }
+      // Integrity: REQUIRED digest check. A missing/invalid digest aborted
+      // earlier as 'no_sha', so this always runs against a known value — the
+      // system installer can only ever receive a byte-verified APK.
+      if (!verifySha256(bytes, expectedSha256)) {
+        lastError = 'sha_mismatch';
+        return null;
       }
 
       await file.writeAsBytes(bytes, flush: true);
