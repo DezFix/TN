@@ -99,7 +99,17 @@ class ToggleReceiver : BroadcastReceiver() {
                 for (j in 0 until items.length()) {
                     val item = items.getJSONObject(j)
                     if (item.optString("id") != itemId) continue
-                    val nowDone = !item.optBoolean("done")
+                    val currentlyDone = item.optBoolean("done")
+                    // Блок: нельзя завершить родителя пока есть незавершённые подзадачи
+                    if (!currentlyDone) {
+                        for (k in 0 until items.length()) {
+                            val child = items.getJSONObject(k)
+                            if (child.optString("parentId", "") == itemId && !child.optBoolean("done")) {
+                                return false
+                            }
+                        }
+                    }
+                    val nowDone = !currentlyDone
                     item.put("done", nowDone)
                     if (nowDone) snapCompletedRecurring(e)
                     prefs.edit()

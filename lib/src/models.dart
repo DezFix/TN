@@ -190,10 +190,15 @@ class TodoItem {
 /// Toggles [id] and cascades the new value over its whole subtree (checking
 /// a parent checks its subtasks, unchecking unchecks them). Pure function —
 /// mutates [items] in place, returns true when anything changed.
+/// Блок: родителя нельзя завершить пока есть незавершённые подзадачи.
 bool toggleTodoCascade(List<TodoItem> items, String id) {
   final target = items.where((i) => i.id == id).firstOrNull;
   if (target == null) return false;
   final value = !target.done;
+  if (value) {
+    final hasUndoneChildren = items.any((c) => c.parentId == id && !c.done);
+    if (hasUndoneChildren) return false;
+  }
   void apply(TodoItem t) {
     t.done = value;
     for (final c in items.where((i) => i.parentId == t.id)) {

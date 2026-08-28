@@ -6,12 +6,14 @@ Everything published here goes to GitHub in English only.
 
 ## [1.26.0] - 2026-08-28
 
-- **Cache:** RSS and trash/media now in one "Cache & Trash" card with auto-clean info (trash + temp cleared every 48h) and live size
-- **Widget:** header enlarged and +/gear separated for reliable taps; priority sort now groups by Urgent/Important/Normal and shows all urgent tasks (even without due date); widget properly refreshes after setting change; resize now smooth (targetCell 3×3, updatePeriod 0)
-- **Voice:** waveform is now the scrub bar — drag the waves to seek, thumb follows progress (old recordings without waveform show synthetic waves)
-- **App Shortcuts:** long-press app icon → Quick note (hot add) and Upcoming tasks
-- **Updater:** auto-update now picks the APK matching the installed variant (universal vs arm64/x86_64) to avoid versionCode downgrade
-- **Smart folders:** moved under its own "Smart folders" section for future extensibility
+- **Cache:** RSS and trash/media merged into one "Cache & Trash" card with auto-clean info (trash + temp cleared every 48h) and live size
+- **Widget:** header attached to window (no floating pill) with larger +/gear hitboxes; one task per entry (subtasks aggregated as "+N"); parent cannot be completed until subtasks done; resize smooth (targetCell 3×3, updatePeriod 0); always sort by time (newest first), period filter fixed ("Today" shows only today)
+- **Voice:** waveform is now the scrub bar — drag the waves to seek, thumb follows progress (old recordings show synthetic waves)
+- **Chat composer:** single outline (no double blue corners), full-width with larger radius
+- **App Shortcuts:** long-press app icon → Quick note and Upcoming tasks
+- **Updater:** auto-update picks APK matching installed variant (universal vs arm64/x86_64) to avoid downgrade
+- **Smart folders:** moved under its own "Smart folders" tab for future extensibility
+- **Potato PC:** `tool/potato_retry.dart` — auto-kills hung builds and retries 3×, reports culprit script
 
 ## [1.25.0] - 2026-08-28
 

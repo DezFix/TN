@@ -2377,26 +2377,31 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: 6),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: p.bgChat,
-                borderRadius: BorderRadius.circular(TNRadii.lg),
-                border: Border.all(color: p.divider.withValues(alpha: 0.45)),
-              ),
-              child: TextField(
-                controller: _text,
-                style: TextStyle(color: p.text, fontSize: 14.5),
-                minLines: 1,
-                maxLines: 5,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
-                  hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 13),
+            child: TextField(
+              controller: _text,
+              style: TextStyle(color: p.text, fontSize: 14.5),
+              minLines: 1,
+              maxLines: 5,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: p.bgChat,
+                hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
+                hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.lg),
+                  borderSide: BorderSide(color: p.divider.withValues(alpha: 0.45)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.lg),
+                  borderSide: BorderSide(color: p.divider.withValues(alpha: 0.45)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.lg),
+                  borderSide: BorderSide(color: p.accent, width: 1.6),
                 ),
               ),
             ),

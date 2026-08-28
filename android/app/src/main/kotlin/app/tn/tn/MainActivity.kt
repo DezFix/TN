@@ -73,6 +73,31 @@ class MainActivity : FlutterFragmentActivity() {
             window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         }
         super.onCreate(savedInstanceState)
+        publishShortcuts()
+    }
+
+    private fun publishShortcuts() {
+        try {
+            if (Build.VERSION.SDK_INT < 25) return
+            val sm = getSystemService(android.content.pm.ShortcutManager::class.java) ?: return
+            if (sm.isRequestPinShortcutSupported) {
+                // Static shortcuts already declared in XML, but ensure dynamic for launchers that need it
+                val icon = android.graphics.drawable.Icon.createWithResource(this, R.mipmap.ic_launcher)
+                val quick = android.content.pm.ShortcutInfo.Builder(this, "quick_note")
+                    .setShortLabel(getString(R.string.shortcut_quick_note))
+                    .setLongLabel(getString(R.string.shortcut_quick_note_long))
+                    .setIcon(icon)
+                    .setIntent(Intent("app.tn.tn.SHORTCUT_QUICK_NOTE").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
+                    .build()
+                val agenda = android.content.pm.ShortcutInfo.Builder(this, "agenda")
+                    .setShortLabel(getString(R.string.shortcut_agenda))
+                    .setLongLabel(getString(R.string.shortcut_agenda_long))
+                    .setIcon(icon)
+                    .setIntent(Intent("app.tn.tn.SHORTCUT_AGENDA").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
+                    .build()
+                sm.dynamicShortcuts = listOf(quick, agenda)
+            }
+        } catch (_: Exception) {}
     }
 
     override fun getInitialRoute(): String {

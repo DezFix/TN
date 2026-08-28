@@ -83,10 +83,6 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // option was removed and Week was replaced by Upcoming.
             val periodRaw = prefs.getString("flutter.tn-daywidget-period", "upcoming") ?: "upcoming"
             val period = if (periodRaw == "today") "today" else "upcoming"
-            val sortMode = try {
-                prefs.getString("flutter.tn-widget-sort", null)
-                    ?: prefs.getString("tn-widget-sort", null) ?: "priority"
-            } catch (_: Exception) { "priority" }
             val now = System.currentTimeMillis()
             val data = JSONObject(raw)
             val names = HashMap<String, String>()
@@ -105,50 +101,53 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 val chatId = e.optString("chatId", "")
                 val time0 = e.optLong("dueAt", e.optLong("ts", 0L))
                 val due = e.optLong("dueAt", 0L)
-                // In priority sort, show all tasks (even without due) so urgent is never hidden
-                if (sortMode != "priority") {
-                    when (period) {
-                        "today" -> if (due == 0L || due > endOfTodayMillis()) continue
-                        // Upcoming: overdue + today + tomorrow + day after tomorrow.
-                        else -> if (due == 0L || due > endOfUpcomingMillis()) continue
-                    }
+                when (period) {
+                    "today" -> if (due == 0L || due > endOfTodayMillis()) continue
+                    // Upcoming: overdue + today + tomorrow + day after tomorrow.
+                    else -> if (due == 0L || due > endOfUpcomingMillis()) continue
                 }
                 // Overdue = the moment has already passed (same semantics as
                 // the in-app bubble), not merely "before today" — otherwise a
                 // task expiring earlier TODAY stays gray in the widget.
                 val overdue = due in 1 until System.currentTimeMillis()
                 val items = e.optJSONArray("items") ?: continue
+                // Собираем задачу + подзадачи в одну строку для чистоты виджета
+                val undone = ArrayList<JSONObject>()
                 for (j in 0 until items.length()) {
                     val it = items.getJSONObject(j)
-                    // Completed items stay out of the widget entirely.
                     if (it.optBoolean("done")) continue
-                    val text = it.optString("text", "").trim()
-                    if (text.isEmpty()) continue
+                    if (it.optString("text", "").trim().isEmpty()) continue
+                    undone.add(it)
+                }
+                if (undone.isEmpty()) continue
+                // Корни — задачи без parentId
+                val roots = undone.filter { it.optString("parentId", "").isEmpty() }
+                val targets = if (roots.isNotEmpty()) roots else listOf(undone[0])
+                for (root in targets) {
+                    val rootId = root.optString("id")
+                    var title = root.optString("text", "").trim().take(90)
+                    // Считаем подзадачи этого корня
+                    val subCount = undone.count { it.optString("parentId", "") == rootId }
+                    if (subCount > 0) {
+                        title = "${title.take(80)} (+$subCount)"
+                    }
+                    val prio = root.optInt("priority", 0)
                     rows.add(
                         Row(
                             e.optString("id"),
-                            it.optString("id"),
+                            rootId,
                             chatId,
-                            text.take(90),
+                            title,
                             meta(context, names[chatId] ?: "", time0),
                             overdue,
                             time0,
-                            it.optInt("priority", 0),
+                            prio,
                         )
                     )
                 }
             }
-            // Priority-first then deadline: срочно (2) → важно (1) → обычно (0).
-            // Внутри одного приоритета — ближайший дедлайн первым. Это
-            // профили "обычно / важно / срочно" из настроек задачи.
-            if (sortMode == "priority") {
-                rows.sortWith(Comparator { a, b ->
-                    val pr = b.priority.compareTo(a.priority)
-                    if (pr != 0) pr else a.ts.compareTo(b.ts)
-                })
-            } else {
-                rows.sortBy { it.ts }
-            }
+            // Всегда сначала новые и по времени (ближайший дедлайн первым)
+            rows.sortBy { it.ts }
             return rows
         }
 

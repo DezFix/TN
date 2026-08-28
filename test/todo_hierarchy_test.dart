@@ -43,9 +43,17 @@ void main() {
           TodoItem(id: 'solo', text: 'standalone'),
         ];
 
-    test('checking parent checks whole subtree but not other roots', () {
+    test('checking parent blocked until subtasks done', () {
       final items = fixture();
-      toggleTodoCascade(items, 'p');
+      // p has undone child c1 -> blocked
+      expect(toggleTodoCascade(items, 'p'), isFalse);
+      expect(items.every((i) => !i.done), isTrue);
+      // Complete deepest first, then parent
+      expect(toggleTodoCascade(items, 'g'), isTrue);
+      expect(items.firstWhere((i) => i.id == 'g').done, isTrue);
+      expect(toggleTodoCascade(items, 'c1'), isTrue);
+      expect(items.firstWhere((i) => i.id == 'c1').done, isTrue);
+      expect(toggleTodoCascade(items, 'p'), isTrue);
       expect(
           items.where((i) => i.id != 'solo').map((i) => i.done),
           everyElement(isTrue));
@@ -63,10 +71,17 @@ void main() {
 
     test('child toggle does not touch parent or siblings', () {
       final items = fixture();
-      toggleTodoCascade(items, 'c1');
+      // c1 has undone child g -> blocked
+      expect(toggleTodoCascade(items, 'c1'), isFalse);
       expect(items.firstWhere((i) => i.id == 'p').done, isFalse);
-      expect(items.firstWhere((i) => i.id == 'g').done, isTrue);
+      expect(items.firstWhere((i) => i.id == 'g').done, isFalse);
       expect(items.firstWhere((i) => i.id == 'solo').done, isFalse);
+      // Complete leaf then parent
+      expect(toggleTodoCascade(items, 'g'), isTrue);
+      expect(toggleTodoCascade(items, 'c1'), isTrue);
+      expect(items.firstWhere((i) => i.id == 'g').done, isTrue);
+      expect(items.firstWhere((i) => i.id == 'c1').done, isTrue);
+      expect(items.firstWhere((i) => i.id == 'p').done, isFalse);
     });
 
     test('unknown id returns false without changes', () {
