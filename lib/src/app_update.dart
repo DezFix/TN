@@ -8,13 +8,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_info.dart';
 import 'app_log.dart';
 import 'app_model.dart';
 import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.25.0';
+const appBuildVersion = '1.26.0';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoLatest = 'https://api.github.com/repos/DezFix/TN/releases/latest';
@@ -77,7 +78,7 @@ Future<ReleaseInfo?> fetchLatestRelease() async {
     if (tag.isEmpty || body.trim().isEmpty) return null;
 
     final picked =
-        Platform.isAndroid ? _pickApk(rel['assets'] as List<dynamic>?) : null;
+        Platform.isAndroid ? await _pickApk(rel['assets'] as List<dynamic>?) : null;
     return ReleaseInfo(
       tag: tag,
       name: (rel['name'] as String?) ?? '',
@@ -92,11 +93,14 @@ Future<ReleaseInfo?> fetchLatestRelease() async {
   }
 }
 
-/// Only .apk files are installable — the old "last asset" fallback could
-/// pick the Windows zip and then fail the container check.
-({String url, String sha})? _pickApk(List<dynamic>? assets) {
+/// Only .apk files are installable — picks the variant matching the installed
+/// APK (universal vs split) so versionCode never downgrades (78 vs 2078).
+Future<({String url, String sha})?> _pickApk(List<dynamic>? assets) async {
   if (assets == null) return null;
-  String? universalUrl, universalSha, fallbackUrl, fallbackSha;
+  String? universalUrl, universalSha;
+  String? arm64Url, arm64Sha;
+  String? x86Url, x86Sha;
+  String? fallbackUrl, fallbackSha;
   for (final a in assets) {
     final map = a as Map<String, dynamic>;
     final n = (map['name'] as String?) ?? '';
@@ -104,20 +108,43 @@ Future<ReleaseInfo?> fetchLatestRelease() async {
     final u = map['browser_download_url'] as String? ?? '';
     final digest = (map['digest'] as String?) ?? '';
     final sha = digest.startsWith('sha256:') ? digest.substring(7) : '';
-    if (n.contains('universal')) {
+    final lower = n.toLowerCase();
+    if (lower.contains('universal')) {
       universalUrl = u;
       universalSha = sha.isNotEmpty ? sha : null;
+    } else if (lower.contains('arm64')) {
+      arm64Url ??= u;
+      arm64Sha ??= sha.isNotEmpty ? sha : null;
+    } else if (lower.contains('x86_64') || lower.contains('x86')) {
+      x86Url ??= u;
+      x86Sha ??= sha.isNotEmpty ? sha : null;
     } else if (fallbackUrl == null) {
       fallbackUrl = u;
       fallbackSha = sha.isNotEmpty ? sha : null;
     }
   }
-  final url = universalUrl ?? fallbackUrl;
-  if (url == null) return null;
-  return (
-    url: url,
-    sha: universalUrl != null ? (universalSha ?? '') : (fallbackSha ?? '')
-  );
+  // Detect installed variant to avoid universal↔split downgrade (78 vs 2078)
+  String abi = 'arm64-v8a';
+  bool isUniversal = true;
+  try {
+    abi = await AppInfo.getAbi();
+    isUniversal = await AppInfo.isUniversal();
+  } catch (_) {}
+  if (isUniversal && universalUrl != null) {
+    return (url: universalUrl, sha: universalSha ?? '');
+  }
+  if (abi.contains('arm64') && arm64Url != null) {
+    return (url: arm64Url, sha: arm64Sha ?? '');
+  }
+  if ((abi.contains('x86_64') || abi.contains('x86')) && x86Url != null) {
+    return (url: x86Url, sha: x86Sha ?? '');
+  }
+  // Fallback chain: universal -> arm64 -> x86 -> any apk
+  if (universalUrl != null) return (url: universalUrl, sha: universalSha ?? '');
+  if (arm64Url != null) return (url: arm64Url, sha: arm64Sha ?? '');
+  if (x86Url != null) return (url: x86Url, sha: x86Sha ?? '');
+  if (fallbackUrl != null) return (url: fallbackUrl, sha: fallbackSha ?? '');
+  return null;
 }
 
 /// Cold-start flow: "What's new" once per unseen tag + a single update nudge.

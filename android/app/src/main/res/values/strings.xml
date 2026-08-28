@@ -6,4 +6,8 @@
     <string name="dw_empty">Nothing here yet</string>
     <string name="dw_overdue">%1$s — overdue</string>
     <string name="dw_meta_chat">%1$s · %2$s</string>
+    <string name="shortcut_quick_note">Быстрая заметка</string>
+    <string name="shortcut_quick_note_long">Быстрая задача в TN</string>
+    <string name="shortcut_agenda">Ближайшие задачи</string>
+    <string name="shortcut_agenda_long">Открыть повестку</string>
 </resources>

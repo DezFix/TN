@@ -6,6 +6,8 @@ class WidgetBridge {
   static void Function()? _onOpenSettings;
   static void Function(String chatId)? _onOpenChat;
   static void Function()? _onHotAdd;
+  static void Function()? _onShortcutQuickNote;
+  static void Function()? _onShortcutAgenda;
 
   /// Register a callback invoked when the user taps the gear on the widget.
   static set onOpenSettings(void Function()? cb) {
@@ -16,6 +18,8 @@ class WidgetBridge {
         _onOpenChat?.call(call.arguments as String);
       }
       if (call.method == 'hotAdd') _onHotAdd?.call();
+      if (call.method == 'shortcutQuickNote') _onShortcutQuickNote?.call();
+      if (call.method == 'shortcutAgenda') _onShortcutAgenda?.call();
       return null;
     });
   }
@@ -27,6 +31,14 @@ class WidgetBridge {
 
   static set onHotAdd(void Function()? cb) {
     _onHotAdd = cb;
+  }
+
+  static set onShortcutQuickNote(void Function()? cb) {
+    _onShortcutQuickNote = cb;
+  }
+
+  static set onShortcutAgenda(void Function()? cb) {
+    _onShortcutAgenda = cb;
   }
 
   /// Poll for a pending open-chat request from a cold-start widget tap.
@@ -45,6 +57,15 @@ class WidgetBridge {
       return result as bool? ?? false;
     } catch (_) {
       return false;
+    }
+  }
+
+  static Future<String?> takePendingShortcut() async {
+    try {
+      final result = await _channel.invokeMethod('getPendingShortcut');
+      return result as String?;
+    } catch (_) {
+      return null;
     }
   }
 

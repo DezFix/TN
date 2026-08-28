@@ -23,6 +23,7 @@ import 'src/sync.dart';
 import 'src/theme.dart';
 import 'src/widget_bridge.dart';
 import 'src/widgets.dart';
+import 'screens/agenda_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/list_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -110,6 +111,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   AppModel? _loadedModel;
   Timer? _pendingOpenChatTimer;
   Timer? _pendingHotAddTimer;
+  Timer? _pendingShortcutTimer;
   bool _whatsNewShown = false;
 
   @override
@@ -131,9 +133,20 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       if (m == null) return;
       _handleHotAdd(m);
     };
+    WidgetBridge.onShortcutQuickNote = () {
+      final m = _loadedModel;
+      if (m == null) return;
+      _handleHotAdd(m);
+    };
+    WidgetBridge.onShortcutAgenda = () {
+      final m = _loadedModel;
+      if (m == null) return;
+      _navKey.currentState?.push(MaterialPageRoute(builder: (_) => AgendaScreen(model: m)));
+    };
     // Cold start: the app was launched by tapping a task text in the widget.
     _pendingOpenChatCheck();
     _pendingHotAddCheck();
+    _pendingShortcutCheck();
   }
 
   Future<void> _pendingOpenChatCheck() async {
@@ -158,6 +171,22 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       final m = _loadedModel;
       if (m == null) return;
       _handleHotAdd(m);
+    });
+  }
+
+  Future<void> _pendingShortcutCheck() async {
+    if (_isTestEnv) return;
+    _pendingShortcutTimer = Timer(const Duration(milliseconds: 950), () async {
+      if (!mounted) return;
+      final action = await WidgetBridge.takePendingShortcut();
+      if (action == null || !mounted) return;
+      final m = _loadedModel;
+      if (m == null) return;
+      if (action == 'quick_note') {
+        _handleHotAdd(m);
+      } else if (action == 'agenda') {
+        _navKey.currentState?.push(MaterialPageRoute(builder: (_) => AgendaScreen(model: m)));
+      }
     });
   }
 
@@ -219,6 +248,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   void dispose() {
     _pendingOpenChatTimer?.cancel();
     _pendingHotAddTimer?.cancel();
+    _pendingShortcutTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

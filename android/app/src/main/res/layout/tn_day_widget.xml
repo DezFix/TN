@@ -10,7 +10,7 @@
     android:paddingTop="10dp"
     android:paddingBottom="8dp">
 
-    <!-- Header pill: accent icon, title, task-count badge, gear. -->
+    <!-- Header pill: accent icon, title, task-count badge, + and gear separated for easy tapping. -->
     <LinearLayout
         android:id="@+id/dw_header"
         android:layout_width="match_parent"
@@ -18,60 +18,71 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@drawable/dw_header_bg"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp">
+        android:paddingStart="12dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
-        <ImageView
-            android:id="@+id/dw_icon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@drawable/ic_dw_check_on"
-            android:contentDescription="task widget" />
-
-        <TextView
-            android:id="@+id/dw_title"
+        <LinearLayout
+            android:id="@+id/dw_header_content"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="7dp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:text="@string/dw_title_tasks"
-            android:textColor="#4EA4F6"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/dw_count"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="20dp"
-            android:gravity="center"
-            android:background="@drawable/dw_count_bg"
-            android:paddingStart="7dp"
-            android:paddingEnd="7dp"
-            android:paddingTop="1dp"
-            android:paddingBottom="1dp"
-            android:singleLine="true"
-            android:textColor="#FFFFFF"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            <ImageView
+                android:id="@+id/dw_icon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_dw_check_on"
+                android:contentDescription="task widget" />
+
+            <TextView
+                android:id="@+id/dw_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="@string/dw_title_tasks"
+                android:textColor="#4EA4F6"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/dw_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="22dp"
+                android:gravity="center"
+                android:background="@drawable/dw_count_bg"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:singleLine="true"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ImageView
             android:id="@+id/dw_hot_add"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginStart="8dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:padding="6dp"
             android:src="@drawable/ic_dw_add"
             android:contentDescription="quick add" />
 
         <ImageView
             android:id="@+id/dw_settings"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:layout_marginStart="8dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="2dp"
+            android:padding="8dp"
             android:src="@drawable/ic_dw_gear"
             android:contentDescription="widget settings" />
     </LinearLayout>

@@ -48,6 +48,18 @@ object PendingHotAdd {
     }
 }
 
+object PendingShortcut {
+    @Volatile
+    var action: String? = null
+
+    @Synchronized
+    fun take(): String? {
+        val v = action
+        action = null
+        return v
+    }
+}
+
 // FlutterFragmentActivity (not FlutterActivity) — required by local_auth's
 // biometric prompt on Android.
 class MainActivity : FlutterFragmentActivity() {
@@ -82,6 +94,20 @@ class MainActivity : FlutterFragmentActivity() {
                     .invokeMethod("hotAdd", null)
             } ?: run { PendingHotAdd.pending = true }
         }
+        when (intent.action) {
+            "app.tn.tn.SHORTCUT_QUICK_NOTE" -> {
+                flutterEngine?.let { engine ->
+                    MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
+                        .invokeMethod("shortcutQuickNote", null)
+                } ?: run { PendingShortcut.action = "quick_note" }
+            }
+            "app.tn.tn.SHORTCUT_AGENDA" -> {
+                flutterEngine?.let { engine ->
+                    MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
+                        .invokeMethod("shortcutAgenda", null)
+                } ?: run { PendingShortcut.action = "agenda" }
+            }
+        }
         val chatId = intent.getStringExtra("open_chat")
         if (!chatId.isNullOrEmpty()) {
             flutterEngine?.let { engine ->
@@ -111,6 +137,9 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "getPendingHotAdd" -> {
                         result.success(PendingHotAdd.take())
+                    }
+                    "getPendingShortcut" -> {
+                        result.success(PendingShortcut.take())
                     }
                     else -> result.notImplemented()
                 }
@@ -168,12 +197,42 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tn/appInfo")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getAbi" -> result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a")
+                    "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    "getVersionCode" -> {
+                        try {
+                            val pInfo = packageManager.getPackageInfo(packageName, 0)
+                            val vc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else pInfo.versionCode.toLong()
+                            result.success(vc)
+                        } catch (_: Exception) { result.success(0L) }
+                    }
+                    "isUniversal" -> {
+                        // Universal APK contains multiple ABIs, split contains single. We approximate via versionCode: universal <2000, splits >=2000
+                        try {
+                            val pInfo = packageManager.getPackageInfo(packageName, 0)
+                            val vc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else pInfo.versionCode.toLong()
+                            // base = vc % 1000, universal if vc <1000 or vc==base, split if vc>=2000
+                            val isUniversal = vc < 1000 || vc == vc % 1000L
+                            // More reliable: check nativeLibraryDir contains multiple ABIs? Fallback to versionCode heuristic.
+                            result.success(isUniversal)
+                        } catch (_: Exception) { result.success(true) }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         // Cold start via a share action.
         intent?.let { handleShareIntent(it) }?.let { PendingShare.data = it.toMutableMap() }
         // Cold start via widget text tap.
         val openChatId = intent?.getStringExtra("open_chat")
         if (!openChatId.isNullOrEmpty()) PendingOpenChat.chatId = openChatId
         if (intent?.getBooleanExtra("hot_add", false) == true) PendingHotAdd.pending = true
+        when (intent?.action) {
+            "app.tn.tn.SHORTCUT_QUICK_NOTE" -> PendingShortcut.action = "quick_note"
+            "app.tn.tn.SHORTCUT_AGENDA" -> PendingShortcut.action = "agenda"
+        }
     }
 
     /** Extracts shared text/media into a map, copying streams to app storage. */

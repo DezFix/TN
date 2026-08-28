@@ -260,6 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Общий вес кеша + мусор
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -299,14 +300,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(tr('rss_refresh'), style: TextStyle(color: p.accent)),
                   ),
                 ),
-              ],
-            ),
-          ),
-          _sectionLabel(tr('rss_channels'), p),
-          _card(
-            p,
-            child: Column(
-              children: [
+                Divider(height: 24, color: p.divider),
+                // RSS внутри той же карточки
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -314,6 +309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     TextButton(
                       onPressed: () async {
                         await RssService.clearCache();
+                        await _loadCacheSize();
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('rss_cache_cleared'))));
                       },
@@ -321,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                Divider(height: 24, color: p.divider),
+                const SizedBox(height: 4),
                 Text(tr('rss_cache_max_size'),
                     style: TextStyle(
                         fontSize: 11,
@@ -352,15 +348,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(tr('rss_cache_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
                 const SizedBox(height: 8),
                 Text(tr('rss_cache_for'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                const SizedBox(height: 12),
+                // Автоочистка — один переключатель на всё
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: p.bgList,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_delete_outlined, size: 18, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('cache_auto_title'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
+                            Text(tr('cache_auto_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.check_circle, size: 20, color: p.accent),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          _sectionLabel(tr('folders'), p),
+          _sectionLabel(tr('smart_folders'), p),
           _card(
             p,
             child: Column(
               children: [
-                // Smart profile folders (auto)
                 Row(
                   children: [
                     Icon(Icons.auto_awesome_outlined, size: 18, color: p.accent),
@@ -368,6 +389,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Expanded(child: Text(tr('smart_folders'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.5))),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(tr('smart_folders_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
                 const SizedBox(height: 10),
                 _smartFolderToggle(
                   p: p,
@@ -386,7 +409,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _smartNotes,
                   onChanged: (v) => _setSmartFolder('notes', v),
                 ),
-                Divider(height: 20, color: p.divider),
+                const SizedBox(height: 8),
+                Text(tr('smart_folders_future'), style: TextStyle(fontSize: 11, color: p.textFaint, fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ),
+          _sectionLabel(tr('folders'), p),
+          _card(
+            p,
+            child: Column(
+              children: [
                 InkWell(
                   onTap: () async {
                     // Same name+color dialog as the FAB flow on the main

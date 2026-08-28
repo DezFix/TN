@@ -4,6 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.26.0] - 2026-08-28
+
+- **Cache:** RSS and trash/media now in one "Cache & Trash" card with auto-clean info (trash + temp cleared every 48h) and live size
+- **Widget:** header enlarged and +/gear separated for reliable taps; priority sort now groups by Urgent/Important/Normal and shows all urgent tasks (even without due date); widget properly refreshes after setting change; resize now smooth (targetCell 3×3, updatePeriod 0)
+- **Voice:** waveform is now the scrub bar — drag the waves to seek, thumb follows progress (old recordings without waveform show synthetic waves)
+- **App Shortcuts:** long-press app icon → Quick note (hot add) and Upcoming tasks
+- **Updater:** auto-update now picks the APK matching the installed variant (universal vs arm64/x86_64) to avoid versionCode downgrade
+- **Smart folders:** moved under its own "Smart folders" section for future extensibility
+
 ## [1.25.0] - 2026-08-28
 
 - **Widget:** priority sorting — tasks sort by importance (Urgent/Important/Normal) then by time; new sort switch in widget settings (priority vs time)

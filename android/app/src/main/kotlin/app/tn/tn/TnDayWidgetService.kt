@@ -60,10 +60,15 @@ class TnDayWidgetViewsFactory(
         } catch (_: Exception) {
             emptyList<TnDayWidgetProvider.Companion.Row>()
         }
+        val sortMode = TnDayWidgetProvider.readSortMode(context)
         var lastSection: String? = null
         val flat = ArrayList<ListItem>()
         for (r in rows) {
-            val section = TnDayWidgetProvider.sectionLabel(context, ws, r.ts)
+            val section = if (sortMode == "priority") {
+                TnDayWidgetProvider.priorityHeader(context, r.priority)
+            } else {
+                TnDayWidgetProvider.sectionLabel(context, ws, r.ts)
+            }
             if (section != null && section != lastSection) {
                 flat.add(ListItem.Header(section))
                 lastSection = section

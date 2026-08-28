@@ -48,9 +48,21 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val ids = manager.getAppWidgetIds(ComponentName(context, TnDayWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
+                try {
+                    manager.notifyAppWidgetViewDataChanged(id, R.id.dw_list)
+                } catch (_: Exception) {}
                 val views = buildViews(context, id)
                 manager.updateAppWidget(id, views)
             }
+        }
+
+        fun readSortMode(context: Context): String {
+            return try {
+                val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                prefs.getString("flutter.tn-widget-sort", null)
+                    ?: prefs.getString("tn-widget-sort", null)
+                    ?: "priority"
+            } catch (_: Exception) { "priority" }
         }
 
         data class Row(
@@ -71,6 +83,10 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // option was removed and Week was replaced by Upcoming.
             val periodRaw = prefs.getString("flutter.tn-daywidget-period", "upcoming") ?: "upcoming"
             val period = if (periodRaw == "today") "today" else "upcoming"
+            val sortMode = try {
+                prefs.getString("flutter.tn-widget-sort", null)
+                    ?: prefs.getString("tn-widget-sort", null) ?: "priority"
+            } catch (_: Exception) { "priority" }
             val now = System.currentTimeMillis()
             val data = JSONObject(raw)
             val names = HashMap<String, String>()
@@ -89,10 +105,13 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 val chatId = e.optString("chatId", "")
                 val time0 = e.optLong("dueAt", e.optLong("ts", 0L))
                 val due = e.optLong("dueAt", 0L)
-                when (period) {
-                    "today" -> if (due == 0L || due > endOfTodayMillis()) continue
-                    // Upcoming: overdue + today + tomorrow + day after tomorrow.
-                    else -> if (due == 0L || due > endOfUpcomingMillis()) continue
+                // In priority sort, show all tasks (even without due) so urgent is never hidden
+                if (sortMode != "priority") {
+                    when (period) {
+                        "today" -> if (due == 0L || due > endOfTodayMillis()) continue
+                        // Upcoming: overdue + today + tomorrow + day after tomorrow.
+                        else -> if (due == 0L || due > endOfUpcomingMillis()) continue
+                    }
                 }
                 // Overdue = the moment has already passed (same semantics as
                 // the in-app bubble), not merely "before today" — otherwise a
@@ -122,11 +141,6 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             // Priority-first then deadline: срочно (2) → важно (1) → обычно (0).
             // Внутри одного приоритета — ближайший дедлайн первым. Это
             // профили "обычно / важно / срочно" из настроек задачи.
-            val sortMode = try {
-                val p = prefs.getString("flutter.tn-widget-sort", null)
-                    ?: prefs.getString("tn-widget-sort", null) ?: "priority"
-                p
-            } catch (_: Exception) { "priority" }
             if (sortMode == "priority") {
                 rows.sortWith(Comparator { a, b ->
                     val pr = b.priority.compareTo(a.priority)
@@ -175,6 +189,20 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        fun priorityHeader(context: Context, priority: Int): String {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
+            if (lang.isNullOrEmpty()) lang = Locale.getDefault().language
+            return when (lang.take(2).lowercase(Locale.ROOT)) {
+                "ru" -> when (priority) { 2 -> "Срочно"; 1 -> "Важно"; else -> "Обычно" }
+                "uk" -> when (priority) { 2 -> "Терміново"; 1 -> "Важливо"; else -> "Звичайно" }
+                "de" -> when (priority) { 2 -> "Dringend"; 1 -> "Wichtig"; else -> "Normal" }
+                "es" -> when (priority) { 2 -> "Urgente"; 1 -> "Importante"; else -> "Normal" }
+                "fr" -> when (priority) { 2 -> "Urgent"; 1 -> "Important"; else -> "Normal" }
+                else -> when (priority) { 2 -> "Urgent"; 1 -> "Important"; else -> "Normal" }
+            }
+        }
+
         /**
          * Adjustable widget font size (scale, default 1.0) written by the
          * in-app widget settings screen. Shared by the provider (header) and
@@ -216,10 +244,10 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val rv = RemoteViews(context.packageName, R.layout.tn_day_widget)
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
 
-            // Header opens the app.
+            // Header content (icon+title) opens the app — separated from +/gear for reliable tapping
             val open = Intent(context, MainActivity::class.java)
             rv.setOnClickPendingIntent(
-                R.id.dw_header,
+                R.id.dw_header_content,
                 PendingIntent.getActivity(
                     context, 2, open,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

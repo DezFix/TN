@@ -2727,26 +2727,21 @@ class _StaticWaveform extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (samples.isEmpty) {
-      return Container(
-        height: 4,
-        margin: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: restColor,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      );
-    }
+    // Если волн нет (старые записи) — генерируем синтетическую волну, чтобы
+    // скруб-бар всегда был волнами, как просил юзер: волны + прогресс в одном
+    final effective = samples.isEmpty
+        ? List<int>.generate(40, (i) => [18, 28, 42, 60, 42, 28, 14, 22][i % 8])
+        : samples;
     return SizedBox(
       height: 30,
       child: CustomPaint(
         painter: _WaveformPainter(
-          samples: samples,
+          samples: effective,
           progress: progress,
           playedColor: playedColor,
           restColor: restColor,
-          barWidth: 2.5,
-          gap: 1.5,
+          barWidth: 2.8,
+          gap: 1.4,
         ),
       ),
     );
