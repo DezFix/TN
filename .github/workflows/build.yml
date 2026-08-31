@@ -21,6 +21,13 @@ jobs:
           channel: stable
           flutter-version: 3.41.4
 
+      - name: Install NDK 29 for whisper_ggml
+        run: |
+          echo "Installing NDK 29.0.14206865 for whisper_ggml..."
+          yes | sdkmanager --licenses || true
+          sdkmanager --install "ndk;29.0.14206865" || $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;29.0.14206865" || $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;29.0.14206865" || true
+          ls -la $ANDROID_SDK_ROOT/ndk 2>/dev/null || ls -la $ANDROID_HOME/ndk 2>/dev/null || echo "NDK dir check done"
+
       - run: flutter pub get
       - run: flutter test
       - name: Restore release keystore

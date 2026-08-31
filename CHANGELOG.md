@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.3] - 2026-08-31
+
+- **Build fix:** `ndkVersion 29.0.14206865` (stable) + CI `Install NDK 29` step (`sdkmanager --install ndk;29.0.14206865`, `yes | sdkmanager --licenses`) — чинит падение `Build APKs` `FAILURE License not accepted` на `v1.27.2` (`29.0.13113456 rc1` → stable). Локально установлено оба NDK, сборка `130.7MB` успешна `140s`
+
 ## [1.27.2] - 2026-08-31
 
 - **Build:** `android/app/build.gradle.kts:32` `ndkVersion 29.0.13113456` для `whisper_ggml` (ранее `flutter.ndkVersion 27`), исправляет `LICENSE not accepted` / `NDK 29 required` на CI и локально; APK вырос `65.7MB → 130.7MB` из-за `whisper.cpp` native libs, но остаётся offline
