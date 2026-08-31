@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.4] - 2026-08-31
+
+- **Build fix:** CI `Install NDK 29 for whisper_ggml` — теперь ставит обе `29.0.13113456` (требует `whisper_ggml` плагин) + `29.0.14206865` (app), через `$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager` + `yes | --licenses` до и после, чинит `FAILURE License not accepted` на `v1.27.2/v1.27.3` (android `whisper_ggml` `ndk;29.0.13113456` лицензия). Windows билд уже был `success`, android теперь тоже
+
 ## [1.27.3] - 2026-08-31
 
 - **Build fix:** `ndkVersion 29.0.14206865` (stable) + CI `Install NDK 29` step (`sdkmanager --install ndk;29.0.14206865`, `yes | sdkmanager --licenses`) — чинит падение `Build APKs` `FAILURE License not accepted` на `v1.27.2` (`29.0.13113456 rc1` → stable). Локально установлено оба NDK, сборка `130.7MB` успешна `140s`
