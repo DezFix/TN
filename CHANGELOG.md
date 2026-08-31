@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.26.4] - 2026-08-31
+
+- **Todo editor:** reworked "Изменить список" from small dialog to full bottom sheet — header with clock (tap → date/time & repeat sheet) and importance chips (Normal/Important/Urgent) + task list with colored priority dots (tap to cycle), inline subtasks and quick delete; each row shows `↳` for children and `∙` priority color, time can be set/cleared from the top menu
+- **Widget:** subtasks now stay together inside one task — parent row shows `↳ sub • sub +N` preview (up to 3 names + counter) under the title, instead of separate rows or hidden "+N"
+
 ## [1.26.3] - 2026-08-31
 
 - **Widget:** removed `+` quick-add button (use long-press app icon → Quick note); tasks now grouped by priority (Urgent / Important / Normal) with overdue on top, instead of time buckets

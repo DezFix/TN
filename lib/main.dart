@@ -209,16 +209,24 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       );
     }
     if (pickedId == null) return;
-    final items = await showTodoEditorDialog(ctx, model);
-    if (items == null || items.isEmpty) return;
+    final res = await showTodoEditorDialog(ctx, model);
+    if (res == null || res.items.isEmpty) return;
     final entry = Entry(
       id: uid('e'),
       chatId: pickedId,
       type: 'todo',
       ts: DateTime.now().millisecondsSinceEpoch,
       text: '',
-      items: items,
+      items: res.items,
+      dueAt: res.schedule?.dueAt,
+      recurrence: res.schedule?.recurrence,
+      recurrenceDays: res.schedule?.recurrenceDays,
+      monthDay: res.schedule?.monthDay,
     );
+    // Если приоритет выбран — применяем к первому элементу (если у него 0).
+    if (res.schedule != null && res.schedule!.priority != 0 && entry.items!.isNotEmpty && entry.items!.first.priority == 0) {
+      entry.items!.first.priority = res.schedule!.priority;
+    }
     model.state.entries.add(entry);
     await model.save();
     if (!ctx.mounted) return;

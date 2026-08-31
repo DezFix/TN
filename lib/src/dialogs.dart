@@ -353,12 +353,21 @@ Future<Chat?> showForwardDialog(BuildContext context, AppModel model,
   );
 }
 
-Future<List<TodoItem>?> showTodoEditorDialog(
+class TodoEditorResult {
+  final List<TodoItem> items;
+  final SchedulePick? schedule;
+  const TodoEditorResult(this.items, this.schedule);
+}
+
+/// Reworked sheet: удобное меню с часами и важностью. Показывает срок и
+/// приоритет в шапке (как в sched_sheet) + список с цветными маркерами,
+/// часами per-item и быстрым переключением важности.
+Future<TodoEditorResult?> showTodoEditorDialog(
     BuildContext context, AppModel model, {Entry? entry}) async {
   final p = model.p;
   final tr = model.tr;
   final items = <TodoItem>[
-    if (entry != null)
+    if (entry != null && entry.items != null)
       ...entry.items!.map((i) => TodoItem(
           id: i.id,
           text: i.text,
@@ -368,9 +377,24 @@ Future<List<TodoItem>?> showTodoEditorDialog(
   ];
   final field = TextEditingController();
   String? addUnder;
+  int defaultPriority = 0;
+  // Начальный schedule из entry (если редактируем) — иначе null.
+  SchedulePick? schedule;
+  if (entry != null && entry.dueAt != null) {
+    final m = entry;
+    schedule = SchedulePick(
+      dueAt: m.dueAt,
+      recurrence: m.recurrence,
+      recurrenceDays: m.recurrenceDays == null ? null : List<int>.of(m.recurrenceDays!),
+      monthDay: m.monthDay,
+      priority: items.isNotEmpty ? items.first.priority : 0,
+    );
+    if (items.isNotEmpty) defaultPriority = items.first.priority;
+  } else if (items.isNotEmpty) {
+    // Если есть элементы — возьмём приоритет первого как default.
+    defaultPriority = items.first.priority;
+  }
 
-  // Index right after the last descendant of parentId — keeps subtasks
-  // visually grouped under their parent in list order.
   int insertAfterSubtree(List<TodoItem> list, String? parentId) {
     if (parentId == null) return list.length;
     var idx = list.indexWhere((i) => i.id == parentId);
@@ -390,15 +414,30 @@ Future<List<TodoItem>?> showTodoEditorDialog(
     return idx + 1;
   }
 
-  return showDialog<List<TodoItem>>(
+  String fmtDue(int ms) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final time = '${two(d.hour)}:${two(d.minute)}';
+    final today = d.year == now.year && d.month == now.month && d.day == now.day;
+    if (today) return time;
+    final date = d.year == now.year ? '${d.day}.${two(d.month)}' : '${d.day}.${two(d.month)}.${d.year % 100}';
+    return '$date $time';
+  }
+
+  return showModalBottomSheet<TodoEditorResult>(
     context: context,
+    backgroundColor: p.modalBg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) {
         void addItem() {
           final t = field.text.trim();
           if (t.isEmpty) return;
-          items.insert(insertAfterSubtree(items, addUnder),
-              TodoItem(id: uid('t'), text: t, parentId: addUnder));
+          items.insert(
+              insertAfterSubtree(items, addUnder),
+              TodoItem(id: uid('t'), text: t, parentId: addUnder, priority: defaultPriority));
           field.clear();
           setState(() => addUnder = null);
         }
@@ -419,15 +458,8 @@ Future<List<TodoItem>?> showTodoEditorDialog(
                 onSubmitted: (_) => Navigator.pop(c2, true),
               ),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(c2),
-                    child:
-                        Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: p.accent),
-                  onPressed: () => Navigator.pop(c2, true),
-                  child: Text(tr('save')),
-                ),
+                TextButton(onPressed: () => Navigator.pop(c2), child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+                FilledButton(style: FilledButton.styleFrom(backgroundColor: p.accent), onPressed: () => Navigator.pop(c2, true), child: Text(tr('save'))),
               ],
             ),
           );
@@ -436,7 +468,39 @@ Future<List<TodoItem>?> showTodoEditorDialog(
           }
         }
 
-        // Ordered display pass: roots first, then each item's subtasks.
+        void cyclePriority(TodoItem it) {
+          setState(() => it.priority = (it.priority + 1) % 3);
+          // Также обновляем default для следующих добавлений.
+          defaultPriority = it.priority;
+        }
+
+        Future<void> pickTime() async {
+          // Открываем общий sheet выбора даты/времени/повторов.
+          // Передаём текущий schedule, показываем приоритет тоже.
+          final res = await showScheduleSheet(
+            ctx,
+            model,
+            initialDueAt: schedule?.dueAt,
+            initialRecurrence: schedule?.recurrence,
+            initialRecurrenceDays: schedule?.recurrenceDays,
+            initialMonthDay: schedule?.monthDay,
+            initialPriority: defaultPriority,
+            showPriority: true,
+          );
+          if (res != null && res.dueAt != null) {
+            setState(() {
+              schedule = res;
+              defaultPriority = res.priority;
+              // Если хотим — можно проставить приоритет всем корневым элементам.
+              // Пока ставим только default для новых.
+            });
+          }
+        }
+
+        void clearTime() {
+          setState(() => schedule = null);
+        }
+
         final display = <MapEntry<TodoItem, int>>[];
         final byParent = <String?, List<TodoItem>>{};
         for (final it in items) {
@@ -448,141 +512,316 @@ Future<List<TodoItem>?> showTodoEditorDialog(
             walk(it.id, d + 1);
           }
         }
-
         walk(null, 0);
 
-        Widget circle(bool done, {double size = 17}) => AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: done ? p.accent : Colors.transparent,
-                border: Border.all(
-                    color: done ? p.accent : p.textFaint.withValues(alpha: .55),
-                    width: 2),
-              ),
-              child: done ? Icon(Icons.check, size: 12, color: Colors.white) : null,
-            );
+        Widget circle(bool done, int prio, {double size = 18}) {
+          final col = p.priority(prio);
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: done ? p.accent : Colors.transparent,
+              border: Border.all(color: done ? p.accent : col.withValues(alpha: .65), width: done ? 2 : 1.8),
+            ),
+            child: done ? const Icon(Icons.check, size: 11, color: Colors.white) : null,
+          );
+        }
 
-        return AlertDialog(
-          backgroundColor: p.modalBg,
-          title: Text(tr(entry != null ? 'todo_edit_title' : 'todo_new_title'),
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
-          content: SizedBox(
-            width: 340,
+        Widget priorityChip(int pr, bool sel) {
+          final label = tr('priority_$pr');
+          final col = p.priority(pr);
+          return GestureDetector(
+            onTap: () => setState(() => defaultPriority = pr),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: sel ? col : p.bgChat,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: sel ? col : p.divider, width: 1.2),
+              ),
+              child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: sel ? Colors.white : p.textSoft)),
+            ),
+          );
+        }
+
+        // Родители для выборки подзадачи (только корневые)
+        final roots = items.where((i) => i.parentId == null).toList();
+
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: p.divider, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 10),
                 Row(
+                  children: [
+                    Expanded(
+                      child: Text(tr(entry != null ? 'todo_edit_title' : 'todo_new_title'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: p.text)),
+                    ),
+                    if (items.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(20)),
+                        child: Text('${items.length}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent)),
+                      ),
+                    const SizedBox(width: 6),
+                    IconButton(onPressed: () => Navigator.pop(ctx), icon: Icon(Icons.close, size: 20, color: p.textFaint)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // ── Часы + важность (как меню) ──
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(TNRadii.md), border: Border.all(color: p.divider.withValues(alpha: .45))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: pickTime,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: schedule?.dueAt != null ? p.accent.withValues(alpha: .14) : p.modalBg,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: schedule?.dueAt != null ? p.accent : p.divider, width: 1.1),
+                              ),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                Icon(Icons.schedule_rounded, size: 14, color: schedule?.dueAt != null ? p.accent : p.textFaint),
+                                const SizedBox(width: 6),
+                                Text(schedule?.dueAt != null ? fmtDue(schedule!.dueAt!) : tr('change_time'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: schedule?.dueAt != null ? p.accent : p.textSoft)),
+                              ]),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (schedule?.dueAt != null)
+                            GestureDetector(
+                              onTap: clearTime,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(color: p.modalBg, shape: BoxShape.circle, border: Border.all(color: p.divider)),
+                                child: Icon(Icons.close, size: 12, color: p.textFaint),
+                              ),
+                            ),
+                          const Spacer(),
+                          if (schedule?.recurrence != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(color: p.accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(20)),
+                              child: Text(schedule!.recurrence == 'daily' ? tr('sched_daily') : schedule!.recurrence == 'monthly' ? tr('sched_monthly') : tr('sched_weekdays'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: p.accent)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(Icons.flag_rounded, size: 14, color: p.textFaint),
+                          const SizedBox(width: 6),
+                          Text(tr('priority'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: .4)),
+                          const SizedBox(width: 8),
+                          for (final pr in [0, 1, 2]) ...[
+                            priorityChip(pr, defaultPriority == pr),
+                            if (pr != 2) const SizedBox(width: 6),
+                          ],
+                          const Spacer(),
+                          Text(tr('priority_${defaultPriority}'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.priority(defaultPriority))),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // ── Поле ввода ──
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: TextField(
                         controller: field,
                         style: TextStyle(color: p.text, fontSize: 13.5),
+                        textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
+                          filled: true,
+                          fillColor: p.bgChat,
                           hintText: tr(addUnder != null ? 'todo_sub_hint' : 'todo_item_hint'),
                           hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
                           isDense: true,
-                          enabledBorder:
-                              UnderlineInputBorder(borderSide: BorderSide(color: p.divider)),
-                          focusedBorder:
-                              UnderlineInputBorder(borderSide: BorderSide(color: p.accent)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: p.accent, width: 1.2)),
                         ),
                         onSubmitted: (_) => addItem(),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.add_circle, color: p.accent),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: p.accent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13)),
                       onPressed: addItem,
+                      child: Icon(Icons.add, size: 18, color: Colors.white),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  height: 220,
-                  decoration:
-                      BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(8)),
-                  child: ListView.builder(
-                    itemCount: display.length,
-                    itemBuilder: (ctx, i) {
-                      final me = display[i];
-                      final it = me.key;
-                      final depth = me.value;
-                      return ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        contentPadding: EdgeInsets.only(left: 8.0 + depth * 18.0, right: 2),
-                        leading: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: () {
-                            toggleTodoCascade(items, it.id);
-                            setState(() {});
-                          },
-                          child: Padding(padding: const EdgeInsets.all(3), child: circle(it.done)),
+                if (addUnder != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(color: p.accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(10), border: Border.all(color: p.accent.withValues(alpha: .20))),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.subdirectory_arrow_right, size: 14, color: p.accent),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text('${tr('todo_sub_hint')} • ${roots.firstWhere((r) => r.id == addUnder, orElse: () => TodoItem(id: '', text: '')).text.take(24)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.accent, fontWeight: FontWeight.w600)),
                         ),
-                        title: InkWell(
-                          onTap: () => rename(it),
-                          child: Text(it.text,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: it.done ? p.textFaint : p.text,
-                                decoration: it.done ? TextDecoration.lineThrough : null,
-                                decorationColor: p.textFaint,
-                              )),
-                        ),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          if (depth == 0)
-                            InkWell(
-                              onTap: () => setState(() => addUnder = it.id),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(Icons.subdirectory_arrow_right,
-                                    size: 15, color: p.textFaint),
-                              ),
-                            ),
-                          InkWell(
-                            onTap: () {
-                              removeTodoItem(items, it.id);
-                              setState(() {});
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(Icons.close, size: 16, color: p.textFaint),
-                            ),
-                          ),
-                        ]),
-                      );
-                    },
+                        const SizedBox(width: 8),
+                        GestureDetector(onTap: () => setState(() => addUnder = null), child: Icon(Icons.close, size: 14, color: p.accent)),
+                      ],
+                    ),
                   ),
+                ],
+                const SizedBox(height: 10),
+                // ── Список задач ──
+                Flexible(
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 360, minHeight: 80),
+                    decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(12)),
+                    child: display.isEmpty
+                        ? Center(child: Padding(padding: const EdgeInsets.all(18), child: Text(tr('todo_empty'), style: TextStyle(fontSize: 13, color: p.textFaint))))
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            itemCount: display.length,
+                            separatorBuilder: (_, __) => Divider(height: 1, color: p.divider.withValues(alpha: .35), indent: 14, endIndent: 14),
+                            itemBuilder: (ctx, i) {
+                              final me = display[i];
+                              final it = me.key;
+                              final depth = me.value;
+                              final isRoot = depth == 0;
+                              final col = p.priority(it.priority);
+                              return Padding(
+                                padding: EdgeInsets.only(left: 4 + depth * 16.0, right: 4, top: 2, bottom: 2),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: p.modalBg,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: depth == 0 && it.priority > 0 ? col.withValues(alpha: .35) : p.divider.withValues(alpha: .45)),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      if (depth > 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(left: 6),
+                                          child: Icon(Icons.subdirectory_arrow_right, size: 12, color: p.textFaint.withValues(alpha: .6)),
+                                        ),
+                                      InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () {
+                                          toggleTodoCascade(items, it.id);
+                                          setState(() {});
+                                        },
+                                        child: Padding(padding: const EdgeInsets.all(8), child: circle(it.done, it.priority)),
+                                      ),
+                                      // приоритет-точка (быстрый тап)
+                                      InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () => cyclePriority(it),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(6),
+                                          child: Container(width: 9, height: 9, decoration: BoxDecoration(color: isRoot ? col : col.withValues(alpha: .55), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: .85), width: .5))),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () => rename(it),
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                                            child: Text(it.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: isRoot ? 13.2 : 12.6, fontWeight: isRoot ? FontWeight.w600 : FontWeight.w400, color: it.done ? p.textFaint : p.text, decoration: it.done ? TextDecoration.lineThrough : null)),
+                                          ),
+                                        ),
+                                      ),
+                                      // часы (открывают выбор времени для всего списка — пока один срок на всё)
+                                      InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: pickTime,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(7),
+                                          child: Icon(Icons.schedule_outlined, size: 15, color: schedule?.dueAt != null ? p.accent : p.textFaint),
+                                        ),
+                                      ),
+                                      if (isRoot)
+                                        InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: () => setState(() => addUnder = it.id),
+                                          child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.add, size: 14, color: p.textFaint)),
+                                        ),
+                                      InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () {
+                                          removeTodoItem(items, it.id);
+                                          // если удалили родителя — сбросить addUnder
+                                          if (addUnder == it.id) addUnder = null;
+                                          setState(() {});
+                                        },
+                                        child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.close, size: 15, color: p.textFaint)),
+                                      ),
+                                      const SizedBox(width: 2),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('cancel'), style: TextStyle(color: p.textSoft, fontWeight: FontWeight.w600))),
+                    const Spacer(),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      onPressed: () {
+                        final cleaned = items.where((i) => i.text.trim().isNotEmpty).toList();
+                        if (cleaned.isEmpty) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(tr('todo_empty'))));
+                          return;
+                        }
+                        // Синхронизируем приоритет default со schedule, если выбран.
+                        SchedulePick? outPick;
+                        if (schedule != null) {
+                          outPick = SchedulePick(dueAt: schedule!.dueAt, recurrence: schedule!.recurrence, recurrenceDays: schedule!.recurrenceDays == null ? null : List<int>.of(schedule!.recurrenceDays!), monthDay: schedule!.monthDay, priority: defaultPriority);
+                        } else if (defaultPriority != 0) {
+                          // Без времени — всё равно отдадим приоритет, чтобы caller мог применить к entry.
+                          outPick = SchedulePick(priority: defaultPriority);
+                        }
+                        Navigator.pop(ctx, TodoEditorResult(cleaned, outPick));
+                      },
+                      child: Text(tr('todo_done'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: p.accent),
-              onPressed: () {
-                final cleaned =
-                    items.where((i) => i.text.trim().isNotEmpty).toList();
-                if (cleaned.isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(tr('todo_empty'))));
-                  return;
-                }
-                Navigator.pop(ctx, cleaned);
-              },
-              child: Text(tr('todo_done')),
-            ),
-          ],
         );
       },
     ),
   );
+}
+
+// Вспомогательное расширение для take.
+extension _Take on String {
+  String take(int n) => length <= n ? this : substring(0, n);
 }
 
 Future<DateTime?> showReminderPicker(BuildContext context, AppModel model) async {

@@ -74,6 +74,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val overdue: Boolean,
             val ts: Long,
             val priority: Int,
+            val subPreview: String?,
         )
 
         fun loadRows(context: Context): List<Row> {
@@ -125,11 +126,18 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 val targets = if (roots.isNotEmpty()) roots else listOf(undone[0])
                 for (root in targets) {
                     val rootId = root.optString("id")
-                    var title = root.optString("text", "").trim().take(90)
-                    // Считаем подзадачи этого корня
-                    val subCount = undone.count { it.optString("parentId", "") == rootId }
-                    if (subCount > 0) {
-                        title = "${title.take(80)} (+$subCount)"
+                    val title = root.optString("text", "").trim().take(90)
+                    // Подзадачи вместе в одной задаче — собираем превью внутри родителя.
+                    val childTexts = undone
+                        .filter { it.optString("parentId", "") == rootId }
+                        .map { it.optString("text", "").trim() }
+                        .filter { it.isNotEmpty() }
+                    val totalSubs = childTexts.size
+                    val previewList = childTexts.take(3)
+                    val subPreview: String? = if (previewList.isEmpty()) null else {
+                        val base = previewList.joinToString(" • ")
+                        val more = totalSubs - previewList.size
+                        if (more > 0) "$base  +$more" else base
                     }
                     val prio = root.optInt("priority", 0)
                     rows.add(
@@ -142,6 +150,7 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                             overdue,
                             time0,
                             prio,
+                            subPreview,
                         )
                     )
                 }

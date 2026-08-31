@@ -38,6 +38,17 @@
             android:textSize="13sp" />
 
         <TextView
+            android:id="@+id/dr_subs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textColor="#B8C5D0"
+            android:textSize="10sp"
+            android:visibility="gone"
+            android:paddingTop="1dp" />
+
+        <TextView
             android:id="@+id/dr_meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -95,6 +95,14 @@ class TnDayWidgetViewsFactory(
         row.setTextViewText(R.id.dr_meta, r.meta)
         row.setFloat(R.id.dr_title, "setTextSize", 13f * fontScale)
         row.setFloat(R.id.dr_meta, "setTextSize", 11f * fontScale)
+        // Подзадачи вместе в одной задаче — превью внутри строки родителя.
+        if (r.subPreview != null && r.subPreview.isNotEmpty()) {
+            row.setTextViewText(R.id.dr_subs, "↳ ${r.subPreview}")
+            row.setFloat(R.id.dr_subs, "setTextSize", 10f * fontScale)
+            row.setViewVisibility(R.id.dr_subs, android.view.View.VISIBLE)
+        } else {
+            row.setViewVisibility(R.id.dr_subs, android.view.View.GONE)
+        }
         row.setInt(R.id.dr_title, "setTextColor", Color.WHITE)
         row.setInt(
             R.id.dr_meta, "setTextColor",

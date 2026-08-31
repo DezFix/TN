@@ -336,16 +336,23 @@ class _ChatScreenState extends State<ChatScreen> {
         items: [TodoItem(id: uid('t'), text: draft)],
       );
     }
-    final items = await showTodoEditorDialog(context, widget.model, entry: seed);
-    if (!mounted || items == null || items.isEmpty) return;
+    final res = await showTodoEditorDialog(context, widget.model, entry: seed);
+    if (!mounted || res == null || res.items.isEmpty) return;
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
       type: 'todo',
       ts: DateTime.now().millisecondsSinceEpoch,
       text: '',
-      items: items,
+      items: res.items,
+      dueAt: res.schedule?.dueAt,
+      recurrence: res.schedule?.recurrence,
+      recurrenceDays: res.schedule?.recurrenceDays,
+      monthDay: res.schedule?.monthDay,
     );
+    if (res.schedule != null && res.schedule!.priority != 0 && entry.items!.isNotEmpty && entry.items!.first.priority == 0) {
+      entry.items!.first.priority = res.schedule!.priority;
+    }
     widget.model.state.entries.add(entry);
     _text.clear();
     _clearDraft();
@@ -855,12 +862,33 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case EntryAction.edit:
         if (entry.type == 'todo') {
-          final items = await showTodoEditorDialog(context, widget.model, entry: entry);
-          if (items == null) return;
-          entry.items = items;
+          final res = await showTodoEditorDialog(context, widget.model, entry: entry);
+          if (res == null) return;
+          entry.items = res.items;
+          // Обновляем срок/повтор/важность из меню с часами.
+          if (res.schedule != null) {
+            entry.dueAt = res.schedule!.dueAt;
+            entry.recurrence = res.schedule!.recurrence;
+            entry.recurrenceDays = res.schedule!.recurrenceDays == null ? null : List<int>.of(res.schedule!.recurrenceDays!);
+            entry.monthDay = res.schedule!.monthDay;
+            // если приоритет выбран в шапке — синхронизируем у корневых задач, у которых 0.
+            final pr = res.schedule!.priority;
+            if (pr != 0) {
+              for (final it in entry.items ?? const <TodoItem>[]) {
+                if (it.parentId == null && it.priority == 0) it.priority = pr;
+              }
+            }
+          } else {
+            // Часы сброшены — чистим срок.
+            entry.dueAt = null;
+            entry.recurrence = null;
+            entry.recurrenceDays = null;
+            entry.monthDay = null;
+          }
           entry.editedAt = DateTime.now().millisecondsSinceEpoch;
           entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
           await widget.model.save();
+          await widget.model.rescheduleAlarms();
           if (mounted) setState(() {});
         } else {
           _editText.text = entry.text;
