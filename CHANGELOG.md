@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.0] - 2026-08-31
+
+- **Todo editor:** simplified per user feedback — now 2 clear menus: (1) tasks & subtasks only (input + list with `↳` subtasks, `✓` toggle, `×` delete) and (2) time & importance (tap `Изменить время` → existing date/time & priority sheet). Importance chips removed from the first sheet — priority lives only in the time sheet, as requested
+- **Voice AI (NEW, local):** on-device speech-to-text (no internet) — tap ✨ in composer, dictate, see live transcription `↳ sub` preview, `Готово` saves as Task (in Tasks chats) or Note (in Notes chats). Uses `speech_to_text` with `onDevice:true`, `locale` from app language (`ru_RU/uk_UA/de_DE/es_ES/fr_FR/en_US`), 30s `listenFor` / 3s `pauseFor`, shows local badge. Audio messages stay; transcription is additional — can be extended to Vosk/Whisper file mode later
+
 ## [1.26.4] - 2026-08-31
 
 - **Todo editor:** reworked "Изменить список" from small dialog to full bottom sheet — header with clock (tap → date/time & repeat sheet) and importance chips (Normal/Important/Urgent) + task list with colored priority dots (tap to cycle), inline subtasks and quick delete; each row shows `↳` for children and `∙` priority color, time can be set/cleared from the top menu

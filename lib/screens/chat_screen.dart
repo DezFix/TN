@@ -20,6 +20,7 @@ import '../src/reminders.dart';
 import '../src/rss.dart';
 import '../src/share_service.dart';
 import '../src/sound.dart';
+import '../src/speech_service.dart';
 import '../src/theme.dart';
 import '../src/undo.dart';
 import '../src/undo_toast.dart';
@@ -74,6 +75,10 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<Amplitude>? _ampSub;
   Duration _playPos = Duration.zero;
   Duration? _playDur;
+
+  // ── Мини-ИИ голос→текст (локально) ──
+  bool _dictating = false;
+  String _dictationText = '';
 
   Chat? get _chatOrNull => widget.model.state.chatById(widget.chatId);
   Chat get _chat => _chatOrNull!;
@@ -153,6 +158,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _recorder.dispose();
     _recordTimer?.cancel();
     _ampSub?.cancel();
+    if (_dictating) SpeechService.cancel();
     for (final r in _recognizers) {
       r.dispose();
     }
@@ -619,6 +625,72 @@ class _ChatScreenState extends State<ChatScreen> {
       final f = File(path);
       if (await f.exists()) await f.delete();
     } catch (_) {}
+  }
+
+  // ── Мини-ИИ: локальное распознавание речи → задачи/заметки ──
+  Future<void> _startDictation() async {
+    if (_dictating || _recording) return;
+    HapticFeedback.mediumImpact();
+    final locale = SpeechService.localeFor(widget.model.state.lang);
+    final ok = await SpeechService.init();
+    if (!ok) {
+      if (mounted) _toast('🎤 ${widget.model.tr('rec_too_short')}');
+      return;
+    }
+    setState(() {
+      _dictating = true;
+      _dictationText = '';
+    });
+    final started = await SpeechService.startListening(
+      localeId: locale,
+      onResult: (text, _) {
+        if (!mounted) return;
+        setState(() => _dictationText = text);
+      },
+    );
+    if (!started && mounted) {
+      setState(() => _dictating = false);
+      _toast('🎤 недоступно');
+    }
+  }
+
+  Future<void> _stopDictation({bool save = true}) async {
+    if (!_dictating) return;
+    await SpeechService.stop();
+    final text = _dictationText.trim();
+    setState(() => _dictating = false);
+    if (!save || text.isEmpty) {
+      setState(() => _dictationText = '');
+      return;
+    }
+    // Сохраняем как задачу или заметку в зависимости от типа чата — локально.
+    final isTasks = _chat.kind == 'tasks';
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: isTasks ? 'todo' : 'text',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: isTasks ? '' : text,
+      items: isTasks ? [TodoItem(id: uid('t'), text: text)] : null,
+      tags: extractTags(text),
+    );
+    widget.model.state.entries.add(entry);
+    await widget.model.save();
+    if (mounted) {
+      setState(() => _dictationText = '');
+      _scrollToBottom();
+      _toast(isTasks ? widget.model.tr('todo_added', [_chat.name]) : widget.model.tr('copied'));
+    }
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _cancelDictation() async {
+    if (!_dictating) return;
+    await SpeechService.cancel();
+    setState(() {
+      _dictating = false;
+      _dictationText = '';
+    });
   }
 
   Future<void> _playAudio(Entry entry) async {
@@ -1187,6 +1259,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
               if (_recording) Positioned(left: 0, right: 0, bottom: 0, child: _buildRecordingPanel()),
+              if (_dictating) Positioned(left: 0, right: 0, bottom: 0, child: _buildDictationPanel()),
             ],
           ),
         ),
@@ -2404,6 +2477,22 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               const SizedBox(width: 6),
+              // Мини-ИИ: локальное распознавание голоса → задачи/заметки
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _dictating ? p.accent.withValues(alpha: .15) : p.bgChat,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _dictating ? p.accent : p.divider.withValues(alpha: 0.5)),
+                ),
+                child: IconButton(
+                  icon: Icon(_dictating ? Icons.graphic_eq : Icons.auto_awesome_rounded, color: _dictating ? p.accent : p.textSoft, size: 20),
+                  tooltip: 'AI',
+                  onPressed: _dictating ? () => _stopDictation(save: true) : _startDictation,
+                ),
+              ),
+              const SizedBox(width: 6),
           Expanded(
             child: TextField(
               controller: _text,
@@ -2707,12 +2796,97 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ],
             ),
-          ] else
+          ]           else
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('< ${model.tr('rec_cancel')}  •  ${model.tr('rec_lock_hint')} ↑',
                   style: TextStyle(fontSize: 10.5, color: p.textFaint)),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDictationPanel() {
+    final model = widget.model;
+    final isTasks = _chat.kind == 'tasks';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      decoration: BoxDecoration(
+        color: p.bgChat,
+        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.6))),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -2))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), shape: BoxShape.circle),
+                child: Icon(Icons.auto_awesome_rounded, color: p.accent, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('AI • ${isTasks ? model.tr('kind_tasks') : model.tr('kind_note')}',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: .4)),
+                    const SizedBox(height: 2),
+                    Text(_dictating ? 'Слушаю... говорите' : 'Готово',
+                        style: TextStyle(fontSize: 12.5, color: p.textSoft)),
+                  ],
+                ),
+              ),
+              if (_dictating)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: p.accent),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.divider.withValues(alpha: .5))),
+            child: _dictationText.isEmpty
+                ? Text(model.tr('rec_too_short'), style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))
+                : Text(_dictationText, style: TextStyle(fontSize: 14, color: p.text, height: 1.35)),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _cancelDictation,
+                icon: Icon(Icons.close, size: 18, color: p.textSoft),
+                label: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft)),
+              ),
+              const Spacer(),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(side: BorderSide(color: p.divider)),
+                onPressed: _dictating ? null : () => _stopDictation(save: false),
+                child: Text(model.tr('rec_cancel')),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: p.accent),
+                icon: Icon(isTasks ? Icons.checklist : Icons.note_add, size: 18, color: Colors.white),
+                label: Text(isTasks ? model.tr('todo_add') : model.tr('save'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                onPressed: (_dictationText.trim().isEmpty && !_dictating) ? null : () => _stopDictation(save: true),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('локально • on-device • ${SpeechService.isAvailable ? 'готов' : 'проверка...'}',
+                style: TextStyle(fontSize: 10, color: p.textFaint)),
+          ),
         ],
       ),
     );

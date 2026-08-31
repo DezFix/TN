@@ -377,8 +377,7 @@ Future<TodoEditorResult?> showTodoEditorDialog(
   ];
   final field = TextEditingController();
   String? addUnder;
-  int defaultPriority = 0;
-  // Начальный schedule из entry (если редактируем) — иначе null.
+  // Срок/повтор/важность — второй пункт меню (часы). Хранится отдельно, важность теперь только в sched_sheet.
   SchedulePick? schedule;
   if (entry != null && entry.dueAt != null) {
     final m = entry;
@@ -389,10 +388,6 @@ Future<TodoEditorResult?> showTodoEditorDialog(
       monthDay: m.monthDay,
       priority: items.isNotEmpty ? items.first.priority : 0,
     );
-    if (items.isNotEmpty) defaultPriority = items.first.priority;
-  } else if (items.isNotEmpty) {
-    // Если есть элементы — возьмём приоритет первого как default.
-    defaultPriority = items.first.priority;
   }
 
   int insertAfterSubtree(List<TodoItem> list, String? parentId) {
@@ -435,9 +430,7 @@ Future<TodoEditorResult?> showTodoEditorDialog(
         void addItem() {
           final t = field.text.trim();
           if (t.isEmpty) return;
-          items.insert(
-              insertAfterSubtree(items, addUnder),
-              TodoItem(id: uid('t'), text: t, parentId: addUnder, priority: defaultPriority));
+          items.insert(insertAfterSubtree(items, addUnder), TodoItem(id: uid('t'), text: t, parentId: addUnder));
           field.clear();
           setState(() => addUnder = null);
         }
@@ -468,15 +461,8 @@ Future<TodoEditorResult?> showTodoEditorDialog(
           }
         }
 
-        void cyclePriority(TodoItem it) {
-          setState(() => it.priority = (it.priority + 1) % 3);
-          // Также обновляем default для следующих добавлений.
-          defaultPriority = it.priority;
-        }
-
         Future<void> pickTime() async {
-          // Открываем общий sheet выбора даты/времени/повторов.
-          // Передаём текущий schedule, показываем приоритет тоже.
+          final initPrio = schedule?.priority ?? (items.isNotEmpty ? items.first.priority : 0);
           final res = await showScheduleSheet(
             ctx,
             model,
@@ -484,16 +470,11 @@ Future<TodoEditorResult?> showTodoEditorDialog(
             initialRecurrence: schedule?.recurrence,
             initialRecurrenceDays: schedule?.recurrenceDays,
             initialMonthDay: schedule?.monthDay,
-            initialPriority: defaultPriority,
+            initialPriority: initPrio,
             showPriority: true,
           );
-          if (res != null && res.dueAt != null) {
-            setState(() {
-              schedule = res;
-              defaultPriority = res.priority;
-              // Если хотим — можно проставить приоритет всем корневым элементам.
-              // Пока ставим только default для новых.
-            });
+          if (res != null) {
+            setState(() => schedule = res);
           }
         }
 
@@ -514,37 +495,17 @@ Future<TodoEditorResult?> showTodoEditorDialog(
         }
         walk(null, 0);
 
-        Widget circle(bool done, int prio, {double size = 18}) {
-          final col = p.priority(prio);
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: done ? p.accent : Colors.transparent,
-              border: Border.all(color: done ? p.accent : col.withValues(alpha: .65), width: done ? 2 : 1.8),
-            ),
-            child: done ? const Icon(Icons.check, size: 11, color: Colors.white) : null,
-          );
-        }
-
-        Widget priorityChip(int pr, bool sel) {
-          final label = tr('priority_$pr');
-          final col = p.priority(pr);
-          return GestureDetector(
-            onTap: () => setState(() => defaultPriority = pr),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        Widget circle(bool done, {double size = 18}) => AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: size,
+              height: size,
               decoration: BoxDecoration(
-                color: sel ? col : p.bgChat,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: sel ? col : p.divider, width: 1.2),
+                shape: BoxShape.circle,
+                color: done ? p.accent : Colors.transparent,
+                border: Border.all(color: done ? p.accent : p.textFaint.withValues(alpha: .55), width: 2),
               ),
-              child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: sel ? Colors.white : p.textSoft)),
-            ),
-          );
-        }
+              child: done ? const Icon(Icons.check, size: 11, color: Colors.white) : null,
+            );
 
         // Родители для выборки подзадачи (только корневые)
         final roots = items.where((i) => i.parentId == null).toList();
@@ -575,66 +536,45 @@ Future<TodoEditorResult?> showTodoEditorDialog(
                   ],
                 ),
                 const SizedBox(height: 12),
-                // ── Часы + важность (как меню) ──
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(TNRadii.md), border: Border.all(color: p.divider.withValues(alpha: .45))),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: pickTime,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: schedule?.dueAt != null ? p.accent.withValues(alpha: .14) : p.modalBg,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: schedule?.dueAt != null ? p.accent : p.divider, width: 1.1),
-                              ),
-                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.schedule_rounded, size: 14, color: schedule?.dueAt != null ? p.accent : p.textFaint),
-                                const SizedBox(width: 6),
-                                Text(schedule?.dueAt != null ? fmtDue(schedule!.dueAt!) : tr('change_time'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: schedule?.dueAt != null ? p.accent : p.textSoft)),
-                              ]),
-                            ),
+                // ── Пункт 2: время и важность (второй экран) — кнопка открывает существующий sched_sheet ──
+                GestureDetector(
+                  onTap: pickTime,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: schedule?.dueAt != null ? p.accent.withValues(alpha: .10) : p.bgChat,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: schedule?.dueAt != null ? p.accent : p.divider.withValues(alpha: .5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 16, color: schedule?.dueAt != null ? p.accent : p.textFaint),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(schedule?.dueAt != null ? fmtDue(schedule!.dueAt!) : tr('sched_sheet_title'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: schedule?.dueAt != null ? p.accent : p.text)),
+                              if (schedule?.recurrence != null)
+                                Text(schedule!.recurrence == 'daily' ? tr('sched_daily') : schedule!.recurrence == 'monthly' ? tr('sched_monthly') : tr('sched_weekdays'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          if (schedule?.dueAt != null)
-                            GestureDetector(
-                              onTap: clearTime,
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(color: p.modalBg, shape: BoxShape.circle, border: Border.all(color: p.divider)),
-                                child: Icon(Icons.close, size: 12, color: p.textFaint),
-                              ),
+                        ),
+                        if (schedule?.dueAt != null)
+                          GestureDetector(
+                            onTap: () {
+                              clearTime();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(color: p.modalBg, shape: BoxShape.circle, border: Border.all(color: p.divider)),
+                              child: Icon(Icons.close, size: 12, color: p.textFaint),
                             ),
-                          const Spacer(),
-                          if (schedule?.recurrence != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(color: p.accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(20)),
-                              child: Text(schedule!.recurrence == 'daily' ? tr('sched_daily') : schedule!.recurrence == 'monthly' ? tr('sched_monthly') : tr('sched_weekdays'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: p.accent)),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Icon(Icons.flag_rounded, size: 14, color: p.textFaint),
-                          const SizedBox(width: 6),
-                          Text(tr('priority'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: .4)),
-                          const SizedBox(width: 8),
-                          for (final pr in [0, 1, 2]) ...[
-                            priorityChip(pr, defaultPriority == pr),
-                            if (pr != 2) const SizedBox(width: 6),
-                          ],
-                          const Spacer(),
-                          Text(tr('priority_${defaultPriority}'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.priority(defaultPriority))),
-                        ],
-                      ),
-                    ],
+                          )
+                        else
+                          Icon(Icons.chevron_right, size: 18, color: p.textFaint),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -705,14 +645,13 @@ Future<TodoEditorResult?> showTodoEditorDialog(
                               final it = me.key;
                               final depth = me.value;
                               final isRoot = depth == 0;
-                              final col = p.priority(it.priority);
                               return Padding(
                                 padding: EdgeInsets.only(left: 4 + depth * 16.0, right: 4, top: 2, bottom: 2),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: p.modalBg,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: depth == 0 && it.priority > 0 ? col.withValues(alpha: .35) : p.divider.withValues(alpha: .45)),
+                                    border: Border.all(color: p.divider.withValues(alpha: .45)),
                                   ),
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -728,16 +667,7 @@ Future<TodoEditorResult?> showTodoEditorDialog(
                                           toggleTodoCascade(items, it.id);
                                           setState(() {});
                                         },
-                                        child: Padding(padding: const EdgeInsets.all(8), child: circle(it.done, it.priority)),
-                                      ),
-                                      // приоритет-точка (быстрый тап)
-                                      InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () => cyclePriority(it),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(6),
-                                          child: Container(width: 9, height: 9, decoration: BoxDecoration(color: isRoot ? col : col.withValues(alpha: .55), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: .85), width: .5))),
-                                        ),
+                                        child: Padding(padding: const EdgeInsets.all(8), child: circle(it.done)),
                                       ),
                                       Expanded(
                                         child: InkWell(
@@ -749,26 +679,16 @@ Future<TodoEditorResult?> showTodoEditorDialog(
                                           ),
                                         ),
                                       ),
-                                      // часы (открывают выбор времени для всего списка — пока один срок на всё)
-                                      InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: pickTime,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(7),
-                                          child: Icon(Icons.schedule_outlined, size: 15, color: schedule?.dueAt != null ? p.accent : p.textFaint),
-                                        ),
-                                      ),
                                       if (isRoot)
                                         InkWell(
                                           customBorder: const CircleBorder(),
                                           onTap: () => setState(() => addUnder = it.id),
-                                          child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.add, size: 14, color: p.textFaint)),
+                                          child: Padding(padding: const EdgeInsets.all(7), child: Icon(Icons.subdirectory_arrow_right, size: 14, color: p.textFaint)),
                                         ),
                                       InkWell(
                                         customBorder: const CircleBorder(),
                                         onTap: () {
                                           removeTodoItem(items, it.id);
-                                          // если удалили родителя — сбросить addUnder
                                           if (addUnder == it.id) addUnder = null;
                                           setState(() {});
                                         },
@@ -796,15 +716,7 @@ Future<TodoEditorResult?> showTodoEditorDialog(
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(tr('todo_empty'))));
                           return;
                         }
-                        // Синхронизируем приоритет default со schedule, если выбран.
-                        SchedulePick? outPick;
-                        if (schedule != null) {
-                          outPick = SchedulePick(dueAt: schedule!.dueAt, recurrence: schedule!.recurrence, recurrenceDays: schedule!.recurrenceDays == null ? null : List<int>.of(schedule!.recurrenceDays!), monthDay: schedule!.monthDay, priority: defaultPriority);
-                        } else if (defaultPriority != 0) {
-                          // Без времени — всё равно отдадим приоритет, чтобы caller мог применить к entry.
-                          outPick = SchedulePick(priority: defaultPriority);
-                        }
-                        Navigator.pop(ctx, TodoEditorResult(cleaned, outPick));
+                        Navigator.pop(ctx, TodoEditorResult(cleaned, schedule));
                       },
                       child: Text(tr('todo_done'), style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
