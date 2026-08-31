@@ -67,6 +67,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _showSmartFolderSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: widget.model.p.modalBg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: widget.model.p.divider, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 12),
+              Text(widget.model.tr('smart_folders'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: widget.model.p.text)),
+              const SizedBox(height: 4),
+              Text(widget.model.tr('smart_folders_hint'), style: TextStyle(fontSize: 12, color: widget.model.p.textFaint)),
+              const SizedBox(height: 16),
+              _smartFolderToggle(p: widget.model.p, icon: Icons.check_circle_outline, title: widget.model.tr('smart_tasks'), subtitle: widget.model.tr('smart_tasks_hint'), value: _smartTasks, onChanged: (v) => _setSmartFolder('tasks', v)),
+              const SizedBox(height: 8),
+              _smartFolderToggle(p: widget.model.p, icon: Icons.note_alt_outlined, title: widget.model.tr('smart_notes'), subtitle: widget.model.tr('smart_notes_hint'), value: _smartNotes, onChanged: (v) { _setSmartFolder('notes', v); setState(() {}); }),
+              const SizedBox(height: 8),
+              Text(widget.model.tr('smart_folders_future'), style: TextStyle(fontSize: 11, color: widget.model.p.textFaint, fontStyle: FontStyle.italic)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadCacheSize() async {
     setState(() => _cacheLoading = true);
     try {
@@ -254,6 +283,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          _sectionLabel(tr('folders'), p),
+          _card(
+            p,
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: () async {
+                    // Same name+color dialog as the FAB flow on the main
+                    // screen — text-only here made colored folders impossible.
+                    final result = await showFolderEditDialog(context, model);
+                    if (result == null) return;
+                    model.state.folders.add(result);
+                    await model.save();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('folder_created', [result.name]))));
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.create_new_folder_outlined, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('new_folder'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 20, color: p.divider),
+                InkWell(
+                  onTap: () => _showSmartFolderSheet(),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_awesome_mosaic_outlined, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('smart_folder'), style: TextStyle(fontSize: 14.5, color: p.text)),
+                            Text(tr('smart_folders_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
+                Divider(height: 20, color: p.divider),
+                InkWell(
+                  onTap: () => Navigator.push(
+                     context,
+                     MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.tag, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('tags_title'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
+                Divider(height: 20, color: p.divider),
+                InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_vert, size: 20, color: p.accent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(tr('folders_reorder'),
+                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                      ),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Home-screen widgets are an Android feature — hide on desktop.
+          if (!Platform.isWindows) ...[
+            _sectionLabel(tr('section_widget'), p),            _card(
+              p,
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
+                ),
+                 borderRadius: BorderRadius.circular(12),
+                 child: Row(
+                   children: [
+                     Expanded(
+                       child: Text(tr('widget_settings_title'),
+                           style: TextStyle(fontSize: 14.5, color: p.text)),
+                     ),
+                     Icon(Icons.chevron_right, color: p.textFaint),
+                   ],
+                 ),
+               ),
+             ),
+           ],
+          // Biometric app lock — Android/iOS only (local_auth support).
+          if (AppLock.supported) ...[
+            _sectionLabel(tr('lock_enable'), p),
+            _card(
+              p,
+              child: InkWell(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => LockSettingsScreen(model: model)),
+                  );
+                  await _loadLockPref();
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.fingerprint,
+                        size: 22, color: _lockOn ? p.accent : p.textSoft),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tr('lock_menu'),
+                              style:
+                                  TextStyle(fontSize: 14.5, color: p.text)),
+                          Text(tr(_lockOn
+                                  ? (_methodKey == 'methods_multi'
+                                      ? 'lock_methods_multi'
+                                      : 'lock_method_${_methodKey}')
+                                  : 'lock_hint'),
+                              style: TextStyle(
+                                  fontSize: 11, color: p.textFaint)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: p.textFaint),
+                  ],
+                ),
+              ),
+            ),
+          ],
+           const SizedBox(height: 12),
           _sectionLabel(tr('cache_section'), p),
           _card(
             p,
@@ -377,181 +563,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionLabel(tr('smart_folders'), p),
-          _card(
-            p,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.auto_awesome_outlined, size: 18, color: p.accent),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(tr('smart_folders'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.5))),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(tr('smart_folders_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
-                const SizedBox(height: 10),
-                _smartFolderToggle(
-                  p: p,
-                  icon: Icons.check_circle_outline,
-                  title: tr('smart_tasks'),
-                  subtitle: tr('smart_tasks_hint'),
-                  value: _smartTasks,
-                  onChanged: (v) => _setSmartFolder('tasks', v),
-                ),
-                const SizedBox(height: 8),
-                _smartFolderToggle(
-                  p: p,
-                  icon: Icons.note_alt_outlined,
-                  title: tr('smart_notes'),
-                  subtitle: tr('smart_notes_hint'),
-                  value: _smartNotes,
-                  onChanged: (v) => _setSmartFolder('notes', v),
-                ),
-                const SizedBox(height: 8),
-                Text(tr('smart_folders_future'), style: TextStyle(fontSize: 11, color: p.textFaint, fontStyle: FontStyle.italic)),
-              ],
-            ),
-          ),
-          _sectionLabel(tr('folders'), p),
-          _card(
-            p,
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: () async {
-                    // Same name+color dialog as the FAB flow on the main
-                    // screen — text-only here made colored folders impossible.
-                    final result = await showFolderEditDialog(context, model);
-                    if (result == null) return;
-                    model.state.folders.add(result);
-                    await model.save();
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('folder_created', [result.name]))));
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.create_new_folder_outlined, size: 20, color: p.accent),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(tr('new_folder'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 20, color: p.divider),
-                InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tag, size: 20, color: p.accent),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(tr('tags_title'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
-                      ),
-                      Icon(Icons.chevron_right, color: p.textFaint),
-                    ],
-                  ),
-                ),
-                Divider(height: 20, color: p.divider),
-                InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)),
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.swap_vert, size: 20, color: p.accent),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(tr('folders_reorder'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
-                      ),
-                      Icon(Icons.chevron_right, color: p.textFaint),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Home-screen widgets are an Android feature — hide on desktop.
-          if (!Platform.isWindows) ...[
-            _sectionLabel(tr('section_widget'), p),            _card(
-              p,
-              child: InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
-                ),
-                 borderRadius: BorderRadius.circular(12),
-                 child: Row(
-                   children: [
-                     Expanded(
-                       child: Text(tr('widget_settings_title'),
-                           style: TextStyle(fontSize: 14.5, color: p.text)),
-                     ),
-                     Icon(Icons.chevron_right, color: p.textFaint),
-                   ],
-                 ),
-               ),
-             ),
-           ],
-          // Biometric app lock — Android/iOS only (local_auth support).
-          if (AppLock.supported) ...[
-            _sectionLabel(tr('lock_enable'), p),
-            _card(
-              p,
-              child: InkWell(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => LockSettingsScreen(model: model)),
-                  );
-                  await _loadLockPref();
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Row(
-                  children: [
-                    Icon(Icons.fingerprint,
-                        size: 22, color: _lockOn ? p.accent : p.textSoft),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(tr('lock_menu'),
-                              style:
-                                  TextStyle(fontSize: 14.5, color: p.text)),
-                          Text(tr(_lockOn
-                                  ? (_methodKey == 'methods_multi'
-                                      ? 'lock_methods_multi'
-                                      : 'lock_method_${_methodKey}')
-                                  : 'lock_hint'),
-                              style: TextStyle(
-                                  fontSize: 11, color: p.textFaint)),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right, color: p.textFaint),
-                  ],
-                ),
-              ),
-            ),
-          ],
-           const SizedBox(height: 12),
-
-          // About: version, changelog, manual update check, ko-fi.
           _sectionLabel(tr('about_title'), p),
           _card(
             p,

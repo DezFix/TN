@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.26.2] - 2026-08-28
+
+- **Folders:** Smart folder now as submenu under New folder (tap → sheet with smart toggles), cache moved
+- **Settings:** Cache & Trash moved to bottom (below Security, above About)
+- **Widget:** header attached to window (no floating gap, larger hitboxes), corners fixed (no inset gap on sides)
+
 ## [1.26.1] - 2026-08-28
 
 - **Widget:** one task per entry (subtasks aggregated as "+N"), parent cannot be checked until subtasks done

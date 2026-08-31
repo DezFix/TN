@@ -94,9 +94,10 @@ class TnDayWidgetViewsFactory(
         row.setTextViewText(R.id.dr_meta, r.meta)
         row.setFloat(R.id.dr_title, "setTextSize", 13f * fontScale)
         row.setFloat(R.id.dr_meta, "setTextSize", 11f * fontScale)
+        row.setInt(R.id.dr_title, "setTextColor", Color.WHITE)
         row.setInt(
-            R.id.dr_title, "setTextColor",
-            if (r.overdue) Color.rgb(255, 107, 107) else Color.WHITE
+            R.id.dr_meta, "setTextColor",
+            if (r.overdue) Color.rgb(255, 107, 107) else Color.parseColor("#8A9BA8")
         )
         row.setViewVisibility(
             R.id.dr_dot,
