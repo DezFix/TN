@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.2] - 2026-08-31
+
+- **Build:** `android/app/build.gradle.kts:32` `ndkVersion 29.0.13113456` для `whisper_ggml` (ранее `flutter.ndkVersion 27`), исправляет `LICENSE not accepted` / `NDK 29 required` на CI и локально; APK вырос `65.7MB → 130.7MB` из-за `whisper.cpp` native libs, но остаётся offline
+
 ## [1.27.1] - 2026-08-31
 
 - **Voice AI fix:** кнопка ✨ перенесена с панели ввода на сам голосовой пузырь — `Расшифровать` прямо на сообщении; теперь всегда доступна (локальный `whisper_ggml` tiny, offline, `ru/en/uk/de/es/fr`), а не `недоступно` от системы. Показывает `LinearProgress` + `AI расшифровывает локально...`, превью текста, `Копировать` и `Как задачу/заметку` (сохраняет в текущий чат). Модель качается один раз и кэшируется, далее без сети. Composer-кнопка удалена

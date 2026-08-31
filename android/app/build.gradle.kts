@@ -29,7 +29,7 @@ fun tnSigningProp(name: String): String? =
 android {
     namespace = "app.tn.tn"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13113456"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
