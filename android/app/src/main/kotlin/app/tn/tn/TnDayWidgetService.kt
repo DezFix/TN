@@ -63,8 +63,9 @@ class TnDayWidgetViewsFactory(
         var lastSection: String? = null
         val flat = ArrayList<ListItem>()
         for (r in rows) {
-            val section = TnDayWidgetProvider.sectionLabel(context, ws, r.ts)
-            if (section != null && section != lastSection) {
+            // Приоритетные группы: Срочно / Важно / Обычно (вместо времени)
+            val section = TnDayWidgetProvider.priorityHeader(context, r.priority)
+            if (section != lastSection) {
                 flat.add(ListItem.Header(section))
                 lastSection = section
             }

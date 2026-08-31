@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.26.3] - 2026-08-31
+
+- **Widget:** removed `+` quick-add button (use long-press app icon → Quick note); tasks now grouped by priority (Urgent / Important / Normal) with overdue on top, instead of time buckets
+- **Widget:** sorting is now priority-first (Urgent above Important above Normal, overdue first within each group, then by nearest deadline)
+
 ## [1.26.2] - 2026-08-28
 
 - **Folders:** Smart folder now as submenu under New folder (tap → sheet with smart toggles), cache moved

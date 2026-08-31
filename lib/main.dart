@@ -110,7 +110,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   bool _showWelcome = false;
   AppModel? _loadedModel;
   Timer? _pendingOpenChatTimer;
-  Timer? _pendingHotAddTimer;
   Timer? _pendingShortcutTimer;
   bool _whatsNewShown = false;
 
@@ -128,11 +127,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         builder: (_) => ChatScreen(model: m, chatId: chatId),
       ));
     };
-    WidgetBridge.onHotAdd = () {
-      final m = _loadedModel;
-      if (m == null) return;
-      _handleHotAdd(m);
-    };
     WidgetBridge.onShortcutQuickNote = () {
       final m = _loadedModel;
       if (m == null) return;
@@ -145,7 +139,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     };
     // Cold start: the app was launched by tapping a task text in the widget.
     _pendingOpenChatCheck();
-    _pendingHotAddCheck();
     _pendingShortcutCheck();
   }
 
@@ -159,18 +152,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       _navKey.currentState?.push(MaterialPageRoute(
         builder: (_) => ChatScreen(model: m, chatId: chatId),
       ));
-    });
-  }
-
-  Future<void> _pendingHotAddCheck() async {
-    if (_isTestEnv) return;
-    _pendingHotAddTimer = Timer(const Duration(milliseconds: 900), () async {
-      if (!mounted) return;
-      final pending = await WidgetBridge.takePendingHotAdd();
-      if (!pending || !mounted) return;
-      final m = _loadedModel;
-      if (m == null) return;
-      _handleHotAdd(m);
     });
   }
 
@@ -247,7 +228,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   @override
   void dispose() {
     _pendingOpenChatTimer?.cancel();
-    _pendingHotAddTimer?.cancel();
     _pendingShortcutTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

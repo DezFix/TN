@@ -5,7 +5,6 @@ class WidgetBridge {
   static const _channel = MethodChannel('tn/widget');
   static void Function()? _onOpenSettings;
   static void Function(String chatId)? _onOpenChat;
-  static void Function()? _onHotAdd;
   static void Function()? _onShortcutQuickNote;
   static void Function()? _onShortcutAgenda;
 
@@ -17,7 +16,6 @@ class WidgetBridge {
       if (call.method == 'openChat') {
         _onOpenChat?.call(call.arguments as String);
       }
-      if (call.method == 'hotAdd') _onHotAdd?.call();
       if (call.method == 'shortcutQuickNote') _onShortcutQuickNote?.call();
       if (call.method == 'shortcutAgenda') _onShortcutAgenda?.call();
       return null;
@@ -27,10 +25,6 @@ class WidgetBridge {
   /// Register a callback invoked when the user taps a task text in the widget.
   static set onOpenChat(void Function(String chatId)? cb) {
     _onOpenChat = cb;
-  }
-
-  static set onHotAdd(void Function()? cb) {
-    _onHotAdd = cb;
   }
 
   static set onShortcutQuickNote(void Function()? cb) {
@@ -48,15 +42,6 @@ class WidgetBridge {
       return result as String?;
     } catch (_) {
       return null;
-    }
-  }
-
-  static Future<bool> takePendingHotAdd() async {
-    try {
-      final result = await _channel.invokeMethod('getPendingHotAdd');
-      return result as bool? ?? false;
-    } catch (_) {
-      return false;
     }
   }
 

@@ -36,18 +36,6 @@ object PendingOpenChat {
     }
 }
 
-object PendingHotAdd {
-    @Volatile
-    var pending = false
-
-    @Synchronized
-    fun take(): Boolean {
-        val v = pending
-        pending = false
-        return v
-    }
-}
-
 object PendingShortcut {
     @Volatile
     var action: String? = null
@@ -113,12 +101,6 @@ class MainActivity : FlutterFragmentActivity() {
                     .invokeMethod("openSettings", null)
             }
         }
-        if (intent.getBooleanExtra("hot_add", false)) {
-            flutterEngine?.let { engine ->
-                MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
-                    .invokeMethod("hotAdd", null)
-            } ?: run { PendingHotAdd.pending = true }
-        }
         when (intent.action) {
             "app.tn.tn.SHORTCUT_QUICK_NOTE" -> {
                 flutterEngine?.let { engine ->
@@ -159,9 +141,6 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "getPendingOpenChat" -> {
                         result.success(PendingOpenChat.take())
-                    }
-                    "getPendingHotAdd" -> {
-                        result.success(PendingHotAdd.take())
                     }
                     "getPendingShortcut" -> {
                         result.success(PendingShortcut.take())
@@ -253,7 +232,6 @@ class MainActivity : FlutterFragmentActivity() {
         // Cold start via widget text tap.
         val openChatId = intent?.getStringExtra("open_chat")
         if (!openChatId.isNullOrEmpty()) PendingOpenChat.chatId = openChatId
-        if (intent?.getBooleanExtra("hot_add", false) == true) PendingHotAdd.pending = true
         when (intent?.action) {
             "app.tn.tn.SHORTCUT_QUICK_NOTE" -> PendingShortcut.action = "quick_note"
             "app.tn.tn.SHORTCUT_AGENDA" -> PendingShortcut.action = "agenda"
