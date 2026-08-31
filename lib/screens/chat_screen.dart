@@ -21,6 +21,7 @@ import '../src/rss.dart';
 import '../src/share_service.dart';
 import '../src/sound.dart';
 import '../src/speech_service.dart';
+import '../src/voice_ai.dart';
 import '../src/theme.dart';
 import '../src/undo.dart';
 import '../src/undo_toast.dart';
@@ -79,6 +80,9 @@ class _ChatScreenState extends State<ChatScreen> {
   // ── Мини-ИИ голос→текст (локально) ──
   bool _dictating = false;
   String _dictationText = '';
+  final Map<String, String> _transcribed = {};
+  final Map<String, bool> _transcribing = {};
+  final Map<String, int> _transcribeProgress = {};
 
   Chat? get _chatOrNull => widget.model.state.chatById(widget.chatId);
   Chat get _chat => _chatOrNull!;
@@ -691,6 +695,76 @@ class _ChatScreenState extends State<ChatScreen> {
       _dictating = false;
       _dictationText = '';
     });
+  }
+
+  // ── Расшифровка голосового сообщения (кнопка на пузыре) ──
+  Future<void> _transcribeVoice(Entry entry) async {
+    if (entry.media == null) return;
+    if (_transcribing[entry.id] == true) return;
+    setState(() {
+      _transcribing[entry.id] = true;
+      _transcribeProgress[entry.id] = 0;
+    });
+    try {
+      final path = await _pathOf(entry.media!);
+      final text = await VoiceAi.transcribeFile(
+        path,
+        appLang: widget.model.state.lang,
+        onProgress: (p) {
+          if (mounted) setState(() => _transcribeProgress[entry.id] = p);
+        },
+      );
+      if (!mounted) return;
+      if (text != null && text.trim().isNotEmpty) {
+        setState(() {
+          _transcribed[entry.id] = text.trim();
+          _transcribing[entry.id] = false;
+          _transcribeProgress.remove(entry.id);
+        });
+        // Сохраняем расшифровку прямо в тексте аудио-записи для истории.
+        entry.text = text.trim();
+        entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        await widget.model.save();
+        if (mounted) setState(() {});
+        final preview = text.trim().length > 30 ? '${text.trim().substring(0, 30)}…' : text.trim();
+        _toast('✓ $preview');
+      } else {
+        setState(() {
+          _transcribing[entry.id] = false;
+          _transcribeProgress.remove(entry.id);
+        });
+        if (mounted) _toast('Не удалось распознать — попробуйте громче и чётче');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _transcribing[entry.id] = false;
+        _transcribeProgress.remove(entry.id);
+      });
+      _toast('Ошибка AI: $e');
+    }
+  }
+
+  Future<void> _saveTranscribedAsTaskOrNote(String text) async {
+    final t = text.trim();
+    if (t.isEmpty) return;
+    final isTasks = _chat.kind == 'tasks';
+    final entry = Entry(
+      id: uid('e'),
+      chatId: widget.chatId,
+      type: isTasks ? 'todo' : 'text',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      text: isTasks ? '' : t,
+      items: isTasks ? [TodoItem(id: uid('t'), text: t)] : null,
+      tags: extractTags(t),
+    );
+    widget.model.state.entries.add(entry);
+    await widget.model.save();
+    if (mounted) {
+      setState(() {});
+      _scrollToBottom();
+      _toast(isTasks ? widget.model.tr('todo_added', [_chat.name]) : 'Заметка создана');
+    }
   }
 
   Future<void> _playAudio(Entry entry) async {
@@ -1976,6 +2050,83 @@ class _ChatScreenState extends State<ChatScreen> {
               _timeLabel(entry),
             ],
           ),
+          // ── Мини-ИИ: расшифровка на самом сообщении ──
+          if (_transcribing[entry.id] == true) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (_transcribeProgress[entry.id] ?? 0) > 0 ? (_transcribeProgress[entry.id]! / 100) : null,
+                minHeight: 3,
+                backgroundColor: p.divider,
+                valueColor: AlwaysStoppedAnimation(p.accent),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(children: [
+              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8, color: p.accent)),
+              const SizedBox(width: 6),
+              Text('AI расшифровывает локально...', style: TextStyle(fontSize: 11, color: p.textFaint, fontStyle: FontStyle.italic)),
+            ]),
+          ] else if (_transcribed[entry.id] != null || entry.text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(10), border: Border.all(color: p.divider.withValues(alpha: .45))),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(Icons.auto_awesome_rounded, size: 12, color: p.accent),
+                    const SizedBox(width: 4),
+                    Text('Расшифровка:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: .3)),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () async {
+                        final t = _transcribed[entry.id] ?? entry.text;
+                        await Clipboard.setData(ClipboardData(text: t));
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(model.tr('copied'))));
+                      },
+                      child: Icon(Icons.copy_rounded, size: 14, color: p.textFaint),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(_transcribed[entry.id] ?? entry.text, style: TextStyle(fontSize: 13, color: p.text, height: 1.35)),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      icon: Icon(_chat.kind == 'tasks' ? Icons.checklist_rounded : Icons.note_add_rounded, size: 14, color: Colors.white),
+                      label: Text(_chat.kind == 'tasks' ? 'Как задачу' : 'Как заметку', style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w700)),
+                      onPressed: () => _saveTranscribedAsTaskOrNote(_transcribed[entry.id] ?? entry.text),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(side: BorderSide(color: p.divider), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      icon: Icon(Icons.refresh_rounded, size: 14, color: p.textSoft),
+                      label: Text('Ещё раз', style: TextStyle(fontSize: 11.5, color: p.textSoft)),
+                      onPressed: () => _transcribeVoice(entry),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _transcribeVoice(entry),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(color: p.accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(20), border: Border.all(color: p.accent.withValues(alpha: .22))),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.auto_awesome_rounded, size: 14, color: p.accent),
+                  const SizedBox(width: 5),
+                  Flexible(child: Text('Расшифровать', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent), overflow: TextOverflow.ellipsis)),
+                ]),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2474,22 +2625,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: Icon(Icons.attach_file_rounded, color: p.textSoft, size: 20),
                   tooltip: model.tr('attach'),
                   onPressed: () => _showAttachSheet(model),
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Мини-ИИ: локальное распознавание голоса → задачи/заметки
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _dictating ? p.accent.withValues(alpha: .15) : p.bgChat,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: _dictating ? p.accent : p.divider.withValues(alpha: 0.5)),
-                ),
-                child: IconButton(
-                  icon: Icon(_dictating ? Icons.graphic_eq : Icons.auto_awesome_rounded, color: _dictating ? p.accent : p.textSoft, size: 20),
-                  tooltip: 'AI',
-                  onPressed: _dictating ? () => _stopDictation(save: true) : _startDictation,
                 ),
               ),
               const SizedBox(width: 6),

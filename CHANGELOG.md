@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.1] - 2026-08-31
+
+- **Voice AI fix:** кнопка ✨ перенесена с панели ввода на сам голосовой пузырь — `Расшифровать` прямо на сообщении; теперь всегда доступна (локальный `whisper_ggml` tiny, offline, `ru/en/uk/de/es/fr`), а не `недоступно` от системы. Показывает `LinearProgress` + `AI расшифровывает локально...`, превью текста, `Копировать` и `Как задачу/заметку` (сохраняет в текущий чат). Модель качается один раз и кэшируется, далее без сети. Composer-кнопка удалена
+
 ## [1.27.0] - 2026-08-31
 
 - **Todo editor:** simplified per user feedback — now 2 clear menus: (1) tasks & subtasks only (input + list with `↳` subtasks, `✓` toggle, `×` delete) and (2) time & importance (tap `Изменить время` → existing date/time & priority sheet). Importance chips removed from the first sheet — priority lives only in the time sheet, as requested
