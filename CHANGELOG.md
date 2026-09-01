@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.7] - 2026-08-31
+
+- **Voice AI:** `tiny` → `base` (~150MB) — точнее распознаёт на шуме/акценте, всё ещё быстро и не `small` 300MB; компромисс "много места не хочется давай base" — модель качается один раз `VoiceAi.ensureModelDownloaded()` `base`, далее офлайн `whisperLangFor`
+
 ## [1.27.6] - 2026-08-31
 
 - **Widget title:** period-aware header — `Сегодня` / `Ближайшее будущее` (ru), `Today` / `Upcoming` (en), `Сьогодні` / `Найближче майбутнє` (uk) etc., instead of static `Задачи`. `TnDayWidgetProvider.widgetTitleForPeriod()` reads `tn-daywidget-period` + `tn-widget-lang`, `buildViews` uses `title` not `Ws.title`; preview in `widget_settings_screen` now shows `widget_title_today/upcoming` + `i18n` keys added for 6 languages

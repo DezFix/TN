@@ -706,10 +706,10 @@ class _ChatScreenState extends State<ChatScreen> {
       _transcribeProgress[entry.id] = 0;
     });
     try {
-      // Первый раз модель ~75MB качается — показываем что это локальный ИИ, телефоном обрабатывается
+      // Первый раз модель base ~150MB качается — показываем что это локальный ИИ, телефоном обрабатывается
       final ready = await VoiceAi.isModelReady();
       if (!ready) {
-        if (mounted) _toast('Загрузка AI модели ~75MB — нужен интернет один раз');
+        if (mounted) _toast('Загрузка AI модели ~150MB base — нужен интернет один раз');
         final ok = await VoiceAi.ensureModelDownloaded();
         if (!ok) {
           if (!mounted) return;

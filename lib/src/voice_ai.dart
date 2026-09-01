@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:whisper_ggml/whisper_ggml.dart';
 
 /// Локальный мини-ИИ для расшифровки голосовых сообщений в текст.
-/// Работает полностью офлайн через whisper.cpp (tiny/base модели, ~75MB).
+/// Работает полностью офлайн через whisper.cpp (base ~150MB, точнее tiny).
 /// Никаких сетевых запросов после загрузки модели.
 class VoiceAi {
   static final WhisperController _controller = WhisperController();
@@ -29,20 +29,20 @@ class VoiceAi {
 
   static Future<bool> isModelReady() async {
     try {
-      final path = await _controller.getPath(WhisperModel.tiny);
+      final path = await _controller.getPath(WhisperModel.base);
       return File(path).existsSync();
     } catch (_) {
       return false;
     }
   }
 
-  /// Проверяет и при необходимости качает модель tiny (~75MB). Первый раз требует сеть, далее офлайн.
+  /// Проверяет и при необходимости качает модель base (~150MB, точнее tiny). Первый раз сеть, далее офлайн.
   static Future<bool> ensureModelDownloaded() async {
     try {
-      final path = await _controller.getPath(WhisperModel.tiny);
+      final path = await _controller.getPath(WhisperModel.base);
       if (File(path).existsSync()) return true;
-      debugPrint('VoiceAi: downloading whisper tiny model...');
-      await _controller.downloadModel(WhisperModel.tiny);
+      debugPrint('VoiceAi: downloading whisper base model...');
+      await _controller.downloadModel(WhisperModel.base);
       final ok = File(path).existsSync();
       debugPrint('VoiceAi: model download ${ok ? "ok" : "failed"} -> $path');
       return ok;
@@ -65,17 +65,17 @@ class VoiceAi {
       return null;
     }
     try {
-      // 1) Убедиться что модель есть (первый раз — скачает ~75MB)
+      // 1) Убедиться что модель есть (первый раз — скачает ~150MB base)
       final modelOk = await ensureModelDownloaded();
       if (!modelOk) {
         debugPrint('VoiceAi: model not available, need internet for first download');
         return null;
       }
-      // 2) Транскрибация
+      // 2) Транскрибация (base точнее tiny, но всё ещё быстро)
       final lang = whisperLangFor(appLang);
-      debugPrint('VoiceAi: transcribe $audioPath lang=$lang');
+      debugPrint('VoiceAi: transcribe $audioPath lang=$lang base');
       final res = await _controller.transcribe(
-        model: WhisperModel.tiny,
+        model: WhisperModel.base,
         audioPath: audioPath,
         lang: lang,
         onProgress: onProgress != null ? (p) => onProgress(p) : null,
