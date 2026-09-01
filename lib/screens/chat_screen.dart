@@ -706,6 +706,22 @@ class _ChatScreenState extends State<ChatScreen> {
       _transcribeProgress[entry.id] = 0;
     });
     try {
+      // Первый раз модель ~75MB качается — показываем что это локальный ИИ, телефоном обрабатывается
+      final ready = await VoiceAi.isModelReady();
+      if (!ready) {
+        if (mounted) _toast('Загрузка AI модели ~75MB — нужен интернет один раз');
+        final ok = await VoiceAi.ensureModelDownloaded();
+        if (!ok) {
+          if (!mounted) return;
+          setState(() {
+            _transcribing[entry.id] = false;
+            _transcribeProgress.remove(entry.id);
+          });
+          _toast('Модель не загружена — подключите интернет и попробуйте снова');
+          return;
+        }
+        if (mounted) _toast('Модель загружена — расшифровываю локально');
+      }
       final path = await _pathOf(entry.media!);
       final text = await VoiceAi.transcribeFile(
         path,

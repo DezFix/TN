@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:whisper_ggml/whisper_ggml.dart';
 
 /// Локальный мини-ИИ для расшифровки голосовых сообщений в текст.
@@ -26,6 +27,31 @@ class VoiceAi {
     }
   }
 
+  static Future<bool> isModelReady() async {
+    try {
+      final path = await _controller.getPath(WhisperModel.tiny);
+      return File(path).existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Проверяет и при необходимости качает модель tiny (~75MB). Первый раз требует сеть, далее офлайн.
+  static Future<bool> ensureModelDownloaded() async {
+    try {
+      final path = await _controller.getPath(WhisperModel.tiny);
+      if (File(path).existsSync()) return true;
+      debugPrint('VoiceAi: downloading whisper tiny model...');
+      await _controller.downloadModel(WhisperModel.tiny);
+      final ok = File(path).existsSync();
+      debugPrint('VoiceAi: model download ${ok ? "ok" : "failed"} -> $path');
+      return ok;
+    } catch (e) {
+      debugPrint('VoiceAi ensureModel error: $e');
+      return false;
+    }
+  }
+
   /// Транскрибирует аудиофайл локально. Возвращает текст или null.
   /// `audioPath` — абсолютный путь к m4a/wav.
   static Future<String?> transcribeFile(
@@ -34,10 +60,20 @@ class VoiceAi {
     void Function(int progress)? onProgress,
   }) async {
     final file = File(audioPath);
-    if (!await file.exists()) return null;
+    if (!await file.exists()) {
+      debugPrint('VoiceAi: file not found $audioPath');
+      return null;
+    }
     try {
-      // tiny — самая лёгкая, ~75MB, быстрая на телефоне. Для лучшего качества можно base.
+      // 1) Убедиться что модель есть (первый раз — скачает ~75MB)
+      final modelOk = await ensureModelDownloaded();
+      if (!modelOk) {
+        debugPrint('VoiceAi: model not available, need internet for first download');
+        return null;
+      }
+      // 2) Транскрибация
       final lang = whisperLangFor(appLang);
+      debugPrint('VoiceAi: transcribe $audioPath lang=$lang');
       final res = await _controller.transcribe(
         model: WhisperModel.tiny,
         audioPath: audioPath,
@@ -45,11 +81,12 @@ class VoiceAi {
         onProgress: onProgress != null ? (p) => onProgress(p) : null,
       );
       final text = res?.transcription.text.trim();
+      debugPrint('VoiceAi: result="${text?.substring(0, (text.length > 80 ? 80 : text.length))}"');
       if (text == null || text.isEmpty) return null;
-      // Whisper иногда возвращает "[BLANK_AUDIO]" для тишины
       if (text.contains('BLANK_AUDIO')) return null;
       return text;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('VoiceAi transcribe error: $e\n$st');
       return null;
     }
   }

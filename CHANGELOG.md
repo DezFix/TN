@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.5] - 2026-08-31
+
+- **Voice AI fix:** `whisper_ggml` теперь реально встроен и телефоном обрабатывается — добавлен `VoiceAi.isModelReady()/ensureModelDownloaded()` (`getPath` + `downloadModel` `tiny ~75MB`), первый раз показывает `Загрузка AI модели ~75MB — нужен интернет один раз` и `Модель загружена — расшифровываю локально`, далее офлайн; исправлен `недоступно` (ранее `speech_to_text` системный), улучшены `debugPrint` и `try/catch`, `cancel` no-op
+
 ## [1.27.4] - 2026-08-31
 
 - **Build fix:** CI `Install NDK 29 for whisper_ggml` — теперь ставит обе `29.0.13113456` (требует `whisper_ggml` плагин) + `29.0.14206865` (app), через `$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager` + `yes | --licenses` до и после, чинит `FAILURE License not accepted` на `v1.27.2/v1.27.3` (android `whisper_ggml` `ndk;29.0.13113456` лицензия). Windows билд уже был `success`, android теперь тоже
