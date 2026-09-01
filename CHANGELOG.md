@@ -4,34 +4,39 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.8] - 2026-08-31
+
+- **Voice AI:** `base` now auto-detects `ru/uk/en/de/es/fr` via `lang: 'auto'` (was forced to app language `whisperLangFor`, so Ukrainian/English spoken with Russian app was mis-recognized as Russian). Now understands any language — `base` multilingual 99 langs, first download ~150MB then offline. Fix for "only Russian" report
+- **Changelog:** translated `1.27.1-1.27.7` Russian entries to English per header `English only`; `1.27.7` after `1.26.0` is not strange — `1.27.0` minor for voice AI feature, `1.27.1-1.27.7` patches, `1.26.x` remains
+
 ## [1.27.7] - 2026-08-31
 
-- **Voice AI:** `tiny` → `base` (~150MB) — точнее распознаёт на шуме/акценте, всё ещё быстро и не `small` 300MB; компромисс "много места не хочется давай base" — модель качается один раз `VoiceAi.ensureModelDownloaded()` `base`, далее офлайн `whisperLangFor`
+- **Voice AI:** `tiny` → `base` (~150MB) — more accurate on noise/accent, still fast vs `small` 300MB; compromise "don't want much space, let's take base" — model downloads once `VoiceAi.ensureModelDownloaded()` `base`, then offline `whisperLangFor`
 
 ## [1.27.6] - 2026-08-31
 
-- **Widget title:** period-aware header — `Сегодня` / `Ближайшее будущее` (ru), `Today` / `Upcoming` (en), `Сьогодні` / `Найближче майбутнє` (uk) etc., instead of static `Задачи`. `TnDayWidgetProvider.widgetTitleForPeriod()` reads `tn-daywidget-period` + `tn-widget-lang`, `buildViews` uses `title` not `Ws.title`; preview in `widget_settings_screen` now shows `widget_title_today/upcoming` + `i18n` keys added for 6 languages
-- **Widget → message:** tap on text now opens directly to that message with highlight frame (like `Ближайшее будущее` agenda) — `TnDayWidgetService` `openFill` now includes `entryId` for `dr_root/dr_title/dr_subs/dr_meta`, `ToggleReceiver` forwards `open_entry`, `MainActivity.PendingOpenChat` holds `chatId+entryId` Map, `WidgetBridge` handles `Map`/`String` and `takePendingOpenChat()` returns `Map`, `main.dart` pushes `ChatScreen(chatId, scrollToEntryId, highlightEntryId)`
+- **Widget title:** period-aware header — `Today` / `Upcoming` (instead of static `Tasks`/`Задачи`). `TnDayWidgetProvider.widgetTitleForPeriod()` reads `tn-daywidget-period` + `tn-widget-lang`; `buildViews` uses dynamic `title` not `Ws.title`; preview in `widget_settings_screen` now shows `widget_title_today/upcoming` + `i18n` keys for 6 languages
+- **Widget → message:** tap on text now opens directly to that message with highlight frame (like `Upcoming` agenda) — `TnDayWidgetService` `openFill` now includes `entryId` for `dr_root/dr_title/dr_subs/dr_meta`, `ToggleReceiver` forwards `open_entry`, `MainActivity.PendingOpenChat` holds `chatId+entryId` Map, `WidgetBridge` handles `Map`/`String` and `takePendingOpenChat()` returns `Map`, `main.dart` pushes `ChatScreen(chatId, scrollToEntryId, highlightEntryId)`
 
 ## [1.27.5] - 2026-08-31
 
-- **Voice AI fix:** `whisper_ggml` теперь реально встроен и телефоном обрабатывается — добавлен `VoiceAi.isModelReady()/ensureModelDownloaded()` (`getPath` + `downloadModel` `tiny ~75MB`), первый раз показывает `Загрузка AI модели ~75MB — нужен интернет один раз` и `Модель загружена — расшифровываю локально`, далее офлайн; исправлен `недоступно` (ранее `speech_to_text` системный), улучшены `debugPrint` и `try/catch`, `cancel` no-op
+- **Voice AI fix:** `whisper_ggml` now truly built-in and on-device — added `VoiceAi.isModelReady()/ensureModelDownloaded()` (`getPath` + `downloadModel` `tiny ~75MB`), shows `Downloading AI model ~75MB — internet needed once` then `Model ready — transcribing locally`, then offline; fixed `unavailable` (was system `speech_to_text`), improved `debugPrint`/`try/catch`, `cancel` no-op
 
 ## [1.27.4] - 2026-08-31
 
-- **Build fix:** CI `Install NDK 29 for whisper_ggml` — теперь ставит обе `29.0.13113456` (требует `whisper_ggml` плагин) + `29.0.14206865` (app), через `$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager` + `yes | --licenses` до и после, чинит `FAILURE License not accepted` на `v1.27.2/v1.27.3` (android `whisper_ggml` `ndk;29.0.13113456` лицензия). Windows билд уже был `success`, android теперь тоже
+- **Build fix:** CI `Install NDK 29 for whisper_ggml` — now installs both `29.0.13113456` (required by `whisper_ggml` plugin) + `29.0.14206865` (app) via `$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager` + `yes | --licenses` before/after, fixes `FAILURE License not accepted` on `v1.27.2/v1.27.3` (`ndk;29.0.13113456`). Windows already `success`, android now too
 
 ## [1.27.3] - 2026-08-31
 
-- **Build fix:** `ndkVersion 29.0.14206865` (stable) + CI `Install NDK 29` step (`sdkmanager --install ndk;29.0.14206865`, `yes | sdkmanager --licenses`) — чинит падение `Build APKs` `FAILURE License not accepted` на `v1.27.2` (`29.0.13113456 rc1` → stable). Локально установлено оба NDK, сборка `130.7MB` успешна `140s`
+- **Build fix:** `ndkVersion 29.0.14206865` (stable) + CI `Install NDK 29` step (`sdkmanager --install ndk;29.0.14206865`, `yes | sdkmanager --licenses`) — fixes `Build APKs` `FAILURE License not accepted` on `v1.27.2` (`29.0.13113456 rc1` → stable). Both NDKs installed locally, build `130.7MB` success `140s`
 
 ## [1.27.2] - 2026-08-31
 
-- **Build:** `android/app/build.gradle.kts:32` `ndkVersion 29.0.13113456` для `whisper_ggml` (ранее `flutter.ndkVersion 27`), исправляет `LICENSE not accepted` / `NDK 29 required` на CI и локально; APK вырос `65.7MB → 130.7MB` из-за `whisper.cpp` native libs, но остаётся offline
+- **Build:** `android/app/build.gradle.kts:32` `ndkVersion 29.0.13113456` for `whisper_ggml` (was `flutter.ndkVersion 27`), fixes `LICENSE not accepted` / `NDK 29 required` on CI and locally; APK grew `65.7MB → 130.7MB` due to `whisper.cpp` native libs, still offline
 
 ## [1.27.1] - 2026-08-31
 
-- **Voice AI fix:** кнопка ✨ перенесена с панели ввода на сам голосовой пузырь — `Расшифровать` прямо на сообщении; теперь всегда доступна (локальный `whisper_ggml` tiny, offline, `ru/en/uk/de/es/fr`), а не `недоступно` от системы. Показывает `LinearProgress` + `AI расшифровывает локально...`, превью текста, `Копировать` и `Как задачу/заметку` (сохраняет в текущий чат). Модель качается один раз и кэшируется, далее без сети. Composer-кнопка удалена
+- **Voice AI fix:** moved ✨ button from composer to voice bubble — `Transcribe` directly on message; now always available (local `whisper_ggml` tiny, offline, `ru/en/uk/de/es/fr`), not system `unavailable`. Shows `LinearProgress` + `AI transcribing locally...`, preview, `Copy` and `As task/note` (saves to current chat). Model downloads once and caches, then offline. Composer button removed
 
 ## [1.27.0] - 2026-08-31
 

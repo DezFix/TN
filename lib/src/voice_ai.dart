@@ -71,13 +71,10 @@ class VoiceAi {
         debugPrint('VoiceAi: model not available, need internet for first download');
         return null;
       }
-      // 2) Транскрибация (base точнее tiny, но всё ещё быстро)
-      final lang = whisperLangFor(appLang);
-      debugPrint('VoiceAi: transcribe $audioPath lang=$lang base');
-      final res = await _controller.transcribe(
-        model: WhisperModel.base,
-        audioPath: audioPath,
-        lang: lang,
+      // 2) Транскрибация (base точнее tiny, авто-детект языка — uk/en/ru/de/es/fr)
+      // Используем 'auto' чтобы понимать любой язык, а не только язык приложения
+      const lang = 'auto';
+      debugPrint('VoiceAi: transcribe $audioPath lang=$lang (auto) base');
         onProgress: onProgress != null ? (p) => onProgress(p) : null,
       );
       final text = res?.transcription.text.trim();
