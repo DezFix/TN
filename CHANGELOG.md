@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.6] - 2026-08-31
+
+- **Widget title:** period-aware header — `Сегодня` / `Ближайшее будущее` (ru), `Today` / `Upcoming` (en), `Сьогодні` / `Найближче майбутнє` (uk) etc., instead of static `Задачи`. `TnDayWidgetProvider.widgetTitleForPeriod()` reads `tn-daywidget-period` + `tn-widget-lang`, `buildViews` uses `title` not `Ws.title`; preview in `widget_settings_screen` now shows `widget_title_today/upcoming` + `i18n` keys added for 6 languages
+- **Widget → message:** tap on text now opens directly to that message with highlight frame (like `Ближайшее будущее` agenda) — `TnDayWidgetService` `openFill` now includes `entryId` for `dr_root/dr_title/dr_subs/dr_meta`, `ToggleReceiver` forwards `open_entry`, `MainActivity.PendingOpenChat` holds `chatId+entryId` Map, `WidgetBridge` handles `Map`/`String` and `takePendingOpenChat()` returns `Map`, `main.dart` pushes `ChatScreen(chatId, scrollToEntryId, highlightEntryId)`
+
 ## [1.27.5] - 2026-08-31
 
 - **Voice AI fix:** `whisper_ggml` теперь реально встроен и телефоном обрабатывается — добавлен `VoiceAi.isModelReady()/ensureModelDownloaded()` (`getPath` + `downloadModel` `tiny ~75MB`), первый раз показывает `Загрузка AI модели ~75MB — нужен интернет один раз` и `Модель загружена — расшифровываю локально`, далее офлайн; исправлен `недоступно` (ранее `speech_to_text` системный), улучшены `debugPrint` и `try/catch`, `cancel` no-op

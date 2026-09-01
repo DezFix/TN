@@ -128,11 +128,17 @@ class TnDayWidgetViewsFactory(
         }
         row.setOnClickFillInIntent(R.id.dr_check, toggleFill)
 
+        // Тап по тексту → прямо к сообщению (как в "Ближайшее будущее" вкладке: scrollTo + рамка).
         val openFill = Intent().apply {
             action = ToggleReceiver.ACTION_OPEN_CHAT
             putExtra(ToggleReceiver.EXTRA_CHAT_ID, r.chatId)
+            putExtra(ToggleReceiver.EXTRA_ENTRY_ID, r.entryId)
         }
         row.setOnClickFillInIntent(R.id.dr_root, openFill)
+        // Также отдельно на текст/подблок — чтобы гарантировать попадание по тексту.
+        row.setOnClickFillInIntent(R.id.dr_title, openFill)
+        if (r.subPreview != null) row.setOnClickFillInIntent(R.id.dr_subs, openFill)
+        row.setOnClickFillInIntent(R.id.dr_meta, openFill)
         return row
     }
 

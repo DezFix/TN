@@ -22,8 +22,10 @@ class ToggleReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_OPEN_CHAT -> {
                 val chatId = intent.getStringExtra(EXTRA_CHAT_ID) ?: return
+                val entryId = intent.getStringExtra(EXTRA_ENTRY_ID)
                 val launch = Intent(context, MainActivity::class.java).apply {
                     putExtra("open_chat", chatId)
+                    if (entryId != null) putExtra("open_entry", entryId)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
                 try { context.startActivity(launch) } catch (_: Exception) {}

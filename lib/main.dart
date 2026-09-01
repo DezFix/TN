@@ -120,11 +120,11 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     WidgetBridge.onOpenSettings = () {
       _navKey.currentState?.pushNamed('/widget-settings');
     };
-    WidgetBridge.onOpenChat = (chatId) {
+    WidgetBridge.onOpenChat = (chatId, entryId) {
       final m = _loadedModel;
       if (m == null) return;
       _navKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => ChatScreen(model: m, chatId: chatId),
+        builder: (_) => ChatScreen(model: m, chatId: chatId, scrollToEntryId: entryId, highlightEntryId: entryId),
       ));
     };
     WidgetBridge.onShortcutQuickNote = () {
@@ -145,12 +145,15 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   Future<void> _pendingOpenChatCheck() async {
     _pendingOpenChatTimer = Timer(const Duration(milliseconds: 800), () async {
       if (!mounted) return;
-      final chatId = await WidgetBridge.takePendingOpenChat();
-      if (chatId == null || !mounted) return;
+      final pending = await WidgetBridge.takePendingOpenChat();
+      if (pending == null || !mounted) return;
+      final chatId = pending['chatId'];
+      final entryId = pending['entryId'];
+      if (chatId == null || chatId.isEmpty || !mounted) return;
       final m = _loadedModel;
       if (m == null) return;
       _navKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => ChatScreen(model: m, chatId: chatId),
+        builder: (_) => ChatScreen(model: m, chatId: chatId, scrollToEntryId: entryId, highlightEntryId: entryId),
       ));
     });
   }

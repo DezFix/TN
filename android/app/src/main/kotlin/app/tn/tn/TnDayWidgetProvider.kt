@@ -206,6 +206,26 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        /** Заголовок виджета под профиль: "Сегодня" / "Ближайшее будущее" (вместо статичного "Задачи"). */
+        fun widgetTitleForPeriod(context: Context): String {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val periodRaw = prefs.getString("flutter.tn-daywidget-period", null)
+                ?: prefs.getString("tn-daywidget-period", null)
+                ?: "upcoming"
+            val period = if (periodRaw == "today") "today" else "upcoming"
+            var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
+            if (lang.isNullOrEmpty()) lang = Locale.getDefault().language
+            val isToday = period == "today"
+            return when (lang.take(2).lowercase(Locale.ROOT)) {
+                "ru" -> if (isToday) "Сегодня" else "Ближайшее будущее"
+                "uk" -> if (isToday) "Сьогодні" else "Найближче майбутнє"
+                "de" -> if (isToday) "Heute" else "Nächste Zukunft"
+                "es" -> if (isToday) "Hoy" else "Próximamente"
+                "fr" -> if (isToday) "Aujourd'hui" else "Prochainement"
+                else -> if (isToday) "Today" else "Upcoming"
+            }
+        }
+
         fun priorityHeader(context: Context, priority: Int): String {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             var lang = (prefs.all["flutter.tn-widget-lang"] ?: prefs.all["tn-widget-lang"]) as? String
@@ -284,7 +304,8 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             )
 
             val ws = widgetStrings(context)
-            rv.setTextViewText(R.id.dw_title, ws.title)
+            val title = widgetTitleForPeriod(context)
+            rv.setTextViewText(R.id.dw_title, title)
             // Adjustable font size, read through the same helper used by the
             // RemoteViewsFactory so list rows match the widget header.
             val fontScale = readFontScale(context)

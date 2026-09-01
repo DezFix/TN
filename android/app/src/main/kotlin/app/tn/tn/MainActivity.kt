@@ -23,15 +23,28 @@ object PendingShare {
     }
 }
 
-/// Widget row text-tap: chatId waiting for the Dart side.
+/// Widget row text-tap: chatId + entryId waiting for the Dart side (прямо к сообщению, как в "Ближайшее будущее").
 object PendingOpenChat {
     @Volatile
     var chatId: String? = null
+    @Volatile
+    var entryId: String? = null
 
     @Synchronized
-    fun take(): String? {
+    fun take(): Map<String, String?>? {
+        val c = chatId
+        val e = entryId
+        if (c == null) return null
+        chatId = null
+        entryId = null
+        return mapOf("chatId" to c, "entryId" to e)
+    }
+
+    @Synchronized
+    fun takeLegacy(): String? {
         val v = chatId
         chatId = null
+        entryId = null
         return v
     }
 }
@@ -116,10 +129,15 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         val chatId = intent.getStringExtra("open_chat")
+        val entryId = intent.getStringExtra("open_entry")
         if (!chatId.isNullOrEmpty()) {
             flutterEngine?.let { engine ->
+                val args: Any = if (!entryId.isNullOrEmpty()) mapOf("chatId" to chatId, "entryId" to entryId) else chatId
                 MethodChannel(engine.dartExecutor.binaryMessenger, "tn/widget")
-                    .invokeMethod("openChat", chatId)
+                    .invokeMethod("openChat", args)
+            } ?: run {
+                PendingOpenChat.chatId = chatId
+                PendingOpenChat.entryId = entryId
             }
         }
         handleShareIntent(intent)?.let { share ->
@@ -229,9 +247,13 @@ class MainActivity : FlutterFragmentActivity() {
             }
         // Cold start via a share action.
         intent?.let { handleShareIntent(it) }?.let { PendingShare.data = it.toMutableMap() }
-        // Cold start via widget text tap.
+        // Cold start via widget text tap (прямо к сообщению, как в "Ближайшее будущее").
         val openChatId = intent?.getStringExtra("open_chat")
-        if (!openChatId.isNullOrEmpty()) PendingOpenChat.chatId = openChatId
+        val openEntryId = intent?.getStringExtra("open_entry")
+        if (!openChatId.isNullOrEmpty()) {
+            PendingOpenChat.chatId = openChatId
+            PendingOpenChat.entryId = openEntryId
+        }
         when (intent?.action) {
             "app.tn.tn.SHORTCUT_QUICK_NOTE" -> PendingShortcut.action = "quick_note"
             "app.tn.tn.SHORTCUT_AGENDA" -> PendingShortcut.action = "agenda"

@@ -294,7 +294,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                 Icon(Icons.check_circle, size: 15 * _font, color: p.accent),
                 const SizedBox(width: 7),
                 Expanded(
-                  child: Text(model.tr('kind_tasks'),
+                  child: Text(model.tr(_period == 'today' ? 'widget_title_today' : 'widget_title_upcoming'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
