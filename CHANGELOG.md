@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.9] - 2026-08-31
+
+- **Voice AI:** fixed `voice_ai.dart:78` compilation error (`onProgress` outside `transcribe` call after `tiny→base` + `auto` refactor) — restored `final res = await _controller.transcribe(model: base, ... onProgress: onProgress)` — CI `90 passed, 3 failed` (`Failed to load widget_test.dart`) → `108 passed`, `android` now `success` again
+
 ## [1.27.8] - 2026-08-31
 
 - **Voice AI:** `base` now auto-detects `ru/uk/en/de/es/fr` via `lang: 'auto'` (was forced to app language `whisperLangFor`, so Ukrainian/English spoken with Russian app was mis-recognized as Russian). Now understands any language — `base` multilingual 99 langs, first download ~150MB then offline. Fix for "only Russian" report

@@ -75,7 +75,11 @@ class VoiceAi {
       // Используем 'auto' чтобы понимать любой язык, а не только язык приложения
       const lang = 'auto';
       debugPrint('VoiceAi: transcribe $audioPath lang=$lang (auto) base');
-        onProgress: onProgress != null ? (p) => onProgress(p) : null,
+      final res = await _controller.transcribe(
+        model: WhisperModel.base,
+        audioPath: audioPath,
+        lang: lang,
+        onProgress: onProgress,
       );
       final text = res?.transcription.text.trim();
       debugPrint('VoiceAi: result="${text?.substring(0, (text.length > 80 ? 80 : text.length))}"');
