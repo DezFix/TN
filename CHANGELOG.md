@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.10] - 2026-08-31
+
+- **Voice waveform:** fixed `progress` to `playing && totalMs>0` — now only the playing message's bars move, not all; thumb `playing && totalMs>0` only for active; scrub via `onTapDown`/`onHorizontalDragUpdate` `seekFromDx` already works to understand quiet vs loud and drag
+- **Transcription UI:** removed `Ещё раз` (unlikely AI will parse differently); kept `Расшифровать` → `AI transcribing locally...` preview + `Copy` + `As task/note`
+- **Voice → Task:** `As task` now shows `showScheduleSheet` (time & importance) before creating, as before sending a task — `dueAt/recurrence/priority` from `sched`, then `Entry` + `_scheduleEntryReminder`, `As note` still direct
+
 ## [1.27.9] - 2026-08-31
 
 - **Voice AI:** fixed `voice_ai.dart:78` compilation error (`onProgress` outside `transcribe` call after `tiny→base` + `auto` refactor) — restored `final res = await _controller.transcribe(model: base, ... onProgress: onProgress)` — CI `90 passed, 3 failed` (`Failed to load widget_test.dart`) → `108 passed`, `android` now `success` again

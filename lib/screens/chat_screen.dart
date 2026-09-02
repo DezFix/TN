@@ -765,13 +765,44 @@ class _ChatScreenState extends State<ChatScreen> {
     final t = text.trim();
     if (t.isEmpty) return;
     final isTasks = _chat.kind == 'tasks';
+    if (isTasks) {
+      // Показать меню времени/важности как перед отправкой задачи (последний фикс сегодня)
+      final sched = await showScheduleSheet(context, widget.model, showPriority: true);
+      if (sched == null || sched.dueAt == null) {
+        // Пользователь отменил — не создаём задачу, или создаём без времени? Пока не создаём
+        if (sched == null) return;
+        if (sched.dueAt == null) return;
+      }
+      final entry = Entry(
+        id: uid('e'),
+        chatId: widget.chatId,
+        type: 'todo',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        text: '',
+        items: [TodoItem(id: uid('t'), text: t, priority: sched.priority)],
+        tags: extractTags(t),
+        dueAt: sched.dueAt,
+        recurrence: sched.recurrence,
+        recurrenceDays: sched.recurrenceDays,
+        monthDay: sched.monthDay,
+      );
+      widget.model.state.entries.add(entry);
+      await widget.model.save();
+      await _scheduleEntryReminder(entry);
+      if (mounted) {
+        setState(() {});
+        _scrollToBottom();
+        _toast(widget.model.tr('todo_added', [_chat.name]));
+      }
+      return;
+    }
+    // Для заметок — просто текст
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
-      type: isTasks ? 'todo' : 'text',
+      type: 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      text: isTasks ? '' : t,
-      items: isTasks ? [TodoItem(id: uid('t'), text: t)] : null,
+      text: t,
       tags: extractTags(t),
     );
     widget.model.state.entries.add(entry);
@@ -779,7 +810,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) {
       setState(() {});
       _scrollToBottom();
-      _toast(isTasks ? widget.model.tr('todo_added', [_chat.name]) : 'Заметка создана');
+      _toast('Заметка создана');
     }
   }
 
@@ -1976,7 +2007,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final playing = _playingId == entry.id;
     final dur = entry.duration ?? 0;
     final totalMs = _playDur?.inMilliseconds ?? (dur > 0 ? dur * 1000 : 0);
-    final progress = totalMs > 0
+    // Только у играющего сообщения двигаются полосочки — иначе 0
+    final progress = playing && totalMs > 0
         ? (_playPos.inMilliseconds / totalMs).clamp(0.0, 1.0)
         : 0.0;
     // When not playing we still show 0 progress but allow scrubbing to seek & start.
@@ -2029,8 +2061,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             playedColor: p.accent,
                             restColor: p.textFaint.withValues(alpha: .45),
                           ),
-                          // Thumb at progress
-                          if (totalMs > 0)
+                          // Thumb at progress — только у играющего
+                          if (playing && totalMs > 0)
                             Positioned(
                               left: (progress * (cts.maxWidth - 8)).clamp(0.0, cts.maxWidth - 8),
                               child: Container(
@@ -2116,12 +2148,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       icon: Icon(_chat.kind == 'tasks' ? Icons.checklist_rounded : Icons.note_add_rounded, size: 14, color: Colors.white),
                       label: Text(_chat.kind == 'tasks' ? 'Как задачу' : 'Как заметку', style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w700)),
                       onPressed: () => _saveTranscribedAsTaskOrNote(_transcribed[entry.id] ?? entry.text),
-                    ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(side: BorderSide(color: p.divider), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                      icon: Icon(Icons.refresh_rounded, size: 14, color: p.textSoft),
-                      label: Text('Ещё раз', style: TextStyle(fontSize: 11.5, color: p.textSoft)),
-                      onPressed: () => _transcribeVoice(entry),
                     ),
                   ]),
                 ],
