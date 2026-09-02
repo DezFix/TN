@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.12] - 2026-08-31
+
+- **Samsung fingerprint:** fixed OneUI — `biometricsEnrolled` now checks `canCheckBiometrics` + `getAvailableBiometrics` + `isDeviceSupported` (Samsung returns empty list for `BIOMETRIC_WEAK`), `verifyAny`/`unlockBiometrics` now 3-step cascade (`biometricOnly:false` → `true` → `true` + `useErrorDialogs:false`/`sensitiveTransaction:false` with 150ms delays), `LockScreen` prioritizes `biometric` over `pattern/pin` and auto-prompts `550ms` even when code is also enabled; `AndroidManifest` added `USE_FINGERPRINT`
+
 ## [1.27.11] - 2026-08-31
 
 - **Voice waveform:** fixed invisible waves — `restColor` `textFaint .45 → white .55` for contrast, `progress` now `playing && totalMs>0` only for active message, synthetic fallback `isEmpty → List.generate 40 [18,28,42,60...]` always visible; scrub via `onTapDown`/`onHorizontalDragUpdate` `seekFromDx` already works to see quiet vs loud

@@ -242,36 +242,65 @@ class AppLock {
     return nowFn().difference(at).inMinutes < grace;
   }
 
-  /// System biometric sheet (method == biometric).
+  /// System biometric sheet (method == biometric). Samsung OneUI needs
+  /// `biometricOnly: true` + `stickyAuth` + `useErrorDialogs:true` first,
+  /// fallback to `biometricOnly:false` and then weak `sensitiveTransaction:false`.
   static Future<bool> unlockBiometrics(TrFn tr) async {
     try {
       if (!await _auth.isDeviceSupported()) return false;
-      return await _auth.authenticate(
-        localizedReason: tr('lock_title'),
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-          useErrorDialogs: true,
-        ),
-      );
+      // 1) Strict biometric (most reliable on Samsung with fingerprint)
+      try {
+        if (await _auth.authenticate(
+          localizedReason: tr('lock_title'),
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+            useErrorDialogs: true,
+          ),
+        )) return true;
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      // 2) Allow weak + device credential
+      try {
+        if (await _auth.authenticate(
+          localizedReason: tr('lock_title'),
+          options: const AuthenticationOptions(
+            biometricOnly: false,
+            stickyAuth: true,
+            useErrorDialogs: true,
+          ),
+        )) return true;
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      // 3) Samsung weak fallback
+      try {
+        if (await _auth.authenticate(
+          localizedReason: tr('lock_title'),
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+            useErrorDialogs: false,
+            sensitiveTransaction: false,
+          ),
+        )) return true;
+      } catch (_) {}
+      return false;
     } catch (_) {
       return false;
     }
   }
 
-  /// Cascaded verification used everywhere a lock decision is made:
-  ///   1. combined prompt (biometric + device credential on one sheet —
-  ///      most reliable on Samsung/OneUI where two consecutive prompts break),
-  ///   2. strict biometric retry if the combined sheet was cancelled but
-  ///      a fingerprint IS enrolled (edge case: user dismissed PIN fallback),
-  ///   3. if the device has no screen protection at all, verification is
-  ///      impossible — allow through rather than brick the app.
+  /// Cascaded verification — Samsung OneUI is the weird one:
+  ///   1. combined `biometricOnly:false` (fingerprint+PIN in one sheet) — most reliable on Samsung,
+  ///   2. strict `biometricOnly:true` (fallback when combined silently drops biometrics),
+  ///   3. `biometricOnly:true` + `useErrorDialogs:false` (for old Samsung weak biometric),
+  ///   4. if no screen lock at all → allow (don't brick).
   static Future<bool> verifyAny(TrFn tr) async {
     if (!supported) return true;
     final secured = await _auth.isDeviceSupported();
     if (!secured) return true;
 
-    // Try combined prompt first (shows biometric + "use PIN" in one sheet).
+    // 1) Combined — fingerprint + device credential in one sheet (Samsung best)
     try {
       if (await _auth.authenticate(
         localizedReason: tr('lock_title'),
@@ -282,11 +311,33 @@ class AppLock {
         ),
       )) return true;
     } catch (_) {}
+    await Future<void>.delayed(const Duration(milliseconds: 150));
 
-    // If combined failed AND biometrics are enrolled, retry strict-only
-    // (handles rare OEMs where the combined sheet silently drops biometrics).
+    // 2) Strict biometric — handles OEMs where combined drops biometrics
     if (await biometricsEnrolled) {
-      if (await unlockBiometrics(tr)) return true;
+      try {
+        if (await _auth.authenticate(
+          localizedReason: tr('lock_title'),
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+            useErrorDialogs: true,
+          ),
+        )) return true;
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      // 3) Samsung weak biometric fallback — no error dialogs, not sensitive
+      try {
+        if (await _auth.authenticate(
+          localizedReason: tr('lock_title'),
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+            useErrorDialogs: false,
+            sensitiveTransaction: false,
+          ),
+        )) return true;
+      } catch (_) {}
     }
     return false;
   }
@@ -298,12 +349,24 @@ class AppLock {
   }
 
   /// Whether any biometrics are actually enrolled — used to gray out the
-  /// biometric option on devices without them.
+  /// biometric option on devices without them. Samsung OneUI is quirky:
+  /// `getAvailableBiometrics()` can be empty while `canCheckBiometrics`
+  /// is true, so we check both + isDeviceSupported.
   static Future<bool> get biometricsEnrolled async {
     if (!supported) return false;
     try {
+      if (await _auth.canCheckBiometrics) return true;
+    } catch (_) {}
+    try {
       final list = await _auth.getAvailableBiometrics();
-      return list.isNotEmpty;
+      if (list.isNotEmpty) return true;
+    } catch (_) {}
+    try {
+      if (await _auth.isDeviceSupported()) {
+        // On Samsung, isDeviceSupported true + canCheck true means enrolled
+        // even if getAvailableBiometrics is empty (BIOMETRIC_WEAK).
+        return await _auth.canCheckBiometrics;
+      }
     } catch (_) {}
     return false;
   }
@@ -433,9 +496,10 @@ class _LockScreenState extends State<LockScreen> {
   bool get _hasCode => _methods.contains(LockMethod.pattern) ||
       _methods.contains(LockMethod.pin);
 
+  // Samsung users expect fingerprint as primary — prioritize biometric over code
   LockMethod get _currentMethod =>
       _activeMethod ??
-      (_hasCode
+      (_hasBiometric ? LockMethod.biometric : _hasCode
           ? _methods.contains(LockMethod.pattern)
               ? LockMethod.pattern
               : LockMethod.pin
@@ -453,11 +517,14 @@ class _LockScreenState extends State<LockScreen> {
     setState(() {
       _methods = methods;
     });
-    // Auto-prompt biometric if enabled and there's no code-based fallback.
-    if (_hasBiometric && !_hasCode) {
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+    // Auto-prompt biometric if available — Samsung OneUI needs longer delay
+    // and should prompt even when a PIN/pattern is also enabled (user expects fingerprint first).
+    if (_hasBiometric) {
+      // Samsung needs ~500-600ms, others 350ms is enough — use 550ms for all
+      await Future<void>.delayed(const Duration(milliseconds: 550));
       if (!mounted) return;
-      await _tryBiometrics(auto: true);
+      // Don't auto-prompt if the widget was disposed during the delay
+      if (_hasBiometric) await _tryBiometrics(auto: true);
     }
   }
 
