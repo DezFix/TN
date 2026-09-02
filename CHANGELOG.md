@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.11] - 2026-08-31
+
+- **Voice waveform:** fixed invisible waves — `restColor` `textFaint .45 → white .55` for contrast, `progress` now `playing && totalMs>0` only for active message, synthetic fallback `isEmpty → List.generate 40 [18,28,42,60...]` always visible; scrub via `onTapDown`/`onHorizontalDragUpdate` `seekFromDx` already works to see quiet vs loud
+- **Voice → Task:** `As task` now shows `showScheduleSheet` (time & importance) before creating, as before sending a task — `dueAt/recurrence/priority` from `sched`, then `Entry` + `_scheduleEntryReminder` (last fix today)
+
 ## [1.27.10] - 2026-08-31
 
 - **Voice waveform:** fixed `progress` to `playing && totalMs>0` — now only the playing message's bars move, not all; thumb `playing && totalMs>0` only for active; scrub via `onTapDown`/`onHorizontalDragUpdate` `seekFromDx` already works to understand quiet vs loud and drag

@@ -2059,7 +2059,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             samples: entry.waveform ?? const <int>[],
                             progress: progress,
                             playedColor: p.accent,
-                            restColor: p.textFaint.withValues(alpha: .45),
+                            restColor: Colors.white.withValues(alpha: .55),
                           ),
                           // Thumb at progress — только у играющего
                           if (playing && totalMs > 0)
