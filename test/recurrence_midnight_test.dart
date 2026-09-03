@@ -82,4 +82,62 @@ void main() {
       expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)), reason: 'next Monday 09:00');
     });
   });
+
+  group('weekdays Пн-Пт — midnight reset (bug: вчера отметил, сегодня не появилось)', () {
+    // 2026-08-24 Mon, 25 Tue, 26 Wed.
+    Entry weekdayEntry({required DateTime due, required bool done}) => Entry(
+          id: 'e-wd',
+          chatId: 'c1',
+          type: 'todo',
+          ts: 0,
+          dueAt: ms(due),
+          recurrence: 'weekly',
+          recurrenceDays: const [1, 2, 3, 4, 5],
+          items: [TodoItem(id: 't', text: 'будни', done: done)],
+        );
+
+    test('Mon done -> Tue 00:01 resets to Tue undone (главный баг)', () {
+      // Пн 09:00 отмечена в Пн 12:00 (snap -> Пн 09:00 checked, today selected)
+      final e = weekdayEntry(due: at(2026, 8, 24, 9, 0), done: true);
+      expect(snapCompletedRecurring(e, at(2026, 8, 24, 12, 0)), isTrue);
+      expect(e.dueAt, ms(at(2026, 8, 24, 9, 0)));
+      // Вт 00:01 — должна появиться сегодняшняя (undone)
+      final rolled = rolloverRecurringTasks([e], at(2026, 8, 25, 0, 1));
+      expect(rolled, [e], reason: 'обнуление в 00:00');
+      expect(e.items!.single.done, isFalse);
+      expect(e.dueAt, ms(at(2026, 8, 25, 9, 0)));
+    });
+
+    test('Mon overdue checked Tue -> snaps to Tue (не пропускает день)', () {
+      final e = weekdayEntry(due: at(2026, 8, 24, 9, 0), done: true);
+      final changed = snapCompletedRecurring(e, at(2026, 8, 25, 10, 0));
+      expect(changed, isTrue);
+      expect(e.dueAt, ms(at(2026, 8, 25, 9, 0)),
+          reason: 'вчера просрочено + отметил -> сегодняшняя, а не Ср');
+    });
+
+    test('Fri done -> Sat holds checkmark, Mon resets', () {
+      // Пт 2026-08-28 09:00 done Fri 12:00 -> snap stays Fri (today selected)
+      final e = weekdayEntry(due: at(2026, 8, 28, 9, 0), done: true);
+      snapCompletedRecurring(e, at(2026, 8, 28, 12, 0));
+      // Sat 00:01 — выходные, задачи нет, checkmark держится
+      expect(rolloverRecurringTasks([e], at(2026, 8, 29, 0, 1)), isEmpty);
+      expect(e.items!.single.done, isTrue);
+      // Mon 00:01 — появляется понедельничная
+      final rolled = rolloverRecurringTasks([e], at(2026, 8, 31, 0, 1));
+      expect(rolled, [e]);
+      expect(e.items!.single.done, isFalse);
+      expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)));
+    });
+
+    test('Tue done Tue evening stays checked Tue, resets Wed', () {
+      final e = weekdayEntry(due: at(2026, 8, 25, 9, 0), done: true);
+      // Вт 20:00 — сегодняшний период ещё активен
+      expect(rolloverRecurringTasks([e], at(2026, 8, 25, 20, 0)), isEmpty);
+      // Ср 00:01 — новая
+      final rolled = rolloverRecurringTasks([e], at(2026, 8, 26, 0, 1));
+      expect(rolled, [e]);
+      expect(e.dueAt, ms(at(2026, 8, 26, 9, 0)));
+    });
+  });
 }

@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.13] - 2026-09-03
+
+- **Recurring weekdays fix:** Mon–Fri tasks now reset at 00:00 like daily (was: checked yesterday never reappeared today). `rolloverRecurringTasks`/`snapCompletedRecurring` (Dart + `Recurrence.kt`/`ToggleReceiver.kt`) use calendar-day semantics per selected weekday: Mon done → Tue 00:01 fresh Tue undone; overdue Mon checked Tue snaps to Tue (not Wed); weekend holds checkmark until Mon. Midnight widget alarm + app-resume rollover included
+- **Code review:** widget uncheck now refreshes silently (was: no `updateAll` on uncheck, stale checkbox); app calls `rolloverRecurring` on every resume (was: only on external widget writes, missed overnight reset when app stayed open)
+
 ## [1.27.12] - 2026-08-31
 
 - **Samsung fingerprint:** fixed OneUI — `biometricsEnrolled` now checks `canCheckBiometrics` + `getAvailableBiometrics` + `isDeviceSupported` (Samsung returns empty list for `BIOMETRIC_WEAK`), `verifyAny`/`unlockBiometrics` now 3-step cascade (`biometricOnly:false` → `true` → `true` + `useErrorDialogs:false`/`sensitiveTransaction:false` with 150ms delays), `LockScreen` prioritizes `biometric` over `pattern/pin` and auto-prompts `550ms` even when code is also enabled; `AndroidManifest` added `USE_FINGERPRINT`

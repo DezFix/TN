@@ -105,11 +105,11 @@ void main() {
       // Thursday of the same week: period not over yet.
       expect(rolloverRecurringTasks([e], dt(2026, 8, 27, 10)), isEmpty);
       expect(e.items!.every((i) => i.done), isTrue);
-      // Next Monday 09:01: reset + jump to following Monday.
-      final rolled = rolloverRecurringTasks([e], dt(2026, 8, 31, 9, 1));
+      // Next Monday 00:01: reset to TODAY (midnight semantics, not next week).
+      final rolled = rolloverRecurringTasks([e], dt(2026, 8, 31, 0, 1));
       expect(rolled, [e]);
       expect(e.items!.every((i) => i.done), isFalse);
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 9, 7));
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 31));
     });
 
     test('monthly with monthDay clamping survives rollover', () {

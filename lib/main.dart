@@ -248,8 +248,16 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Tasks checked from the home-screen widget land in storage while the
     // app is backgrounded — pull them in when we come back.
+    // Also rollover recurring (будни Пн-Пт в 00:00) if the app stayed open overnight.
     if (state == AppLifecycleState.resumed) {
-      _future.then((m) => m.syncIfExternal());
+      _future.then((m) async {
+        await m.syncIfExternal();
+        final rolled = m.rolloverRecurring();
+        if (rolled > 0) {
+          await m.save();
+          await m.rescheduleAlarms();
+        }
+      });
     }
   }
 

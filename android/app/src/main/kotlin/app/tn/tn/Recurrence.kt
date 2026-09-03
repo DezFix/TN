@@ -62,14 +62,14 @@ object Recurrence {
     /**
      * Resets finished recurring tasks whose period has ended.
      *
-     * DAILY tasks use CALENDAR-DAY semantics: once every item is done and
+     * DAILY and WEEKLY use CALENDAR-DAY semantics: once every item is done and
      * the due date's day is strictly in the past, items reset exactly at
      * midnight (this runs from the TnMidnightReceiver alarm) and the
-     * deadline jumps to today, same clock time. The old code waited for the
-     * next due *instant* (e.g. 18:00), so a task checked off yesterday came
-     * back only at execution time instead of at 00:00.
+     * deadline jumps to today, same clock time. Each selected weekday is its
+     * own period (будни Пн-Пт обнуляются в 00:00). Non-selected days
+     * (weekend) hold the checkmark until the next selected day.
      *
-     * Weekly/monthly keep instant semantics: reset when the next occurrence
+     * Monthly keeps instant semantics: reset when the next occurrence
      * time has passed.
      *
      * Returns true when the state JSON was modified.
@@ -102,38 +102,76 @@ object Recurrence {
                 }
                 val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
 
-                val next: Long
-                if (rec == "daily") {
-                    val cal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
-                    val dueDayStart = (cal.clone() as Calendar).apply {
-                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-                    val todayStart = Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-                    if (dueDayStart >= todayStart) continue // still today's period
-                    // Fresh instance: today, same wall-clock time as before
-                    // (even if that moment already passed today — the task
-                    // then stays checked until tonight's rollover).
-                    next = (cal.clone() as Calendar).apply {
+                val cal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
+                val dueDayStart = (cal.clone() as Calendar).apply {
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val todayStart = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                fun resetToTodaySameTime(): Long {
+                    return (cal.clone() as Calendar).apply {
                         set(Calendar.YEAR, calendarYearOf(todayStart))
                         set(Calendar.MONTH, calendarMonthOf(todayStart))
                         set(Calendar.DAY_OF_MONTH, calendarDayOf(todayStart))
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
                     }.timeInMillis
-                } else {
+                }
+
+                fun uncheckAll() {
+                    for (j in 0 until items.length()) {
+                        items.getJSONObject(j).put("done", false)
+                    }
+                }
+
+                if (rec == "daily") {
+                    if (dueDayStart >= todayStart) continue // still today's period
+                    e.put("dueAt", resetToTodaySameTime())
+                    uncheckAll()
+                    changed = true
+                    continue
+                }
+                if (rec == "weekly") {
+                    val set: IntArray = if (daysArr == null || daysArr.isEmpty()) {
+                        intArrayOf(isoWeekday(cal))
+                    } else daysArr
+                    if (dueDayStart > todayStart) continue // future -> stay checked
+                    if (dueDayStart == todayStart) {
+                        // Same day: future-today -> fresh instance (uncheck),
+                        // past-today -> already did today (stay checked).
+                        if (e.getLong("dueAt") <= now) continue
+                        uncheckAll()
+                        changed = true
+                        continue
+                    }
+                    // dueDay < today (past): reset to today if today is selected,
+                    // otherwise hold until next selected day (catch up if missed).
+                    if (set.contains(isoWeekday(Calendar.getInstance()))) {
+                        e.put("dueAt", resetToTodaySameTime())
+                        uncheckAll()
+                        changed = true
+                        continue
+                    }
                     var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
-                    if (now < candidate) continue // still inside the current period
+                    if (now < candidate) continue
                     while (candidate <= now) {
                         candidate = nextAfter(rec, daysArr, mDay, candidate)
                     }
-                    next = candidate
+                    e.put("dueAt", candidate)
+                    uncheckAll()
+                    changed = true
+                    continue
                 }
-
-                e.put("dueAt", next)
+                var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
+                if (now < candidate) continue // still inside the current period
+                while (candidate <= now) {
+                    candidate = nextAfter(rec, daysArr, mDay, candidate)
+                }
+                e.put("dueAt", candidate)
                 for (j in 0 until items.length()) {
                     items.getJSONObject(j).put("done", false)
                 }

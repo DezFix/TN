@@ -37,16 +37,19 @@ class ToggleReceiver : BroadcastReceiver() {
         val result = goAsync()
         Thread {
             try {
-                val changed = if (itemId != null) toggleItem(context, entryId, itemId)
+                // toggleItem returns becameDone (false when unchecked, but the
+                // state still changed); toggleEntry returns true when found.
+                val becameDone = if (itemId != null) toggleItem(context, entryId, itemId)
                 else toggleEntry(context, entryId)
                 // Recurring task completed from the widget: roll it over when
                 // its period has passed (mirrors AppModel.rolloverRecurring).
                 val rolled = Recurrence.rollover(context)
-                if (changed || rolled) {
+                if (becameDone) {
                     playDing(context)
                     vibrate(context)
-                    TnDayWidgetProvider.updateAll(context)
                 }
+                // Always refresh: unchecking also changes state but returns false.
+                TnDayWidgetProvider.updateAll(context)
             } catch (_: Exception) {
             } finally {
                 result.finish()
@@ -127,11 +130,11 @@ class ToggleReceiver : BroadcastReceiver() {
 
         /**
          * Completing an OVERDUE recurring task snaps its deadline forward so
-         * the checkmark sticks until the new period ends. DAILY tasks use
+         * the checkmark sticks until the new period ends. DAILY and WEEKLY use
          * calendar-day semantics (mirrors models.dart snapCompletedRecurring):
          * completing yesterday's leftover today snaps the deadline to TODAY,
          * same clock time — it stays checked until tonight's midnight
-         * rollover, and the fresh instance is today's. Other rules snap to
+         * rollover, and the fresh instance is today's. Monthly snaps to
          * the next occurrence after now.
          */
         private fun snapCompletedRecurring(e: JSONObject) {
@@ -149,16 +152,34 @@ class ToggleReceiver : BroadcastReceiver() {
                     IntArray(arr.length()) { arr.getInt(it) }
                 }
                 val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
-                val next: Long = if (rec == "daily") {
+                fun snapToToday(): Long {
                     val dueCal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
                     val hour = dueCal.get(Calendar.HOUR_OF_DAY)
                     val minute = dueCal.get(Calendar.MINUTE)
-                    Calendar.getInstance().apply {
+                    return Calendar.getInstance().apply {
                         set(Calendar.HOUR_OF_DAY, hour)
                         set(Calendar.MINUTE, minute)
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
                     }.timeInMillis
+                }
+                // ISO weekday 1=Mon..7=Sun for today
+                fun todayIso(): Int {
+                    val c = Calendar.getInstance()
+                    val dow = c.get(Calendar.DAY_OF_WEEK)
+                    return if (dow == Calendar.SUNDAY) 7 else dow - 1
+                }
+                val next: Long = if (rec == "daily") {
+                    snapToToday()
+                } else if (rec == "weekly") {
+                    val set = if (daysArr == null || daysArr.isEmpty()) {
+                        // fallback: weekday of dueAt
+                        val dueCal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
+                        val dow = dueCal.get(Calendar.DAY_OF_WEEK)
+                        intArrayOf(if (dow == Calendar.SUNDAY) 7 else dow - 1)
+                    } else daysArr
+                    if (set.contains(todayIso())) snapToToday()
+                    else Recurrence.nextAfter(rec, daysArr, mDay, now)
                 } else {
                     Recurrence.nextAfter(rec, daysArr, mDay, now)
                 }
