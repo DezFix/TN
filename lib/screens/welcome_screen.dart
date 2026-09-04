@@ -4,8 +4,10 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../src/app_model.dart';
+import '../src/app_update.dart' show appBuildVersion;
 import '../src/backup.dart';
 import '../src/backup_crypto.dart';
+import '../src/crash_reports.dart';
 import '../src/i18n.dart';
 import '../src/reminders.dart';
 import '../src/theme.dart';
@@ -27,6 +29,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   bool _notifOk = false;
   bool _alarmsOk = false;
   bool _micOk = false;
+  bool _crash = true;
 
   @override
   void initState() {
@@ -37,6 +40,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     if (_theme != 'light' && _theme != 'dark') _theme = 'dark';
     _checkPerms();
     _checkMic();
+    _loadCrash();
+  }
+
+  Future<void> _loadCrash() async {
+    final v = await CrashReports.loadEnabled();
+    if (!mounted) return;
+    setState(() => _crash = v);
+  }
+
+  Future<void> _setCrash(bool v) async {
+    setState(() => _crash = v);
+    await CrashReports.setEnabled(v, appVersion: appBuildVersion);
   }
 
   @override
@@ -299,6 +314,33 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 const SizedBox(height: 8),
                 Text(tr('perm_hint'), style: TextStyle(fontSize: 12, color: p.textFaint, height: 1.4)),
               ],
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: p.bgChat,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _crash ? p.accent.withValues(alpha: .55) : p.divider),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report_outlined, size: 22, color: _crash ? p.accent : p.textSoft),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tr('crash_title'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+                          const SizedBox(height: 2),
+                          Text(tr('crash_hint'), style: TextStyle(fontSize: 11.5, color: p.textSoft, height: 1.35)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(value: _crash, activeColor: p.accent, onChanged: _setCrash),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 28),
               SizedBox(

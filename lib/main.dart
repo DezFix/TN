@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited, Timer;
+import 'dart:async' show unawaited, Timer, runZonedGuarded;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -12,6 +12,7 @@ import 'src/app_lock.dart';
 import 'src/app_model.dart';
 import 'src/app_update.dart';
 import 'src/backup.dart';
+import 'src/crash_reports.dart';
 import 'src/dialogs.dart';
 import 'src/media.dart';
 import 'src/models.dart';
@@ -29,14 +30,29 @@ import 'screens/list_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/widget_settings_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
-  // silently falls back to pure Dart otherwise.
+  // Anonymous crash reports to Bugsink (opt-out in Settings, on by default).
   try {
-    FlutterCryptography.enable();
+    await CrashReports.init(appVersion: appBuildVersion);
   } catch (_) {}
-  runApp(const TN());
+  FlutterError.onError = (details) {
+    try {
+      CrashReports.capture('flutter', details.exception, details.stack);
+    } catch (_) {}
+  };
+  runZonedGuarded(() {
+    // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
+    // silently falls back to pure Dart otherwise.
+    try {
+      FlutterCryptography.enable();
+    } catch (_) {}
+    runApp(const TN());
+  }, (error, stack) {
+    try {
+      CrashReports.capture('zone', error, stack);
+    } catch (_) {}
+  });
 }
 
 class TN extends StatefulWidget {

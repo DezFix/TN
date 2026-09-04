@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.14] - 2026-09-04
+
+- **Anonymous crash reports:** new Bugsink integration (`sentry` SDK, DSN `wrebug.bugsink.com`) — sends only errors + stack traces + app version + OS, no chats or personal data (`user` stripped in `beforeSend`, no tracing). Opt-out switch in Settings → About + on the Welcome screen (on by default); `AppLog.error`, `FlutterError` and zoned errors all forward when enabled
+
 ## [1.27.13] - 2026-09-03
 
 - **Recurring weekdays fix:** Mon–Fri tasks now reset at 00:00 like daily (was: checked yesterday never reappeared today). `rolloverRecurringTasks`/`snapCompletedRecurring` (Dart + `Recurrence.kt`/`ToggleReceiver.kt`) use calendar-day semantics per selected weekday: Mon done → Tue 00:01 fresh Tue undone; overdue Mon checked Tue snaps to Tue (not Wed); weekend holds checkmark until Mon. Midnight widget alarm + app-resume rollover included

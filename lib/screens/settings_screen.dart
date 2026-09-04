@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../src/app_lock.dart';
 import '../src/app_update.dart' show appBuildVersion;
 import '../src/app_model.dart';
+import '../src/crash_reports.dart';
 import '../src/media.dart';
 import 'about_screen.dart';
 import 'lock_settings_screen.dart';
@@ -37,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _cacheMedia = 0, _cacheTrash = 0, _cacheTemp = 0, _cacheTotal = 0;
   bool _smartTasks = true;
   bool _smartNotes = true;
+  bool _crashReports = true;
 
   @override
   void initState() {
@@ -46,6 +48,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLockPref();
     _loadCacheSize();
     _loadSmartFolders();
+    _loadCrashPref();
+  }
+
+  Future<void> _loadCrashPref() async {
+    final v = await CrashReports.loadEnabled();
+    if (!mounted) return;
+    setState(() => _crashReports = v);
+  }
+
+  Future<void> _setCrashReports(bool v) async {
+    setState(() => _crashReports = v);
+    await CrashReports.setEnabled(v, appVersion: appBuildVersion);
   }
 
   Future<void> _loadSmartFolders() async {
@@ -588,6 +602,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Icon(Icons.chevron_right, color: p.textFaint),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _card(
+            p,
+            child: _smartFolderToggle(
+              p: p,
+              icon: Icons.bug_report_outlined,
+              title: tr('crash_title'),
+              subtitle: tr('crash_hint'),
+              value: _crashReports,
+              onChanged: _setCrashReports,
             ),
           ),
           const SizedBox(height: 24),

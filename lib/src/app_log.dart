@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'crash_reports.dart';
+
 /// Best-effort app log: debugPrint in debug builds plus an append-only
 /// `tn-app.log` next to the reminders log. Empty `catch (_) {}` blocks were
 /// silently eating disk/network failures — now critical paths call [logError]
@@ -35,6 +37,8 @@ class AppLog {
       return true;
     }());
     _write('${DateTime.now().toIso8601String()} ERROR [$tag] $e\n');
+    // Anonymous report to Bugsink when the user opted in (never throws).
+    CrashReports.capture(tag, e, st);
   }
 
   static void info(String tag, String msg) {
