@@ -483,22 +483,12 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
     } else if (rec == 'weekly') {
       // Weekly (incl. будни Пн-Пт): each selected weekday is a period,
       // reset at 00:00 like daily. Non-selected days never show a task.
+      // Same-day (today or future) always stays checked — otherwise marking
+      // today's future task would instantly uncheck itself.
+      if (!dueDayStart.isBefore(todayStart)) continue;
       final set = (e.recurrenceDays == null || e.recurrenceDays!.isEmpty)
           ? <int>{dueDt.weekday}
           : Set<int>.of(e.recurrenceDays!);
-      if (dueDayStart.isAfter(todayStart)) continue; // future -> stay checked
-      if (dueDayStart.isAtSameMomentAs(todayStart)) {
-        // Same day: fresh instance (due later today) -> reset to undone,
-        // already-done-today (due earlier today) -> stay checked.
-        if (!dueDt.isAfter(now)) continue;
-        // Keep same dueAt, just uncheck.
-        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-        for (final i in items) {
-          i.done = false;
-        }
-        rolled.add(e);
-        continue;
-      }
       // dueDay < today (past): reset to today if today is selected,
       // otherwise stay checked until the next selected day.
       if (!set.contains(now.weekday)) {
@@ -605,18 +595,15 @@ bool snapCompletedRecurring(Entry e, DateTime now) {
       return true;
     }
     if (rec == 'weekly') {
-      final set = (e.recurrenceDays == null || e.recurrenceDays!.isEmpty)
-          ? <int>{due.weekday}
-          : Set<int>.of(e.recurrenceDays!);
-      // If today is a task day (e.g. будни, сегодня Вт) -> snap to TODAY,
-      // so tonight's 00:00 rollover hands over correctly and no day is skipped.
-      if (set.contains(now.weekday)) {
-        e.dueAt =
-            DateTime(now.year, now.month, now.day, due.hour, due.minute)
-                .millisecondsSinceEpoch;
-        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-        return true;
-      }
+      // Always snap to TODAY (like daily), even on weekends: the overdue
+      // instance becomes today's, stays checked today, and the next 00:00
+      // rollover hands over. Never jumps to a future day (that would skip
+      // today and break the "mark -> today's appears" flow).
+      e.dueAt =
+          DateTime(now.year, now.month, now.day, due.hour, due.minute)
+              .millisecondsSinceEpoch;
+      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      return true;
     }
     e.dueAt = nextOccurrence(
       recurrence: rec,

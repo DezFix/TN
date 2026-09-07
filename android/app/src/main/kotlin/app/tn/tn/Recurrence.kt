@@ -139,15 +139,9 @@ object Recurrence {
                     val set: IntArray = if (daysArr == null || daysArr.isEmpty()) {
                         intArrayOf(isoWeekday(cal))
                     } else daysArr
-                    if (dueDayStart > todayStart) continue // future -> stay checked
-                    if (dueDayStart == todayStart) {
-                        // Same day: future-today -> fresh instance (uncheck),
-                        // past-today -> already did today (stay checked).
-                        if (e.getLong("dueAt") <= now) continue
-                        uncheckAll()
-                        changed = true
-                        continue
-                    }
+                    // Same-day (today or future) always stays checked — otherwise
+                    // marking today's future task would instantly uncheck itself.
+                    if (dueDayStart >= todayStart) continue
                     // dueDay < today (past): reset to today if today is selected,
                     // otherwise hold until next selected day (catch up if missed).
                     if (set.contains(isoWeekday(Calendar.getInstance()))) {

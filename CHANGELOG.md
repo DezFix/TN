@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.15] - 2026-09-05
+
+- **Weekday tasks can be checked again:** fixed regression from 1.27.13 where marking today's future task instantly unchecked itself (`rollover` same-day reset fired right after toggle). Same-day now always stays checked (Dart + Kotlin); `snap` always lands on today like daily — no day is ever skipped, including weekend completions
+
 ## [1.27.14] - 2026-09-04
 
 - **Anonymous crash reports:** new Bugsink integration (`sentry` SDK, DSN `wrebug.bugsink.com`) — sends only errors + stack traces + app version + OS, no chats or personal data (`user` stripped in `beforeSend`, no tracing). Opt-out switch in Settings → About + on the Welcome screen (on by default); `AppLog.error`, `FlutterError` and zoned errors all forward when enabled

@@ -163,23 +163,10 @@ class ToggleReceiver : BroadcastReceiver() {
                         set(Calendar.MILLISECOND, 0)
                     }.timeInMillis
                 }
-                // ISO weekday 1=Mon..7=Sun for today
-                fun todayIso(): Int {
-                    val c = Calendar.getInstance()
-                    val dow = c.get(Calendar.DAY_OF_WEEK)
-                    return if (dow == Calendar.SUNDAY) 7 else dow - 1
-                }
-                val next: Long = if (rec == "daily") {
+                // Weekly snaps to TODAY like daily (never jumps forward and skips
+                // today) — tonight's 00:00 rollover then hands over correctly.
+                val next: Long = if (rec == "daily" || rec == "weekly") {
                     snapToToday()
-                } else if (rec == "weekly") {
-                    val set = if (daysArr == null || daysArr.isEmpty()) {
-                        // fallback: weekday of dueAt
-                        val dueCal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
-                        val dow = dueCal.get(Calendar.DAY_OF_WEEK)
-                        intArrayOf(if (dow == Calendar.SUNDAY) 7 else dow - 1)
-                    } else daysArr
-                    if (set.contains(todayIso())) snapToToday()
-                    else Recurrence.nextAfter(rec, daysArr, mDay, now)
                 } else {
                     Recurrence.nextAfter(rec, daysArr, mDay, now)
                 }

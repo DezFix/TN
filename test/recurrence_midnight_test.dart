@@ -63,8 +63,11 @@ void main() {
               'rollover hands over to tomorrow — never skipping a day');
     });
 
-    test('weekly overdue completion still jumps past now (unchanged)', () {
+    test('weekly overdue completion snaps to TODAY like daily', () {
       // Wed Aug 26 2026 is a Wednesday; weekly on Mondays.
+      // Snapping to today (even a non-task day) keeps the instance visible
+      // as checked, and the next 00:00 rollover hands over to Monday —
+      // jumping straight to next Monday would lose the Mon instance.
       final now = at(2026, 8, 26, 12, 0);
       final e = Entry(
         id: 'e2',
@@ -79,7 +82,12 @@ void main() {
 
       snapCompletedRecurring(e, now);
 
-      expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)), reason: 'next Monday 09:00');
+      expect(e.dueAt, ms(at(2026, 8, 26, 9, 0)), reason: 'today Wed 09:00');
+      // Mon 00:01 -> fresh Monday instance
+      final rolled = rolloverRecurringTasks([e], at(2026, 8, 31, 0, 1));
+      expect(rolled, [e]);
+      expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)));
+      expect(e.items!.single.done, isFalse);
     });
   });
 
@@ -128,6 +136,20 @@ void main() {
       expect(rolled, [e]);
       expect(e.items!.single.done, isFalse);
       expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)));
+    });
+
+    test('marking today future task stays checked (no instant uncheck)', () {
+      // Баг: будни нельзя отметить — toggle + rollover тут же снимал галочку.
+      // Вт 09:00, сейчас Вт 08:00: отметили -> должно остаться done.
+      final e = weekdayEntry(due: at(2026, 8, 25, 9, 0), done: false);
+      expect(toggleTodoCascade(e.items!, e.items!.single.id), isTrue);
+      expect(e.items!.single.done, isTrue);
+      // snap: не просрочено -> без изменений
+      expect(snapCompletedRecurring(e, at(2026, 8, 25, 8, 0)), isFalse);
+      // rollover сразу после toggle (как в _toggleTodoItem) -> держится
+      expect(rolloverRecurringTasks([e], at(2026, 8, 25, 8, 0)), isEmpty);
+      expect(e.items!.single.done, isTrue,
+          reason: 'отметка сегодняшней задачи не должна слетать');
     });
 
     test('Tue done Tue evening stays checked Tue, resets Wed', () {

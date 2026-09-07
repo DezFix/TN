@@ -148,11 +148,11 @@ void main() {
       expect(e.items!.every((i) => i.done), isTrue);
     });
 
-    test('weekly overdue snaps to next selected weekday', () {
+    test('weekly overdue snaps to TODAY (midnight semantics, like daily)', () {
       final e = task(rec: 'weekly', days: const [3], dueAt: ms(2026, 8, 19), done: true); // Wed
       final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12)); // Mon
       expect(snapped, isTrue);
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 26)); // Wed
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 24)); // Mon today
     });
 
     test('not-overdue completed task is untouched', () {
