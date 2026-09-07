@@ -94,5 +94,44 @@ String fakeTr(String key, [List<String>? args]) =>
       );
       expect(due.length, 1);
     });
+
+    test('fully done todo never fires (marked done, alarm must stay silent)', () {
+      final done = Entry(
+        id: 'd1',
+        chatId: 'c1',
+        type: 'todo',
+        ts: 0,
+        items: [TodoItem(id: 'i1', text: 'task', done: true)],
+        dueAt: now,
+      );
+      expect(done.isDone, isTrue);
+      final due = collectDue(
+        reminders: const [],
+        entries: [done, todoEntry('t1', now)],
+        chatTrashed: (_) => false,
+        chatNameOf: (_) => 'X',
+        tr: fakeTr,
+        now: now,
+      );
+      expect(due.map((d) => d.key), ['t1|$now']);
+    });
+
+    test('isDone is false for undone / partial / non-todo', () {
+      expect(todoEntry('t1', now).isDone, isFalse);
+      final partial = Entry(
+        id: 'p1',
+        chatId: 'c1',
+        type: 'todo',
+        ts: 0,
+        items: [
+          TodoItem(id: 'i1', text: 'a', done: true),
+          TodoItem(id: 'i2', text: 'b', done: false),
+        ],
+        dueAt: now,
+      );
+      expect(partial.isDone, isFalse);
+      final note = Entry(id: 'n1', chatId: 'c1', type: 'text', ts: 0, text: 'hi');
+      expect(note.isDone, isFalse);
+    });
   });
 }

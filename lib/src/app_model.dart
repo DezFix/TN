@@ -66,6 +66,8 @@ class AppModel extends ChangeNotifier {
     }
     for (final e in state.entries) {
       if (e.dueAt == null || e.dueAt! <= now) continue;
+      // Done tasks (incl. just-checked recurring) must not ring.
+      if (e.isDone) continue;
       final chat = state.chatById(e.chatId);
       if (chat == null || chat.isTrashed) continue;
       await RemindersService.instance.schedule(
@@ -120,6 +122,7 @@ class AppModel extends ChangeNotifier {
     final rolled = rolloverRecurringTasks(state.entries, DateTime.now());
     for (final e in rolled) {
       final chat = state.chatById(e.chatId);
+      if (chat == null || chat.isTrashed) continue;
       RemindersService.instance.schedule(
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat?.name ?? 'TN']),

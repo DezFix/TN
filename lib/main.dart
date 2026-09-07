@@ -271,8 +271,10 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         final rolled = m.rolloverRecurring();
         if (rolled > 0) {
           await m.save();
-          await m.rescheduleAlarms();
         }
+        // Always rebuild alarms: widget/agenda toggles while backgrounded
+        // leave stale armed alarms for now-done tasks (reschedule skips done).
+        await m.rescheduleAlarms();
       });
     }
   }

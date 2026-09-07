@@ -276,6 +276,13 @@ class Entry {
 
   bool get isEdited => editedAt != null;
 
+  /// True when this is a todo whose every item is checked. Done tasks must
+  /// never fire notifications — all alarm paths check this.
+  bool get isDone =>
+      type == 'todo' &&
+      (items?.isNotEmpty ?? false) &&
+      items!.every((i) => i.done);
+
   /// Deep copy of every content field into a fresh entry in [targetChatId].
   /// Used by forward — the old hand-rolled copies kept dropping recurrence
   /// fields (`monthDay`, sometimes `recurrenceDays`), breaking forwarded

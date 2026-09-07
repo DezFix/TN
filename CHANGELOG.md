@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.16] - 2026-09-06
+
+- **Done tasks stay silent:** fixed notification firing after checking a weekday task. Root cause chain: toggle re-armed the alarm for the just-completed instance (past due fires instantly), `rescheduleAlarms`/Windows engine never skipped done todos, agenda toggle left stale alarms. Now: new `Entry.isDone` gate in `rescheduleAlarms` + `collectDue`, toggle cancels the alarm when fully done (chat + agenda), past-due scheduling guarded, resume always rebuilds alarms (also drops widget-toggled stale ones); rollover skips trashed chats
+
 ## [1.27.15] - 2026-09-05
 
 - **Weekday tasks can be checked again:** fixed regression from 1.27.13 where marking today's future task instantly unchecked itself (`rollover` same-day reset fired right after toggle). Same-day now always stays checked (Dart + Kotlin); `snap` always lands on today like daily — no day is ever skipped, including weekend completions

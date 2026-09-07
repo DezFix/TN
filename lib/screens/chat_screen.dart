@@ -283,8 +283,19 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _cancelEntryReminder(Entry entry) async {
+    try {
+      await RemindersService.instance.cancel(
+        Reminder(id: entry.id, chatId: entry.chatId, when: entry.dueAt ?? 0),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _scheduleEntryReminder(Entry entry) async {
+    // Never arm the past (fires instantly) or a completed task.
     if (entry.dueAt == null) return;
+    if (entry.dueAt! <= DateTime.now().millisecondsSinceEpoch) return;
+    if (entry.isDone) return;
     await RemindersService.instance.requestPermissions();
     await RemindersService.instance.schedule(
       Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
@@ -2403,6 +2414,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final rolled = model.rolloverRecurring();
     if (snapped || rolled > 0) {
       await model.save();
+    }
+    // Done tasks must not ring: drop the armed alarm; undone ones re-arm.
+    if (entry.isDone) {
+      await _cancelEntryReminder(entry);
+    } else {
       await _scheduleEntryReminder(entry);
     }
     if (mounted) setState(() {});

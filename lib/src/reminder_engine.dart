@@ -67,6 +67,8 @@ List<DueItem> collectDue({
   for (final e in entries) {
     if (e.dueAt == null) continue;
     if (e.dueAt! > now || e.dueAt! < floor) continue;
+    // Done tasks never fire (Windows engine mirrors rescheduleAlarms).
+    if (e.isDone) continue;
     if (chatTrashed(e.chatId)) continue;
     add(DueItem(
       key: '${e.id}|${e.dueAt}',
