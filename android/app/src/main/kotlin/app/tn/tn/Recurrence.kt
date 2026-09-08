@@ -160,9 +160,17 @@ object Recurrence {
                     changed = true
                     continue
                 }
+                // Monthly: calendar-day semantics — reset at 00:00 of the due
+                // day, not at the due instant. First occurrence on/after today.
+                if (dueDayStart >= todayStart) continue // today/future -> hold
+                fun dayStartOf(ms: Long): Long =
+                    Calendar.getInstance().apply {
+                        timeInMillis = ms
+                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
                 var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
-                if (now < candidate) continue // still inside the current period
-                while (candidate <= now) {
+                while (dayStartOf(candidate) < todayStart) {
                     candidate = nextAfter(rec, daysArr, mDay, candidate)
                 }
                 e.put("dueAt", candidate)

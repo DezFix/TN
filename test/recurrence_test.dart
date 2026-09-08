@@ -118,6 +118,18 @@ void main() {
       expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!).day, 31);
       expect(e.items!.every((i) => i.done), isFalse);
     });
+
+    test('monthly resets at 00:00 of due day, not at due instant', () {
+      final e = task(rec: 'monthly', monthDay: 15, dueAt: ms(2026, 3, 15, 18, 0), done: true);
+      // Same day 20:00 — period still active, stays checked.
+      expect(rolloverRecurringTasks([e], dt(2026, 3, 15, 20, 0)), isEmpty);
+      expect(e.items!.every((i) => i.done), isTrue);
+      // Next morning 00:01 — fresh Apr 15 instance, not waiting for 18:00.
+      final rolled = rolloverRecurringTasks([e], dt(2026, 3, 16, 0, 1));
+      expect(rolled, [e]);
+      expect(e.items!.every((i) => i.done), isFalse);
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 4, 15, 18, 0));
+    });
   });
 
   group('snapCompletedRecurring', () {

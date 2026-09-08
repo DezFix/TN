@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.17] - 2026-09-06
+
+- **Preset audit:** checked once/daily/weekdays/custom-days/monthly + delete/restore/edit. Found & fixed: monthly reset waited for the exact due instant instead of 00:00 (now calendar-day like the rest, Dart + Kotlin + test); task item add/delete no longer leaves stale alarms (`_showTaskItemSheet` rebuilds alarms); delete/restore and time-edit paths verified already correct (cancel/reschedule in place)
+
 ## [1.27.16] - 2026-09-06
 
 - **Done tasks stay silent:** fixed notification firing after checking a weekday task. Root cause chain: toggle re-armed the alarm for the just-completed instance (past due fires instantly), `rescheduleAlarms`/Windows engine never skipped done todos, agenda toggle left stale alarms. Now: new `Entry.isDone` gate in `rescheduleAlarms` + `collectDue`, toggle cancels the alarm when fully done (chat + agenda), past-due scheduling guarded, resume always rebuilds alarms (also drops widget-toggled stale ones); rollover skips trashed chats

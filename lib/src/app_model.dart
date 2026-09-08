@@ -125,7 +125,7 @@ class AppModel extends ChangeNotifier {
       if (chat == null || chat.isTrashed) continue;
       RemindersService.instance.schedule(
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
-        tr('remind_title', [chat?.name ?? 'TN']),
+        tr('remind_title', [chat.name]),
         entryNotifBody(e, tr),
         snoozeLabels: [tr('snooze_10m'), tr('snooze_1h')],
       ).catchError((_) => false);

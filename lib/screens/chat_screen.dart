@@ -2515,6 +2515,9 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     await model.save();
+    // Item add/delete changes the done-composition: a removed last undone
+    // item (or an added undone one) must re-arm/drop the alarm.
+    await model.rescheduleAlarms();
     if (mounted) setState(() {});
   }
 

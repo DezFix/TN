@@ -537,7 +537,10 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
       rolled.add(e);
       continue;
     } else {
-      // Monthly: stay checked until the next matching occurrence.
+      // Monthly: calendar-day semantics like daily/weekly — reset at 00:00
+      // of the due day, not at the due instant. Finds the first monthly
+      // occurrence on/after today (catches up over missed months).
+      if (!dueDayStart.isBefore(todayStart)) continue; // today/future -> hold
       var next = nextOccurrence(
         recurrence: rec,
         days: e.recurrenceDays,
@@ -545,7 +548,22 @@ List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
         fromMs: e.dueAt!,
         after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
       );
-      if (now.isBefore(DateTime.fromMillisecondsSinceEpoch(next))) continue;
+      while (DateTime.fromMillisecondsSinceEpoch(next).isBefore(todayStart)) {
+        next = nextOccurrence(
+          recurrence: rec,
+          days: e.recurrenceDays,
+          monthDay: e.monthDay,
+          fromMs: next,
+          after: DateTime.fromMillisecondsSinceEpoch(next),
+        );
+      }
+      e.dueAt = next;
+      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      for (final i in items) {
+        i.done = false;
+      }
+      rolled.add(e);
+      continue;
     }
 
     // Catch up: find the next occurrence strictly after now (daily/monthly).
