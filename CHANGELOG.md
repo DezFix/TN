@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.27.18] - 2026-09-06
+
+- **Widget:** bigger task checkbox (`22dp → 30dp` + padding) — easier to hit with a finger, no more misses
+
 ## [1.27.17] - 2026-09-06
 
 - **Preset audit:** checked once/daily/weekdays/custom-days/monthly + delete/restore/edit. Found & fixed: monthly reset waited for the exact due instant instead of 00:00 (now calendar-day like the rest, Dart + Kotlin + test); task item add/delete no longer leaves stale alarms (`_showTaskItemSheet` rebuilds alarms); delete/restore and time-edit paths verified already correct (cancel/reschedule in place)

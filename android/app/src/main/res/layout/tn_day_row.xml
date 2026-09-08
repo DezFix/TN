@@ -13,10 +13,12 @@
     android:paddingTop="7dp"
     android:paddingBottom="7dp">
 
+    <!-- Bigger hitbox (30dp + padding): easier to hit with a finger -->
     <ImageView
         android:id="@+id/dr_check"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:padding="2dp"
         android:src="@drawable/ic_dw_check_off"
         android:contentDescription="toggle done" />
 
@@ -24,7 +26,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="8dp"
         android:layout_marginEnd="6dp"
         android:orientation="vertical">
 
