@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.3] - 2026-09-09
+
+- **Notifications:** Done/Postpone taps now refresh the open chat (the action edited storage behind the live model's back, so the task looked unchecked — `onNotificationAction` pulls changes in and rebuilds alarms)
+
 ## [1.28.2] - 2026-09-09
 
 - **Notifications:** plain reminders ("Remind about") now also get localized Postpone/Done buttons on rebuild (were falling back to English)

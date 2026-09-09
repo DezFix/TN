@@ -450,6 +450,15 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
     final model = AppModel();
     await model.load();
     await RemindersService.instance.init();
+    // Notification action taps (Done/Postpone) edit the stored JSON directly,
+    // even headless — pull the change into the live model, otherwise an open
+    // chat keeps showing the stale (unchecked) task as if nothing happened.
+    RemindersService.onNotificationAction = (_, __) async {
+      try {
+        await model.syncIfExternal();
+        await model.rescheduleAlarms();
+      } catch (_) {}
+    };
     await RemindersService.instance.requestNotificationsPermission();
     _purgeExpiredTrash(model);
     unawaited(MediaStore().purgeTrash());
