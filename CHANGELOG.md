@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.2] - 2026-09-09
+
+- **Notifications:** plain reminders ("Remind about") now also get localized Postpone/Done buttons on rebuild (were falling back to English)
+
 ## [1.28.1] - 2026-09-09
 
 - **Voice waves actually render:** fixed `Stack` collapsing the waveform to zero width (`Size(0, 30)` → `186×34` measured); taller rounded bars, theme-aware color, glowing play button

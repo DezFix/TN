@@ -62,6 +62,7 @@ class AppModel extends ChangeNotifier {
         r,
         tr('remind_title', [chat.name]),
         tr('remind_body'),
+        actionLabels: [tr('notif_postpone'), tr('notif_done')],
       );
     }
     for (final e in state.entries) {
@@ -74,7 +75,7 @@ class AppModel extends ChangeNotifier {
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat.name]),
         entryNotifBody(e, tr),
-        snoozeLabels: [tr('snooze_10m'), tr('snooze_1h')],
+        actionLabels: [tr('notif_postpone'), tr('notif_done')],
       );
     }
   }
@@ -127,7 +128,7 @@ class AppModel extends ChangeNotifier {
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat.name]),
         entryNotifBody(e, tr),
-        snoozeLabels: [tr('snooze_10m'), tr('snooze_1h')],
+        actionLabels: [tr('notif_postpone'), tr('notif_done')],
       ).catchError((_) => false);
     }
     return rolled.length;
