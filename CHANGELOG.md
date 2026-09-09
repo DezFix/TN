@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.1] - 2026-09-09
+
+- **Voice waves actually render:** fixed `Stack` collapsing the waveform to zero width (`Size(0, 30)` → `186×34` measured); taller rounded bars, theme-aware color, glowing play button
+- **Calendar/deep-link jump:** long-press day dots and widget taps now reach far unbuilt rows via measured-offset stepping instead of silently doing nothing
+
 ## [1.28.0] - 2026-09-08
 
 - **Day calendar:** long-press any date pill in a chat → month calendar with dots on days that have (visible) notes; tap a dotted day to jump straight to it with highlight. Honors hidden tasks (hidden notes leave no dots)

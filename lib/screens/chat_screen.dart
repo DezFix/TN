@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
@@ -217,21 +218,15 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToTarget() {
     final target = widget.scrollToEntryId;
     if (target == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ctx = _bubbleContexts[target];
-      if (ctx == null) return;
-      await Scrollable.ensureVisible(ctx,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-          alignment: .3);
-      _highlightId = target;
-      if (mounted) setState(() {});
-      await Future.delayed(const Duration(seconds: 4));
-      if (mounted && _highlightId == target) setState(() => _highlightId = null);
-    });
+    _jumpToEntry(target);
   }
 
   final Map<String, BuildContext> _bubbleContexts = {};
+
+  /// Child index (in the newest-first `children` array incl. day pills) per
+  /// entry id. Built for the WHOLE chat even though rows render lazily —
+  /// needed to step toward far, not-yet-built rows on jump.
+  final Map<String, int> _childIndices = {};
 
   /// Due chip: today shows only the time, other days a compact numeric date.
   String _fmtDue(int ms, String Function(String, [List<String>?]) tr) {
@@ -1341,18 +1336,83 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _jumpToEntry(String entryId) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ctx = _bubbleContexts[entryId];
-      if (ctx == null) return;
+  void _flashHighlight(String entryId) {
+    _highlightId = entryId;
+    if (mounted) setState(() {});
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _highlightId == entryId) {
+        setState(() => _highlightId = null);
+      }
+    });
+  }
+
+  Future<bool> _revealBuilt(String entryId) async {
+    final ctx = _bubbleContexts[entryId];
+    if (ctx == null) return false;
+    try {
       await Scrollable.ensureVisible(ctx,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOut,
           alignment: .3);
-      _highlightId = entryId;
-      if (mounted) setState(() {});
-      await Future.delayed(const Duration(seconds: 3));
-      if (mounted && _highlightId == entryId) setState(() => _highlightId = null);
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+
+  void _jumpToEntry(String entryId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Fast path: the row is already built.
+      if (await _revealBuilt(entryId)) {
+        _flashHighlight(entryId);
+        return;
+      }
+      // Far rows aren't built yet (lazy list) — step toward the known child
+      // index, measuring real offsets of built rows to converge. In the
+      // reversed list offset 0 is the newest child and grows with the index.
+      final targetIdx = _childIndices[entryId];
+      if (targetIdx == null || !_listCtrl.hasClients) return;
+      for (var attempt = 0; attempt < 8; attempt++) {
+        if (!mounted || !_listCtrl.hasClients) return;
+        if (await _revealBuilt(entryId)) {
+          _flashHighlight(entryId);
+          return;
+        }
+        final samples = <int, double>{};
+        for (final kv in _bubbleContexts.entries) {
+          final idx = _childIndices[kv.key];
+          if (idx == null) continue;
+          try {
+            final ro = kv.value.findRenderObject();
+            final vp = ro != null ? RenderAbstractViewport.of(ro) : null;
+            if (ro == null || vp == null) continue;
+            samples[idx] = vp.getOffsetToReveal(ro, 0.0).offset;
+          } catch (_) {}
+          if (samples.length > 60) break;
+        }
+        if (samples.length < 2) return;
+        var i0 = samples.keys.first;
+        var i1 = samples.keys.first;
+        for (final k in samples.keys) {
+          if (k < i0) i0 = k;
+          if (k > i1) i1 = k;
+        }
+        var avg = 140.0;
+        if (i1 != i0) {
+          avg = ((samples[i1]! - samples[i0]!).abs() / (i1 - i0))
+              .clamp(40.0, 3000.0);
+        }
+        final refIdx =
+            (targetIdx - i0).abs() < (targetIdx - i1).abs() ? i0 : i1;
+        final est = samples[refIdx]! + (targetIdx - refIdx) * avg;
+        final max = _listCtrl.position.maxScrollExtent;
+        if (max <= 0) return;
+        _listCtrl.jumpTo(est.clamp(0.0, max));
+        await Future.delayed(const Duration(milliseconds: 120));
+        if (!mounted) return;
+        await Future.delayed(Duration.zero);
+      }
+      if (await _revealBuilt(entryId)) _flashHighlight(entryId);
     });
   }
 
@@ -1854,6 +1914,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final children = <Widget>[];
+    _childIndices.clear();
     String? currentDay;
     DateTime? currentDayStart;
     for (final e in entries) {
@@ -1864,6 +1925,7 @@ class _ChatScreenState extends State<ChatScreen> {
       currentDay = day;
       currentDayStart = dayStartOf(e.ts);
       children.add(makeRow(e));
+      _childIndices[e.id] = children.length - 1;
     }
     if (currentDay != null) children.add(pill(currentDay!, currentDayStart!));
 
@@ -2244,20 +2306,32 @@ class _ChatScreenState extends State<ChatScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Telegram-style round play button.
-              Material(
-                color: p.accent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: () => _playAudio(entry),
-                  child: SizedBox(
-                    width: 46,
-                    height: 46,
-                    child: Icon(
-                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 26,
+              // Telegram-style round play button with a soft accent glow.
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: p.accent.withValues(alpha: .35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: p.accent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _playAudio(entry),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Icon(
+                        playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),
@@ -2278,7 +2352,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             samples: entry.waveform ?? const <int>[],
                             progress: progress,
                             playedColor: p.accent,
-                            restColor: Colors.white.withValues(alpha: .55),
+                            restColor: p.isDark
+                                ? Colors.white.withValues(alpha: .5)
+                                : p.textSoft.withValues(alpha: .55),
                           ),
                           // Thumb at progress — только у играющего
                           if (playing && totalMs > 0)
@@ -2303,13 +2379,19 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           // Duration + file size under the waves, message time at the right.
           Row(
             children: [
+              Icon(Icons.mic_rounded, size: 12, color: p.textFaint),
+              const SizedBox(width: 4),
               Text(
                 playing ? '$posLabel / $durLabel' : '$durLabel$sizeLabel',
-                style: TextStyle(fontSize: 11, color: p.textFaint),
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: p.textSoft,
+                    fontFeatures: const [FontFeature.tabularFigures()]),
               ),
               const Spacer(),
               _timeLabel(entry),
@@ -3341,16 +3423,20 @@ class _StaticWaveform extends StatelessWidget {
     final effective = samples.isEmpty
         ? List<int>.generate(40, (i) => [18, 28, 42, 60, 42, 28, 14, 22][i % 8])
         : samples;
+    // width: infinity — обязательно: внутри Stack волны иначе схлопываются
+    // в нулевую ширину (loose constraints) и их не видно вообще.
     return SizedBox(
-      height: 30,
+      height: 34,
+      width: double.infinity,
       child: CustomPaint(
         painter: _WaveformPainter(
           samples: effective,
           progress: progress,
           playedColor: playedColor,
           restColor: restColor,
-          barWidth: 2.8,
-          gap: 1.4,
+          barWidth: 3.2,
+          gap: 2.0,
+          radius: 2.0,
         ),
       ),
     );
@@ -3365,6 +3451,7 @@ class _WaveformPainter extends CustomPainter {
     required this.restColor,
     required this.barWidth,
     required this.gap,
+    this.radius = 1.5,
   });
 
   final List<int> samples;
@@ -3373,22 +3460,24 @@ class _WaveformPainter extends CustomPainter {
   final Color restColor;
   final double barWidth;
   final double gap;
+  final double radius;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (samples.isEmpty) return;
+    if (samples.isEmpty || size.width <= 0 || size.height <= 0) return;
     final step = barWidth + gap;
     final count = (size.width / step).floor();
+    if (count <= 0) return;
     final paintPlayed = Paint()..color = playedColor;
     final paintRest = Paint()..color = restColor;
     for (var i = 0; i < count; i++) {
       // stretch/compress sample list to fit the available width
       final idx = (i * samples.length / count).floor().clamp(0, samples.length - 1);
-      final h = (samples[idx] / 100) * size.height;
+      final h = ((samples[idx] / 100) * size.height).clamp(2.0, size.height);
       final x = i * step;
       final rect = Rect.fromLTWH(x, (size.height - h) / 2, barWidth, h);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(1.5)),
+        RRect.fromRectAndRadius(rect, Radius.circular(radius)),
         (i / count) < progress ? paintPlayed : paintRest,
       );
     }

@@ -121,5 +121,51 @@ void main() {
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     // Telegram-style duration label under the waves.
     expect(find.text('0:07 ${model.tr('sec')}'), findsOneWidget);
+    // Regression: waves must actually occupy width (Stack used to collapse
+    // the waveform CustomPaint to Size(0, 30), leaving an empty bubble).
+    await tester.pump();
+    final waveSizes = find
+        .byType(CustomPaint)
+        .evaluate()
+        .where((e) =>
+            '${(e.widget as CustomPaint).painter.runtimeType}' ==
+            '_WaveformPainter')
+        .map((e) => (e.renderObject! as RenderBox).size)
+        .toList();
+    expect(waveSizes, isNotEmpty, reason: 'no waveform painted at all');
+    for (final s in waveSizes) {
+      expect(s.width, greaterThan(10), reason: 'waveform has zero width: $s');
+    }
+  });
+
+  testWidgets('deep-link jump reaches far unbuilt entries', (tester) async {
+    // Regression: tapping a calendar day (or a widget row) silently did
+    // nothing when the target row wasn't built yet by the lazy list.
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    state.chats.add(Chat(id: 'c1', name: 'Дневник', color: '#2AABEE'));
+    final base = DateTime.now().millisecondsSinceEpoch;
+    for (var i = 0; i < 40; i++) {
+      state.entries.add(Entry(
+          id: 'e$i',
+          chatId: 'c1',
+          type: 'text',
+          ts: base - i * 3600000,
+          text: 'msg $i'));
+    }
+    final model = AppModel(state: state);
+    await tester.pumpWidget(MaterialApp(
+      home: ChatScreen(
+          model: model,
+          chatId: 'c1',
+          scrollToEntryId: 'e39',
+          highlightEntryId: 'e39'),
+    ));
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(find.text('msg 39'));
+    expect(rect.top, greaterThanOrEqualTo(0));
+    expect(rect.top, lessThan(600));
+    // Let the 3s highlight timer finish so the test can tear down cleanly.
+    await tester.pump(const Duration(seconds: 4));
   });
 }
