@@ -12,15 +12,22 @@ import 'package:timezone/timezone.dart' as tz;
 import 'app_log.dart';
 import 'models.dart';
 
-/// Snooze durations offered right on the notification: (action id, minutes).
+/// Notification actions: postpone by a day vs mark done.
+/// Legacy `tn_snooze_*` ids are still matched below for alarms that were
+/// armed before the update (their buttons travel with the payload).
 const snoozeActions = [
   ('tn_snooze_10', 10),
   ('tn_snooze_60', 60),
 ];
 
+/// Silent background actions (no UI): postpone +24h, mark the entry done.
+const notifPostponeAction = 'tn_postpone';
+const notifDoneAction = 'tn_done';
+const _postponeMinutes = 24 * 60;
+
 AndroidNotificationDetails _androidDetails(
-    String title, String body, List<String>? snoozeLabels) {
-  final labels = snoozeLabels ?? const ['+10 min', '+1 hour'];
+    String title, String body, List<String>? actionLabels) {
+  final labels = actionLabels ?? const ['Postpone', 'Done'];
   return AndroidNotificationDetails(
     'tn_messages',
     'TN messages',
@@ -37,10 +44,10 @@ AndroidNotificationDetails _androidDetails(
     ),
     ticker: '$title: $body',
     actions: [
-      AndroidNotificationAction(snoozeActions[0].$1, labels[0],
-          showsUserInterface: true),
-      AndroidNotificationAction(snoozeActions[1].$1, labels[1],
-          showsUserInterface: true),
+      AndroidNotificationAction(notifPostponeAction, labels[0],
+          showsUserInterface: false, cancelNotification: true),
+      AndroidNotificationAction(notifDoneAction, labels[1],
+          showsUserInterface: false, cancelNotification: true),
     ],
   );
 }
@@ -54,14 +61,84 @@ Future<void> notificationBackgroundHandler(NotificationResponse details) async {
   await handleSnoozeResponse(details);
 }
 
+/// Marks a todo entry done straight from the notification ("Выполнено").
+/// Works headlessly on raw JSON like the widget does; returns true when the
+/// entry was found. Custom reminders are dropped instead (nothing to check).
+Future<bool> completeEntryFromJson(String id) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(storageKey);
+    if (raw == null || raw.isEmpty) return false;
+    final data = jsonDecode(raw) as Map<String, dynamic>;
+    var hit = false;
+    final entries = data['entries'] as List?;
+    if (entries != null) {
+      for (var i = 0; i < entries.length; i++) {
+        final e = entries[i] as Map<String, dynamic>;
+        if (e['id'] != id) continue;
+        final items = e['items'] as List?;
+        if (items != null) {
+          for (final it in items) {
+            (it as Map<String, dynamic>)['done'] = true;
+          }
+        }
+        e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
+      // Custom (non-entry) reminder: "done" just deletes it.
+      final reminders = data['reminders'] as List?;
+      if (reminders != null) {
+        final before = reminders.length;
+        reminders.removeWhere((r) => (r as Map<String, dynamic>)['id'] == id);
+        hit = reminders.length != before;
+      }
+    }
+    if (!hit) return false;
+    await prefs.setString(storageKey, jsonEncode(data));
+    await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
+    // Drop the armed alarm for this entry (fresh plugin instance — the
+    // background isolate shares nothing with the app's one).
+    if (Platform.isAndroid) {
+      try {
+        final plugin = FlutterLocalNotificationsPlugin();
+        await plugin.initialize(
+          settings: const InitializationSettings(
+            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          ),
+        );
+        await plugin.cancel(id: stableHash(id));
+      } catch (_) {}
+    }
+    return true;
+  } catch (e, st) {
+    AppLog.error('notif.done', e, st);
+    return false;
+  }
+}
+
 /// Shared by the background handler and the in-app response listener.
 /// [payload] format: `id|whenMillis`.
 Future<bool> handleSnoozeResponse(NotificationResponse details) async {
   final actionId = details.actionId ?? '';
   final payload = details.payload ?? '';
-  final match =
-      snoozeActions.where((a) => a.$1 == actionId).firstOrNull;
-  if (match == null || payload.isEmpty) return false;
+  if (actionId == notifDoneAction) {
+    if (payload.isEmpty) return false;
+    final sep = payload.lastIndexOf('|');
+    if (sep <= 0) return false;
+    return completeEntryFromJson(payload.substring(0, sep));
+  }
+  int? minutes;
+  if (actionId == notifPostponeAction) {
+    minutes = _postponeMinutes;
+  } else {
+    final match =
+        snoozeActions.where((a) => a.$1 == actionId).firstOrNull;
+    if (match != null) minutes = match.$2;
+  }
+  if (minutes == null || payload.isEmpty) return false;
   final sep = payload.lastIndexOf('|');
   if (sep <= 0) return false;
   final id = payload.substring(0, sep);
@@ -73,7 +150,7 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
     if (raw == null || raw.isEmpty) return false;
     final data = jsonDecode(raw) as Map<String, dynamic>;
     final target =
-        DateTime.now().millisecondsSinceEpoch + match.$2 * 60 * 1000;
+        DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
     var hit = false;
     final reminders = data['reminders'] as List?;
     if (reminders != null) {
@@ -208,7 +285,10 @@ class RemindersService {
                       ),
                     ),
               onDidReceiveNotificationResponse: (details) async {
-                if ((details.actionId ?? '').startsWith('tn_snooze_')) {
+                final actionId = details.actionId ?? '';
+                if (actionId.startsWith('tn_snooze_') ||
+                    actionId == notifPostponeAction ||
+                    actionId == notifDoneAction) {
                   await handleSnoozeResponse(details);
                   onNotificationAction?.call(details.actionId!, details.payload ?? '');
                 }
@@ -309,7 +389,7 @@ class RemindersService {
   }
 
   Future<bool> schedule(Reminder r, String title, String body,
-      {List<String>? snoozeLabels}) async {
+      {List<String>? snoozeLabels, List<String>? actionLabels}) async {
     // Desktop: native scheduled toasts proved unreliable (AUMID/shortcut
     // registration, timezone shifts) — ReminderEngine delivers reminders
     // itself with Telegram-style overlays instead.
@@ -330,7 +410,7 @@ class RemindersService {
         body: body,
         scheduledDate: when,
         notificationDetails: NotificationDetails(
-          android: _androidDetails(title, body, snoozeLabels),
+          android: _androidDetails(title, body, actionLabels ?? snoozeLabels),
         ),
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle

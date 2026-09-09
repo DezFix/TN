@@ -153,16 +153,20 @@ class ReminderEngine {
         title: d.title,
         body: d.body,
         actions: [
-          ('${d.key}|10', model.tr('snooze_10m')),
-          ('${d.key}|60', model.tr('snooze_1h')),
+          ('${d.key}|1440', model.tr('notif_postpone')),
+          ('${d.key}|done', model.tr('notif_done')),
         ],
         onAction: (actionKey) {
           final parts = actionKey.split('|');
+          // key format here is `<dueKey>|<minutes|done>`; rebuild the due key.
+          final dueKey =
+              parts.sublist(0, parts.length - 1).join('|');
+          if (parts.last == 'done') {
+            _completeDueItem(dueKey);
+            return;
+          }
           final minutes = int.tryParse(parts.last);
           if (parts.length >= 2 && minutes != null) {
-            // key format here is `<dueKey>|<minutes>`; rebuild the due key.
-            final dueKey =
-                parts.sublist(0, parts.length - 1).join('|');
             model.snoozeByKey(dueKey, minutes);
           }
         },
@@ -180,6 +184,37 @@ class ReminderEngine {
     showInAppBanner(ctx, model.p,
         title: d.title, body: d.body,
         onTap: () => _openChat(d.chatId));
+  }
+
+  /// "Выполнено" straight from the toast: checks the whole entry (or drops
+  /// a custom reminder), then rebuilds alarms so nothing re-fires.
+  Future<void> _completeDueItem(String dueKey) async {
+    final model = _model;
+    if (model == null) return;
+    final sep = dueKey.lastIndexOf('|');
+    final id = sep > 0 ? dueKey.substring(0, sep) : dueKey;
+    var hit = false;
+    for (final e in model.state.entries) {
+      if (e.id == id) {
+        if (e.items != null) {
+          for (final it in e.items!) {
+            it.done = true;
+          }
+        }
+        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
+      final before = model.state.reminders.length;
+      model.state.reminders.removeWhere((r) => r.id == id);
+      hit = model.state.reminders.length != before;
+    }
+    if (!hit) return;
+    await model.save();
+    await model.rescheduleAlarms();
+    model.refresh();
   }
 
   void _openChat(String chatId) {

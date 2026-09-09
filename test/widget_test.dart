@@ -118,6 +118,8 @@ void main() {
     ));
 
     expect(find.text('напоминание о деле'), findsOneWidget);
-    expect(find.byIcon(Icons.play_circle), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    // Telegram-style duration label under the waves.
+    expect(find.text('0:07 ${model.tr('sec')}'), findsOneWidget);
   });
 }

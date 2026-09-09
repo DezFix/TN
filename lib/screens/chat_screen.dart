@@ -301,9 +301,9 @@ class _ChatScreenState extends State<ChatScreen> {
       Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
       widget.model.tr('remind_title', [_chat.name]),
       widget.model.tr('remind_body'),
-      snoozeLabels: [
-        widget.model.tr('snooze_10m'),
-        widget.model.tr('snooze_1h')
+      actionLabels: [
+        widget.model.tr('notif_postpone'),
+        widget.model.tr('notif_done')
       ],
     );
   }
@@ -618,6 +618,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     try {
       final name = await MediaStore().saveFile(path, 'audio');
+      String? sizeLabel;
+      try {
+        sizeLabel = _fmtDocSize(await File(path!).length());
+      } catch (_) {}
       widget.model.state.entries.add(Entry(
         id: uid('e'),
         chatId: widget.chatId,
@@ -625,6 +629,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ts: DateTime.now().millisecondsSinceEpoch,
         media: name,
         duration: secs,
+        mediaSize: sizeLabel,
         waveform: _downsampleWaveform(levels, 40),
       ));
       await widget.model.save();
@@ -1351,6 +1356,181 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// Long-press on a day pill → month calendar with dots on days that have
+  /// (visible) notes; tap a dotted day to jump straight to it.
+  Future<void> _showDayPicker(DateTime initialMonth, List<Entry> visible) async {
+    DateTime dayStartOf(int ts) {
+      final d = DateTime.fromMillisecondsSinceEpoch(ts);
+      return DateTime(d.year, d.month, d.day);
+    }
+
+    final counts = <DateTime, int>{};
+    for (final e in visible) {
+      final d = dayStartOf(e.ts);
+      counts[d] = (counts[d] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return;
+    var cursor = DateTime(initialMonth.year, initialMonth.month);
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: p.modalBg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final tr = widget.model.tr;
+          final leading = DateTime(cursor.year, cursor.month).weekday - 1;
+          final weekDays = tr('weekdays_short').split(' ');
+          Widget dayCell(DateTime day, {required bool inMonth}) {
+            final count = counts[day] ?? 0;
+            final isToday = day == todayStart;
+            final enabled = inMonth && count > 0;
+            return InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: enabled ? () => Navigator.pop(ctx, day) : null,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isToday && inMonth
+                      ? p.accent.withValues(alpha: .14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: isToday && inMonth
+                      ? Border.all(color: p.accent, width: 1.2)
+                      : null,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${day.day}',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                        color: !inMonth
+                            ? p.textFaint.withValues(alpha: .35)
+                            : count > 0
+                                ? p.text
+                                : p.textFaint.withValues(alpha: .55),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: count > 0 && inMonth
+                            ? p.accent
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final cells = <Widget>[];
+          final firstVisible =
+              DateTime(cursor.year, cursor.month).subtract(Duration(days: leading));
+          for (var i = 0; i < 42; i++) {
+            final day = firstVisible.add(Duration(days: i));
+            cells.add(dayCell(day,
+                inMonth: day.month == cursor.month));
+          }
+          // Drop trailing empty weeks for compactness.
+          while (cells.length > 35 &&
+              cells.sublist(35).every((w) => (w as InkWell).onTap == null)) {
+            cells.removeRange(35, 42);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: p.divider,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.chevron_left, color: p.textSoft),
+                        onPressed: () => setSheet(() => cursor =
+                            DateTime(cursor.year, cursor.month - 1)),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${tr('month_${cursor.month}')} ${cursor.year}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: p.text),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.chevron_right, color: p.textSoft),
+                        onPressed: () => setSheet(() => cursor =
+                            DateTime(cursor.year, cursor.month + 1)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      for (var i = 0;
+                          i < 7 && i < weekDays.length;
+                          i++)
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              weekDays[i],
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.textFaint),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  GridView.count(
+                    crossAxisCount: 7,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 0.92,
+                    children: cells,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (picked == null || !mounted) return;
+    Entry? target;
+    for (final e in visible) {
+      if (dayStartOf(e.ts) == picked) {
+        target = e;
+        break;
+      }
+    }
+    if (target != null) _jumpToEntry(target.id);
+  }
+
   // ---------------- build ----------------
 
   @override
@@ -1609,9 +1789,12 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    Widget pill(String label) => Padding(
+    Widget pill(String label, DateTime day) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
-          child: DayPill(label: label, p: p),
+          child: GestureDetector(
+            onLongPress: () => _showDayPicker(day, entries),
+            child: DayPill(label: label, p: p),
+          ),
         );
 
     Widget makeRow(Entry e) {
@@ -1665,17 +1848,24 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Messenger mode, like Telegram: newest at bottom, view pinned to the bottom.
     // NOTE: sortedEntriesFor returns newest-first already.
+    DateTime dayStartOf(int ts) {
+      final d = DateTime.fromMillisecondsSinceEpoch(ts);
+      return DateTime(d.year, d.month, d.day);
+    }
+
     final children = <Widget>[];
     String? currentDay;
+    DateTime? currentDayStart;
     for (final e in entries) {
       final day = fmtDay(e.ts, tr);
       if (currentDay != null && day != currentDay) {
-        children.add(pill(currentDay!));
+        children.add(pill(currentDay!, currentDayStart!));
       }
       currentDay = day;
+      currentDayStart = dayStartOf(e.ts);
       children.add(makeRow(e));
     }
-    if (currentDay != null) children.add(pill(currentDay!));
+    if (currentDay != null) children.add(pill(currentDay!, currentDayStart!));
 
     // builder + reverse: index 0 renders at the BOTTOM, and children[0] is
     // the NEWEST row (entries iterate newest-first) — plain children[i] puts
@@ -2040,6 +2230,10 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
+    final durLabel = '${dur ~/ 60}:${two(dur % 60)}';
+    final sizeLabel = entry.mediaSize?.isNotEmpty == true
+        ? ', ${entry.mediaSize}'
+        : ' ${model.tr('sec')}';
     return Container(
       width: 270,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2048,13 +2242,27 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              IconButton(
-                icon: Icon(playing ? Icons.pause_circle : Icons.play_circle,
-                    color: p.accent, size: 32),
-                onPressed: () => _playAudio(entry),
+              // Telegram-style round play button.
+              Material(
+                color: p.accent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _playAudio(entry),
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Icon(
+                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 10),
               Expanded(
                 child: LayoutBuilder(
                   builder: (ctx, cts) {
@@ -2096,13 +2304,11 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          // Duration / position + time label on same line for compactness
+          // Duration + file size under the waves, message time at the right.
           Row(
             children: [
               Text(
-                playing
-                    ? '$posLabel / ${dur ~/ 60}:${two(dur % 60)}'
-                    : '${dur ~/ 60}:${two(dur % 60)} ${model.tr('sec')}',
+                playing ? '$posLabel / $durLabel' : '$durLabel$sizeLabel',
                 style: TextStyle(fontSize: 11, color: p.textFaint),
               ),
               const Spacer(),

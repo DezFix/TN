@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.0] - 2026-09-08
+
+- **Day calendar:** long-press any date pill in a chat → month calendar with dots on days that have (visible) notes; tap a dotted day to jump straight to it with highlight. Honors hidden tasks (hidden notes leave no dots)
+- **Notifications:** `+10 min / +1 h` replaced by `Postpone` (+24h) and `Done` (marks the task done / drops the reminder right from the notification, silent background actions, Android + Windows toast). Old armed alarms keep working
+- **Voice messages:** Telegram-style bubble — round play button, waves with scrub, `mm:ss, size` under the waves; recordings now store file size
+- **Fix:** January month name was garbage in ru/uk/de/es/fr (`month_1` held packed data) — now proper names
+
 ## [1.27.18] - 2026-09-06
 
 - **Widget:** bigger task checkbox (`22dp → 30dp` + padding) — easier to hit with a finger, no more misses
