@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.5] - 2026-09-13
+
+- **Bugsink-driven patch:** fixed undo-toast crash (two animation controllers on a single-ticker provider) and one more hidden ListTile ink case (chat edit screen switch). So 3 issues total, all covered by regression tests now
+
 ## [1.28.4] - 2026-09-09
 
 - **Bugsink-driven patch:** fixed Zone mismatch crash (binding was initialized outside `runZonedGuarded` — everything now starts inside the guarded zone) and invisible ListTile ink splashes (tags/folders/lock-settings/about tiles now sit on their own Material instead of under a colored box)

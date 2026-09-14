@@ -80,7 +80,7 @@ class _UndoToastView extends StatefulWidget {
 }
 
 class _UndoToastViewState extends State<_UndoToastView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _slide = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 240));
   late final AnimationController _ring = AnimationController(

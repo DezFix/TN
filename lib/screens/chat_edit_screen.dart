@@ -137,12 +137,15 @@ class _ChatEditScreenState extends State<ChatEditScreen> {
             ),
             if (_kind != 'rss') ...[
               _sectionLabel(tr('ac_title'), p),
-              Container(
-                decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(12)),
+              Material(
+                color: p.bgChat,
+                borderRadius: BorderRadius.circular(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SwitchListTile(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       value: _ac.enabled,
                       onChanged: (v) {
                         HapticFeedback.selectionClick();
