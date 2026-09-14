@@ -410,15 +410,17 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
       Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: p.bgChat,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: selected ? p.accent : Colors.transparent, width: 1.5),
         ),
-        child: ListTile(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          enabled: enabled && !_busy,
+        child: Material(
+          color: p.bgChat,
+          borderRadius: BorderRadius.circular(12),
+          child: ListTile(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            enabled: enabled && !_busy,
           leading: Icon(icon, color: selected ? p.accent : p.textSoft),
           title: Text(title,
               style: TextStyle(
@@ -433,6 +435,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
             color: selected ? p.accent : p.textFaint,
           ),
           onTap: onTap,
+          ),
         ),
       );
 

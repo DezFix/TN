@@ -67,13 +67,12 @@ class TagsScreen extends StatelessWidget {
                 final count = tags[tag]!;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
+                  child: Material(
                     color: p.bgChat,
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    leading: Icon(Icons.tag, size: 20, color: p.accent),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      leading: Icon(Icons.tag, size: 20, color: p.accent),
                     title: Text(tag,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -91,6 +90,7 @@ class TagsScreen extends StatelessWidget {
                               color: p.accent)),
                     ),
                     onTap: () => Navigator.pop(context, '#$tag'),
+                    ),
                   ),
                 );
               },

@@ -31,17 +31,20 @@ import 'screens/welcome_screen.dart';
 import 'screens/widget_settings_screen.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // Anonymous crash reports to Bugsink (opt-out in Settings, on by default).
-  try {
-    await CrashReports.init(appVersion: appBuildVersion);
-  } catch (_) {}
-  FlutterError.onError = (details) {
+  // Everything (incl. binding init) runs INSIDE the guarded zone — otherwise
+  // Flutter throws "Zone mismatch" (bindings initialized in a different zone
+  // than runApp), which we shipped in 1.27.14 and caught via Bugsink.
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    // Anonymous crash reports to Bugsink (opt-out in Settings, on by default).
     try {
-      CrashReports.capture('flutter', details.exception, details.stack);
+      await CrashReports.init(appVersion: appBuildVersion);
     } catch (_) {}
-  };
-  runZonedGuarded(() {
+    FlutterError.onError = (details) {
+      try {
+        CrashReports.capture('flutter', details.exception, details.stack);
+      } catch (_) {}
+    };
     // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
     // silently falls back to pure Dart otherwise.
     try {

@@ -157,27 +157,29 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: p.bgChat, borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              children: [
-                tile(Icons.history_edu, tr('about_changelog'),
-                    onTap: _openChangelog,
-                    trailing: _loadingChangelog
-                        ? spinner
-                        : Icon(Icons.chevron_right, color: p.textFaint)),
-                Divider(height: 8, color: p.divider),
-                tile(Icons.system_update_alt, tr('about_check_updates'),
-                    onTap: _checkUpdates,
-                    trailing: _checking
-                        ? spinner
-                        : Icon(Icons.chevron_right, color: p.textFaint)),
-                Divider(height: 8, color: p.divider),
-                tile(Icons.favorite_outline, 'ko-fi',
-                    iconColor: const Color(0xFFFF5E5B), onTap: _openKofi),
-              ],
+          Material(
+            color: p.bgChat,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  tile(Icons.history_edu, tr('about_changelog'),
+                      onTap: _openChangelog,
+                      trailing: _loadingChangelog
+                          ? spinner
+                          : Icon(Icons.chevron_right, color: p.textFaint)),
+                  Divider(height: 8, color: p.divider),
+                  tile(Icons.system_update_alt, tr('about_check_updates'),
+                      onTap: _checkUpdates,
+                      trailing: _checking
+                          ? spinner
+                          : Icon(Icons.chevron_right, color: p.textFaint)),
+                  Divider(height: 8, color: p.divider),
+                  tile(Icons.favorite_outline, 'ko-fi',
+                      iconColor: const Color(0xFFFF5E5B), onTap: _openKofi),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),

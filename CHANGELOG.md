@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.28.4] - 2026-09-09
+
+- **Bugsink-driven patch:** fixed Zone mismatch crash (binding was initialized outside `runZonedGuarded` — everything now starts inside the guarded zone) and invisible ListTile ink splashes (tags/folders/lock-settings/about tiles now sit on their own Material instead of under a colored box)
+
 ## [1.28.3] - 2026-09-09
 
 - **Notifications:** Done/Postpone taps now refresh the open chat (the action edited storage behind the live model's back, so the task looked unchecked — `onNotificationAction` pulls changes in and rebuilds alarms)

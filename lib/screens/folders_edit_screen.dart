@@ -106,10 +106,12 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
                         return Container(
                           key: ValueKey(f.id),
                           margin: const EdgeInsets.only(bottom: 6),
-                          decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            leading: Icon(Icons.folder_outlined, size: 22, color: color ?? p.accent),
+                          child: Material(
+                            color: p.bgChat,
+                            borderRadius: BorderRadius.circular(12),
+                            child: ListTile(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              leading: Icon(Icons.folder_outlined, size: 22, color: color ?? p.accent),
                             title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14.5, color: p.text)),
                             subtitle: Text(tr('tap_to_edit'), style: TextStyle(fontSize: 11, color: p.textFaint)),
                             trailing: Row(
@@ -124,6 +126,7 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
                               ],
                             ),
                             onTap: () => _edit(f),
+                            ),
                           ),
                         );
                       },
