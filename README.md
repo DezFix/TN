@@ -1,137 +1,137 @@
-# TN — заметки в стиле Telegram-чата
+# TN — notes that feel like a Telegram chat
 
 [![Sponsor](https://img.shields.io/badge/Sponsor%20me-ko--fi-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/k_k)
 
-TN — это разговор с самим собой: чаты-темы вместо папок, сообщения вместо файлов. Идеи, списки дел, фото, голосовые — всё по темам, с напоминаниями и `#тегами`. Данные хранятся только на вашем устройстве. [Поддержать проект — ko-fi.com/k_k](https://ko-fi.com/k_k)
+TN is a conversation with yourself: topic chats instead of folders, messages instead of files. Ideas, to-do lists, photos, voice notes — sorted by topic, with reminders and `#tags`. All data stays on your device. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
 
-> Скриншоты ниже сняты на английском (язык переключается в настройках). Канбан-доска из бета-версии на скринах отсутствует сознательно — она ещё тестируется.
+> Screenshots below are in English (the interface language is switchable in Settings). The beta kanban board is intentionally not pictured — it is still under testing.
 
-## Чаты
+## Chats
 
-Всё начинается со списка чатов. Первый запуск встречает пустым экраном с подсказкой — нажмите большую кнопку или ✎ внизу справа.
+Everything starts with the chat list. A fresh install greets you with an empty screen and a hint — tap the big button or the ✎ button at the bottom right.
 
-<img src="doc/screen/02_chats_empty.png" width="270" alt="Пустой список чатов">
+<img src="doc/screen/02_chats_empty.png" width="270" alt="Empty chat list">
 
-Готовый список выглядит как мессенджер: аватарка с иконкой, название, последнее сообщение и время. Сверху — поиск и фильтры: All, Tasks, Notes, Tags, Upcoming.
+A lived-in list looks like a messenger: avatar with icon, name, last message and time. On top — search plus filters: All, Tasks, Notes, Tags, Upcoming.
 
-<img src="doc/screen/08_chat_list.png" width="270" alt="Список чатов с фильтрами">
+<img src="doc/screen/08_chat_list.png" width="270" alt="Chat list with filters">
 
-### Новый чат
+### New chat
 
-При создании выбираются название, тип, иконка и цвет. Типы:
+Creating a chat picks its name, type, icon and color. Types:
 
-- **Notes** — обычные заметки: текст, фото, голос, файлы;
-- **Tasks** — задачи с чекбоксами, сроками и повторами;
-- **RSS channel** — только читает ленту, новые посты приходят сообщениями;
-- **Kanban** — доска с колонками (пока в бете, см. ниже).
+- **Notes** — plain notes: text, photos, voice, files;
+- **Tasks** — tasks with checkboxes, deadlines and repeats;
+- **RSS channel** — read-only feed, new posts arrive as messages;
+- **Kanban** — board with columns (in beta for now, see below).
 
-<img src="doc/screen/03_new_chat.png" width="270" alt="Создание чата">
+<img src="doc/screen/03_new_chat.png" width="270" alt="Creating a chat">
 
-## Заметки
+## Notes
 
-Чат заметок — обычная переписка с собой. Хэштеги в тексте подсвечиваются и собираются в пилюли под сообщением, по ним работает поиск и экран тегов.
+A notes chat is a plain conversation with yourself. Hashtags in the text are highlighted and collected into pills under the message; search and the tags screen run on them.
 
-<img src="doc/screen/04_chat_notes.png" width="270" alt="Чат заметок с хэштегом">
+<img src="doc/screen/04_chat_notes.png" width="270" alt="Notes chat with a hashtag">
 
-Долгое нажатие на сообщение включает режим выбора: можно отметить несколько записей сразу.
+A long press on a message enables selection mode: tick several entries at once.
 
-<img src="doc/screen/05_selected.png" width="270" alt="Выбор сообщений">
+<img src="doc/screen/05_selected.png" width="270" alt="Selecting messages">
 
-Меню ⋮ предлагает: изменить, закрепить, копировать, переслать, поделиться во внешнее приложение, удалить.
+The ⋮ menu offers: edit, pin, copy, forward, share to an external app, delete.
 
-<img src="doc/screen/06_selection_menu.png" width="270" alt="Меню действий с сообщениями">
+<img src="doc/screen/06_selection_menu.png" width="270" alt="Message actions menu">
 
-Удалённое всегда можно вернуть: вместо диалога подтверждения внизу появляется пилюля «Deleted · Undo» с кольцом обратного отсчёта (~5 секунд).
+Deleted entries can always be brought back: instead of a confirmation dialog, a “Deleted · Undo” pill with a ~5-second countdown ring appears at the bottom.
 
-<img src="doc/screen/07_undo.png" width="270" alt="Отмена удаления">
+<img src="doc/screen/07_undo.png" width="270" alt="Undo delete">
 
-## Задачи и напоминания
+## Tasks and reminders
 
-В чате задач кнопка отправки открывает окно **«Date, time & repeat»**: дата, время (готовые пресеты 07:00–21:00), повтор (один раз / каждый день / будни / дни недели / каждый месяц) и важность (Normal / Important / Urgent).
+In a tasks chat the send button opens the **“Date, time & repeat”** sheet: date, time (07:00–21:00 presets), repeat (once / every day / weekdays / pick days / monthly) and priority (Normal / Important / Urgent).
 
-<img src="doc/screen/09_schedule.png" width="270" alt="Дата, время, повтор и важность">
+<img src="doc/screen/09_schedule.png" width="270" alt="Date, time, repeat and priority">
 
-Готовая задача живёт в чате карточкой с чекбоксом и пилюлей срока. Просрочка подсвечивается.
+A finished task lives in the chat as a card with a checkbox and a due pill. Overdue items are highlighted.
 
-<img src="doc/screen/10_chat_tasks.png" width="270" alt="Чат задач со сроком">
+<img src="doc/screen/10_chat_tasks.png" width="270" alt="Tasks chat with a deadline">
 
-Напоминание приходит уведомлением с кнопками **Postpone** (+24 часа) и **Done** (закрыть задачу прямо из шторки). Выполненные задачи не звонят: при отметке будильник снимается автоматически.
+Reminders arrive as notifications with **Postpone** (+24 hours) and **Done** (close the task right from the shade) buttons. Done tasks never ring: checking one cancels its alarm automatically.
 
-Долгое нажатие на отправку открывает редактор списка: несколько пунктов и подпунктов сразу, срок задаётся там же через иконку часов.
+Long-pressing send opens the list editor: several items and sub-items at once, with the due date set via the clock icon in the same sheet.
 
-## Поиск и теги
+## Search and tags
 
-Поиск ищет по всем чатам и записям (текст, теги, пункты списков). Тап по результату открывает чат ровно на найденном сообщении с подсветкой.
+Search looks across all chats and entries (text, tags, checklist items). Tapping a result opens the chat scrolled exactly to the found message, highlighted.
 
-<img src="doc/screen/11_search.png" width="270" alt="Поиск по чатам и записям">
+<img src="doc/screen/11_search.png" width="270" alt="Searching chats and notes">
 
-## Канбан-доска (бета)
+## Kanban board (beta)
 
-Новый тип чата для ведения дел колонками. По умолчанию их три — Idea / In progress / Done, свои колонки добавляются через меню ⋮ → Columns (или долгим тапом по вкладке): переименование, добавление, удаление. При удалении колонки её карточки переезжают в первую оставшуюся.
+A new chat type for running work in columns. Three by default — Idea / In progress / Done; custom columns are managed via ⋮ → Columns (or by long-pressing a tab): rename, add, delete. Deleting a column moves its cards into the first remaining one.
 
-- Вкладки с счётчиками над сообщениями переключают колонки;
-- свайп карточки вправо двигает её в следующую колонку (последняя — стоп);
-- тап по бейджу колонки на карточке или «…» открывает переход в любую колонку, включая назад;
-- тап — быстрая текстовая карточка в текущую колонку, долгий тап — карточка-чеклист с датой;
-- перенос todo-карточки в последнюю колонку отмечает все пункты выполненными (будильники гаснут), перенос обратно — снимает отметки; Undo возвращает галочки точь-в-точь;
-- задачи канбана видны в повестке и на виджете, пересылка в канбан кладёт карточку в первую колонку.
+- Tabs with counters above the messages switch columns;
+- swiping a card right pushes it to the next column (the last one is a stop);
+- tapping the column badge on a card or “…” moves it to any column, including backwards;
+- tap send = a quick text card in the current column, long-press send = a checklist card with a date;
+- moving a todo card into the last column checks every item (alarms stop); moving it back out unchecks them; Undo restores the exact checkmarks;
+- kanban tasks show up in the agenda and on the widget; forwarding into kanban lands the card in the first column.
 
-## Виджеты
+## Widgets
 
-На рабочий стол ставятся два виджета:
+Two widgets can be placed on the home screen:
 
-- **Задачи** — невыполненные todo из всех чатов (режимы «Сегодня» / «Ближайшее будущее», сортировка «сначала важные» или по времени). Галочка ставится прямо на виджете и синхронизируется с приложением, тап по тексту открывает чат на нужном сообщении;
-- **Канбан** — невыполненные задачи канбан-досок, сгруппированные по колонкам. Поведение то же: галочка на виджете, тап — переход к карточке.
+- **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, “priority first” or time sorting). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
+- **Kanban** — undone todos from kanban chats, grouped by column. Same behaviour: tick on the widget, tap to jump to the card.
 
-Прозрачность фона и размер шрифта настраиваются в приложении (Настройки → Widget settings).
+Background transparency and font size are shared settings inside the app (Settings → Widget settings).
 
-## Быстрые действия с иконки
+## Quick actions from the icon
 
-Долгое нажатие на иконку TN на рабочем столе открывает два шортката с разными иконками:
+Long-pressing the TN launcher icon shows two shortcuts with distinct icons:
 
-- ➕ **Быстрая заметка** — сразу открыть ввод новой записи;
-- ☑️ **Открыть повестку** — экран ближайших задач.
+- ➕ **Quick note** — jump straight into writing a new entry;
+- ☑️ **Open agenda** — the upcoming-tasks screen.
 
-## Папки, повестка, архив
+## Folders, agenda, archive
 
-- **Папки** — свои наборы чатов с именем и цветом (+ умные папки «Задачи»/«Заметки», собирающие чаты по типу автоматически);
-- **Повестка (Upcoming)** — все задачи со сроком по дням: просрочка, сегодня, завтра, позже; фильтры All / Overdue / Today / Week / High;
-- **Архив** — неактивные чаты прячутся с главного экрана;
-- **Корзина** — удалённые чаты лежат там до истечения срока хранения (настраивается), восстановление в один тап.
+- **Folders** — custom chat sets with names and colors (+ smart “Tasks”/“Notes” folders that collect chats by type automatically);
+- **Agenda (Upcoming)** — every task with a deadline, grouped by day: overdue, today, tomorrow, later; filters All / Overdue / Today / Week / High;
+- **Archive** — inactive chats leave the main screen;
+- **Trash** — deleted chats wait out the retention period (configurable), one-tap restore.
 
-## Настройки
+## Settings
 
-<img src="doc/screen/01_settings.png" width="270" alt="Настройки: тема и язык"> <img src="doc/screen/12_settings_mid.png" width="270" alt="Настройки: папки, виджет, блокировка, кеш">
+<img src="doc/screen/01_settings.png" width="270" alt="Settings: theme and language"> <img src="doc/screen/12_settings_mid.png" width="270" alt="Settings: folders, widget, lock, cache">
 
-- тема (светлая/тёмная), 6 языков интерфейса;
-- бэкапы и облако, корзина;
-- папки, умные папки, теги, порядок;
-- виджет, блокировка (биометрия / графический ключ / PIN, время повторной блокировки);
-- кеш и мусор с автоочисткой каждые 48 часов.
+- theme (light/dark), 6 interface languages;
+- backups & cloud, trash;
+- folders, smart folders, tags, ordering;
+- widget, app lock (biometrics / pattern / PIN, re-lock timeout);
+- cache & trash with automatic cleanup every 48 hours.
 
-Внизу — раздел About: версия, чейнджлог, проверка обновлений вручную.
+At the bottom — the About section: version, changelog, manual update check.
 
-<img src="doc/screen/13_settings_about.png" width="270" alt="Настройки: About"> <img src="doc/screen/14_about.png" width="270" alt="Экран About">
+<img src="doc/screen/13_settings_about.png" width="270" alt="Settings: About"> <img src="doc/screen/14_about.png" width="270" alt="About screen">
 
-## Бэкапы
+## Backups
 
-Один zip со всей базой, медиа и настройками: локально в выбранную папку (по расписанию или вручную), в Google Drive или Nextcloud. Бэкапы шифруются паролем (AES-256-GCM) — без него восстановить нельзя. Восстановление — парой тапов, в том числе с экрана приветствия.
+One zip with the whole database, media and settings: locally into a folder of your choice (scheduled or manual), to Google Drive or Nextcloud. Backups are password-encrypted (AES-256-GCM) — they cannot be restored without it. Restoring takes a couple of taps, including from the welcome screen.
 
-## Для разработчиков
+## For developers
 
 ```sh
 flutter pub get
-flutter run          # запуск
-flutter test         # тесты (128 шт.)
+flutter run          # run
+flutter test         # tests (128)
 flutter build apk --release   # APK: build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Бета-сборки публикуются тегами `vX.Y.Z-beta.N` через GitHub Actions (`.github/workflows/build.yml`): Android APK (universal/arm64/x86_64) + Windows zip, релиз помечается как prerelease. Английский чейнджлог в `CHANGELOG.md` попадает в диалог «Что нового» и в тело релиза.
+Beta builds ship via `vX.Y.Z-beta.N` tags through GitHub Actions (`.github/workflows/build.yml`): Android APKs (universal/arm64/x86_64) + Windows zip, the release is marked as prerelease. The English changelog in `CHANGELOG.md` feeds the in-app “What’s new” dialog and the release body.
 
-## Поддержка
+## Support
 
-TN бесплатен и без рекламы навсегда, развивается на донатах: **https://ko-fi.com/k_k** (также GitHub Sponsors).
+TN is free and ad-free forever, developed on donations: **https://ko-fi.com/k_k** (also GitHub Sponsors).
 
-## Лицензия
+## License
 
-GPL-3.0 — см. [LICENSE](LICENSE).
+GPL-3.0 — see [LICENSE](LICENSE).
