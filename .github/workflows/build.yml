@@ -126,3 +126,4 @@ jobs:
           files: out/*
           body_path: release-body.md
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, 'beta') }}

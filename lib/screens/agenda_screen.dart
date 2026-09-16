@@ -300,9 +300,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
           Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
           widget.model.tr('remind_title', [widget.model.state.chatById(e.chatId)?.name ?? 'TN']),
           entryNotifBody(e, widget.model.tr),
-          snoozeLabels: [
-            widget.model.tr('snooze_10m'),
-            widget.model.tr('snooze_1h')
+          actionLabels: [
+            widget.model.tr('notif_postpone'),
+            widget.model.tr('notif_done')
           ],
         );
       }

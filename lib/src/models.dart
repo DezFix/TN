@@ -38,7 +38,34 @@ const chatKinds = [
   ('note', '📝'),
   ('rss', '📡'),
   ('tasks', '✅'),
+  ('kanban', '📋'),
 ];
+
+/// One kanban column (tab inside a kanban chat).
+/// Default columns use stable ids 'idea' / 'work' / 'done' so old entries
+/// and cross-device merges keep working. Custom columns use uid('b').
+class BoardColumn {
+  BoardColumn({required this.id, required this.name});
+
+  final String id;
+  String name;
+
+  factory BoardColumn.fromJson(Map<String, dynamic> j) => BoardColumn(
+        id: j['id'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+}
+
+/// Builds the 3 default columns with localized names. Caller passes
+/// already-translated strings so models.dart stays i18n-free.
+List<BoardColumn> defaultBoardColumns(String idea, String work, String done) =>
+    [
+      BoardColumn(id: 'idea', name: idea),
+      BoardColumn(id: 'work', name: work),
+      BoardColumn(id: 'done', name: done),
+    ];
 
 /// Rule that pulls entries from other chats into this one ("flexible chats"):
 /// e.g. a "Today" chat collecting every task due today.
@@ -92,6 +119,7 @@ class Chat {
     this.deletedAt,
     this.p2pRoomId,
     this.p2pRole,
+    this.board,
   });
 
   final String id;
@@ -114,7 +142,24 @@ class Chat {
   String? p2pRoomId;
   String? p2pRole;
 
+  /// Kanban columns. Null/empty = 3 defaults (idea/work/done) resolved
+  /// at display time via [effectiveBoard] — keeps old backups working.
+  List<BoardColumn>? board;
+
   bool get isTrashed => deletedAt != null;
+  bool get isKanban => kind == 'kanban';
+
+  /// Columns to show. Pass the translator: tr('board_idea') etc.
+  List<BoardColumn> effectiveBoard(String Function(String, [List<String>?]) tr) {
+    if (board != null && board!.isNotEmpty) return board!;
+    return defaultBoardColumns(tr('board_idea'), tr('board_work'), tr('board_done'));
+  }
+
+  void ensureBoard(String Function(String, [List<String>?]) tr) {
+    if (board == null || board!.isEmpty) {
+      board = defaultBoardColumns(tr('board_idea'), tr('board_work'), tr('board_done'));
+    }
+  }
 
   factory Chat.fromJson(Map<String, dynamic> j) => Chat(
         id: j['id'] as String,
@@ -135,6 +180,10 @@ class Chat {
         autoCollect: j['autoCollect'] == null
             ? null
             : AutoCollect.fromJson(j['autoCollect'] as Map<String, dynamic>),
+        board: (j['board'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(BoardColumn.fromJson)
+            .toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -154,7 +203,66 @@ class Chat {
         if (p2pRoomId != null) 'p2pRoomId': p2pRoomId,
         if (p2pRole != null) 'p2pRole': p2pRole,
         if (autoCollect != null) 'autoCollect': autoCollect!.toJson(),
+        if (board != null && board!.isNotEmpty)
+          'board': board!.map((b) => b.toJson()).toList(),
       };
+}
+
+/// Kanban helpers (pure, testable). [tr] is the app translator.
+String resolvedBoardId(
+    Entry e, Chat c, String Function(String, [List<String>?]) tr) {
+  final boards = c.effectiveBoard(tr);
+  if (e.boardId != null && boards.any((b) => b.id == e.boardId)) {
+    return e.boardId!;
+  }
+  return boards.first.id;
+}
+
+String boardNameFor(
+    Entry e, Chat c, String Function(String, [List<String>?]) tr) {
+  final id = resolvedBoardId(e, c, tr);
+  return c.effectiveBoard(tr).firstWhere((b) => b.id == id).name;
+}
+
+/// Next column id when swiping right, or null when already last.
+/// Backwards moves are menu-only by design (beta decision).
+String? nextBoardId(
+    Entry e, Chat c, String Function(String, [List<String>?]) tr) {
+  final boards = c.effectiveBoard(tr);
+  final cur = resolvedBoardId(e, c, tr);
+  final i = boards.indexWhere((b) => b.id == cur);
+  if (i < 0 || i + 1 >= boards.length) return null;
+  return boards[i + 1].id;
+}
+
+/// Moves [e] to [targetId]. When the target is the last column ("Done"),
+/// every todo item is auto-checked (deadline stops ringing). When leaving
+/// the last column backwards via menu, items go back to undone.
+/// Returns the previous column id (for Undo snackbars).
+String moveEntryToBoard(
+  Entry e,
+  Chat c,
+  String targetId,
+  String Function(String, [List<String>?]) tr,
+) {
+  final boards = c.effectiveBoard(tr);
+  final prev = resolvedBoardId(e, c, tr);
+  e.boardId = targetId;
+  e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  final isLast = boards.isNotEmpty && boards.last.id == targetId;
+  final wasLast = boards.isNotEmpty && boards.last.id == prev;
+  if (e.type == 'todo' && e.items != null) {
+    if (isLast) {
+      for (final it in e.items!) {
+        it.done = true;
+      }
+    } else if (wasLast) {
+      for (final it in e.items!) {
+        it.done = false;
+      }
+    }
+  }
+  return prev;
 }
 
 class TodoItem {
@@ -248,6 +356,7 @@ class Entry {
     this.editedAt,
     int? updatedAt,
     this.pinned = false,
+    this.boardId,
   }) : updatedAt = updatedAt ?? DateTime.now().millisecondsSinceEpoch;
 
   final String id;
@@ -273,6 +382,7 @@ class Entry {
   int? editedAt; // millis when last edited
   int updatedAt; // millis of last local change (for sync merge)
   bool pinned; // pinned entries float to the top of the chat
+  String? boardId; // kanban column id; null = first column
 
   bool get isEdited => editedAt != null;
 
@@ -312,6 +422,7 @@ class Entry {
         recurrenceDays:
             recurrenceDays == null ? null : List.of(recurrenceDays!),
         monthDay: monthDay,
+        boardId: boardId,
       );
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
@@ -334,6 +445,7 @@ class Entry {
         editedAt: (j['editedAt'] as num?)?.toInt(),
         updatedAt: (j['updatedAt'] as num?)?.toInt(),
         pinned: j['pinned'] as bool? ?? false,
+        boardId: j['boardId'] as String?,
         items: (j['items'] as List?)
             ?.map((e) => TodoItem.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -359,6 +471,7 @@ class Entry {
         if (editedAt != null) 'editedAt': editedAt,
         'updatedAt': updatedAt,
         if (pinned) 'pinned': pinned,
+        if (boardId != null) 'boardId': boardId,
       };
 }
 

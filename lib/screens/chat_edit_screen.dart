@@ -53,6 +53,7 @@ class _ChatEditScreenState extends State<ChatEditScreen> {
     if (name.isEmpty) return;
     HapticFeedback.lightImpact();
     final rss = _rss.text.trim();
+    final tr = widget.model.tr;
     final result = widget.chat ?? Chat(id: uid('c'), name: name, color: _color, kind: _kind);
     result
       ..name = name
@@ -60,7 +61,10 @@ class _ChatEditScreenState extends State<ChatEditScreen> {
       ..color = _color
       ..kind = _kind
       ..rssUrl = rss.isEmpty ? null : rss
-      ..autoCollect = _ac.enabled ? _ac : null;
+      ..autoCollect = (_ac.enabled && _kind != 'kanban' && _kind != 'rss') ? _ac : null;
+    if (_kind == 'kanban') {
+      result.ensureBoard(tr);
+    }
     Navigator.pop(context, result);
   }
 
@@ -135,7 +139,7 @@ class _ChatEditScreenState extends State<ChatEditScreen> {
                   ),
               ],
             ),
-            if (_kind != 'rss') ...[
+            if (_kind != 'rss' && _kind != 'kanban') ...[
               _sectionLabel(tr('ac_title'), p),
               Material(
                 color: p.bgChat,

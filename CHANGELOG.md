@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0-beta.1] - 2026-09-16
+
+- **Kanban chats (beta):** new chat type with columns (Idea / In progress / Done by default) — tabs with counters above the messages, swipe a card right to push it forward, long-press send creates a checklist card, tap a card's column badge or "…" to move it anywhere
+- **Done auto-check:** moving a todo card into the last column checks every item (alarms stop); moving it back out unchecks them; Undo restores the exact checkmarks
+- **Custom columns:** rename / add / delete columns from the chat menu (⋮ → Columns) or by long-pressing a tab; deleting a column moves its cards to the first remaining one; old backups without columns open on defaults
+- **Everywhere else just works:** kanban todos appear in Agenda and the home-screen widget, forward into kanban lands in the first column (forward out clears it), scheduled dates stay editable from the timestamp or the card menu
+
 ## [1.28.5] - 2026-09-13
 
 - **Bugsink-driven patch:** fixed undo-toast crash (two animation controllers on a single-ticker provider) and one more hidden ListTile ink case (chat edit screen switch). So 3 issues total, all covered by regression tests now

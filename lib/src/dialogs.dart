@@ -5,7 +5,7 @@ import 'models.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum EntryAction { schedTime, copy, edit, forward, delete, select, share, download, pin }
+enum EntryAction { schedTime, copy, edit, forward, delete, select, share, download, pin, boardMove }
 
 Future<Chat?> showChatEditDialog(BuildContext context, AppModel model, {Chat? chat}) async {
   final p = model.p;
@@ -222,7 +222,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
   final tr = model.tr;
   final canEdit = entry.type == 'text' || entry.type == 'todo';
   final isImage = entry.type == 'image';
-  final showSchedule = chatKind == 'tasks';
+  final showSchedule = chatKind == 'tasks' || chatKind == 'kanban';
   final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   return showMenu<EntryAction>(
     context: context,
@@ -232,6 +232,7 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
     position: RelativeRect.fromRect(Rect.fromPoints(globalPos, globalPos), Offset.zero & overlay.size),
     items: [
       if (showSchedule) PopupMenuItem(value: EntryAction.schedTime, child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('change_time'), style: TextStyle(color: p.text))])),
+      if (chatKind == 'kanban') PopupMenuItem(value: EntryAction.boardMove, child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('board_move_to'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.pin, child: Row(children: [Icon(Icons.push_pin_outlined, size: 18, color: entry.pinned ? p.accent : p.textSoft), const SizedBox(width: 10), Text(tr(entry.pinned ? 'unpin' : 'pin'), style: TextStyle(color: p.text))])),
       PopupMenuItem(value: EntryAction.select, child: Row(children: [Icon(Icons.checklist, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr('select'), style: TextStyle(color: p.text))])),
       if (canEdit) PopupMenuItem(value: EntryAction.copy, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('copy'), style: TextStyle(color: p.text))])),
@@ -240,9 +241,215 @@ Future<EntryAction?> showEntryCtxPopup(BuildContext context, AppModel model, Ent
       // external share
       PopupMenuItem(value: EntryAction.share, child: Row(children: [Icon(Icons.share, size: 18, color: p.accent), const SizedBox(width: 10), Text(tr(isImage ? 'share_photo' : 'share_text'), style: TextStyle(color: p.text))])),
       if (isImage) PopupMenuItem(value: EntryAction.download, child: Row(children: [Icon(Icons.download, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(tr('download'), style: TextStyle(color: p.text))])),
-      PopupMenuItem(value: EntryAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.danger))])),
+      PopupMenuItem(value: EntryAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(tr('delete'), style: TextStyle(color: p.text))])),
     ],
   );
+}
+
+/// Kanban column picker: returns target column id or null.
+/// Shows current column as checked, excludes nothing (move back allowed here,
+// swipe forward is forward-only by design).
+Future<String?> showBoardMoveSheet(
+  BuildContext context,
+  AppModel model,
+  Chat chat,
+  Entry entry,
+) {
+  final p = model.p;
+  final tr = model.tr;
+  final boards = chat.effectiveBoard(tr);
+  final cur = resolvedBoardId(entry, chat, tr);
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: p.modalBg,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Text(tr('board_move_to'),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+          ),
+          for (final b in boards)
+            ListTile(
+              leading: Icon(
+                b.id == cur ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                color: b.id == cur ? p.accent : p.textFaint,
+              ),
+              title: Text(b.name, style: TextStyle(color: p.text)),
+              trailing: b.id == cur
+                  ? null
+                  : const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+              onTap: () => Navigator.pop(ctx, b.id),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Kanban columns manager: add / rename / delete.
+/// Returns true when the chat board was changed.
+Future<bool> showBoardManageSheet(BuildContext context, AppModel model, Chat chat) {
+  final p = model.p;
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: p.modalBg,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    builder: (ctx) => _BoardManageSheet(model: model, chat: chat),
+  ).then((v) => v ?? false);
+}
+
+class _BoardManageSheet extends StatefulWidget {
+  const _BoardManageSheet({required this.model, required this.chat});
+  final AppModel model;
+  final Chat chat;
+  @override
+  State<_BoardManageSheet> createState() => _BoardManageSheetState();
+}
+
+class _BoardManageSheetState extends State<_BoardManageSheet> {
+  Future<void> _rename(BoardColumn col) async {
+    final model = widget.model;
+    final p = model.p;
+    final tr = model.tr;
+    final ctrl = TextEditingController(text: col.name);
+    final res = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: p.modalBg,
+        title: Text(tr('board_rename'), style: TextStyle(color: p.text, fontSize: 15, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 24,
+          style: TextStyle(color: p.text),
+          decoration: InputDecoration(
+            hintText: tr('board_name_hint'),
+            hintStyle: TextStyle(color: p.textFaint),
+            counterText: '',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx), child: Text(tr('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(dctx, ctrl.text.trim()), child: Text(tr('save'))),
+        ],
+      ),
+    );
+    if (res == null || res.isEmpty) return;
+    col.name = res;
+    widget.chat.ensureBoard(tr);
+    await model.save();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _add() async {
+    final model = widget.model;
+    final tr = model.tr;
+    widget.chat.ensureBoard(tr);
+    widget.chat.board!.add(BoardColumn(id: uid('b'), name: '${tr('board_add')} ${widget.chat.board!.length + 1}'));
+    await model.save();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _delete(BoardColumn col) async {
+    final model = widget.model;
+    final tr = model.tr;
+    widget.chat.ensureBoard(tr);
+    if (widget.chat.board!.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('board_need_one'))));
+      return;
+    }
+    final fallback = widget.chat.board!.firstWhere((b) => b.id != col.id);
+    for (final e in model.state.entries.where((e) => e.chatId == widget.chat.id)) {
+      if ((e.boardId ?? widget.chat.board!.first.id) == col.id) {
+        e.boardId = fallback.id;
+        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      }
+      // Legacy entries with null boardId implicitly live in first column:
+      // if we delete the first column, point them at the fallback explicitly.
+      if (e.boardId == null && col.id == widget.chat.board!.first.id) {
+        e.boardId = fallback.id;
+        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+      }
+    }
+    widget.chat.board!.removeWhere((b) => b.id == col.id);
+    await model.save();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final model = widget.model;
+    final p = model.p;
+    final tr = model.tr;
+    widget.chat.ensureBoard(tr);
+    final boards = widget.chat.board!;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(tr('board_manage'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text))),
+                IconButton(
+                  icon: Icon(Icons.add_rounded, color: p.accent),
+                  tooltip: tr('board_add'),
+                  onPressed: _add,
+                ),
+              ],
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: boards.length,
+                separatorBuilder: (_, __) => Divider(height: 1, color: p.divider),
+                itemBuilder: (_, i) {
+                  final b = boards[i];
+                  final count = model.state.entries.where((e) => e.chatId == widget.chat.id && (e.boardId ?? boards.first.id) == b.id).length;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)),
+                      child: Text('${i + 1}', style: TextStyle(color: p.accent, fontWeight: FontWeight.w700)),
+                    ),
+                    title: Text(b.name, style: TextStyle(color: p.text)),
+                    subtitle: Text('$count', style: TextStyle(color: p.textFaint, fontSize: 11)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(icon: Icon(Icons.edit_outlined, size: 19, color: p.textSoft), onPressed: () => _rename(b)),
+                        IconButton(icon: Icon(Icons.delete_outline, size: 19, color: p.danger), onPressed: () => _delete(b)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: p.accent),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('todo_done')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 Future<EntryAction?> showEntryCtxSheet(BuildContext context, AppModel model, Entry entry) {
@@ -776,7 +983,7 @@ Future<AttachOption?> showAttachMenuPopup(
   );
 }
 
-enum ChatTopAction { remind, edit, delete, toggleHide, toggleNotifications, search, export }
+enum ChatTopAction { remind, edit, delete, toggleHide, toggleNotifications, search, export, boardManage }
 
 Future<ChatTopAction?> showChatTopMenuPopup(
     BuildContext context, AppModel model) {

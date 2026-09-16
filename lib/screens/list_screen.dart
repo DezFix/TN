@@ -375,7 +375,7 @@ class _ListScreenState extends State<ListScreen> {
     final lastByChat = _lastEntryByChat(model);
 
     bool isSmartMatch(Chat c) {
-      if (_folderFilter == 'smart_tasks') return c.kind == 'tasks';
+      if (_folderFilter == 'smart_tasks') return c.kind == 'tasks' || c.kind == 'kanban';
       if (_folderFilter == 'smart_notes') return c.kind == 'note';
       return c.folderId == _folderFilter;
     }

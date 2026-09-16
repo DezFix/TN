@@ -66,6 +66,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _highlightId;
   String? _playingId;
   String? _pendingImagePath;
+  // Kanban: currently selected column tab (boardId). Null = first column.
+  String? _boardTab;
   bool _recording = false;
   bool _recLocked = false;
   bool _finishing = false;
@@ -88,6 +90,41 @@ class _ChatScreenState extends State<ChatScreen> {
   Chat? get _chatOrNull => widget.model.state.chatById(widget.chatId);
   Chat get _chat => _chatOrNull!;
   Palette get p => widget.model.p;
+
+  bool get _isKanban => _chatOrNull?.isKanban ?? false;
+  bool get _isTaskLike => _chatOrNull?.kind == 'tasks' || _chatOrNull?.kind == 'kanban';
+
+  List<BoardColumn> _boards() {
+    final c = _chatOrNull;
+    if (c == null) return const [];
+    return c.effectiveBoard(widget.model.tr);
+  }
+
+  String? _currentBoardId() {
+    final boards = _boards();
+    if (boards.isEmpty) return null;
+    if (_boardTab != null && boards.any((b) => b.id == _boardTab)) return _boardTab;
+    return boards.first.id;
+  }
+
+  void _ensureBoardTab() {
+    final c = _chatOrNull;
+    if (c == null || !c.isKanban) return;
+    c.ensureBoard(widget.model.tr);
+    final boards = c.effectiveBoard(widget.model.tr);
+    if (boards.isEmpty) return;
+    if (_boardTab == null || !boards.any((b) => b.id == _boardTab)) {
+      _boardTab = boards.first.id;
+    }
+  }
+
+  /// Board id for newly created cards: current tab in kanban, null otherwise.
+  /// Null means "first column" for legacy/migration paths.
+  String? _newBoardId() {
+    if (!_isKanban) return null;
+    _ensureBoardTab();
+    return _currentBoardId();
+  }
 
   /// Cached media path / link preview futures — a FutureBuilder that
   /// re-creates its future on every build restarts the work each time.
@@ -256,6 +293,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: isTasksChat ? '' : text,
       items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
       tags: extractTags(text),
+      boardId: _newBoardId(),
     ));
     HapticFeedback.lightImpact();
     if (mounted) setState(() {});
@@ -313,19 +351,20 @@ class _ChatScreenState extends State<ChatScreen> {
     HapticFeedback.mediumImpact();
     final sched = await _pickTaskSchedule();
     if (!mounted || sched.dueAt == null) return;
-    final isTasks = _chat.kind == 'tasks';
+    final isTaskLike = _isTaskLike;
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
-      type: isTasks ? 'todo' : 'text',
+      type: isTaskLike ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      items: isTasks ? [TodoItem(id: uid('t'), text: text, priority: sched.priority)] : null,
-      text: isTasks ? '' : text,
+      items: isTaskLike ? [TodoItem(id: uid('t'), text: text, priority: sched.priority)] : null,
+      text: isTaskLike ? '' : text,
       tags: extractTags(text),
       dueAt: sched.dueAt,
       recurrence: sched.recurrence,
       recurrenceDays: sched.recurrenceDays == null ? null : List.of(sched.recurrenceDays!),
       monthDay: sched.monthDay,
+      boardId: _newBoardId(),
     );
     widget.model.state.entries.add(entry);
     _text.clear();
@@ -335,9 +374,10 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.model.save();
   }
 
-  /// Long-press send in tasks chats: open a list editor where several
-  /// subtasks (parent + nested) can be typed at once. Creates one todo
-  /// entry carrying that whole tree.
+  /// Long-press send in tasks/kanban chats: open a list editor where several
+  /// subtasks (parent + nested) can be typed at once, with optional
+  /// date/priority. Creates one todo entry carrying that whole tree
+  /// in the current kanban column.
   Future<void> _addSubtaskGroup() async {
     if (_pendingImagePath != null) return;
     HapticFeedback.mediumImpact();
@@ -365,6 +405,7 @@ class _ChatScreenState extends State<ChatScreen> {
       recurrence: res.schedule?.recurrence,
       recurrenceDays: res.schedule?.recurrenceDays,
       monthDay: res.schedule?.monthDay,
+      boardId: _newBoardId(),
     );
     if (res.schedule != null && res.schedule!.priority != 0 && entry.items!.isNotEmpty && entry.items!.first.priority == 0) {
       entry.items!.first.priority = res.schedule!.priority;
@@ -442,6 +483,7 @@ class _ChatScreenState extends State<ChatScreen> {
         media: stored,
         mediaName: name,
         mediaSize: _fmtDocSize(size),
+        boardId: _newBoardId(),
       );
       widget.model.state.entries.add(entry);
       if (mounted) setState(() {});
@@ -476,6 +518,7 @@ class _ChatScreenState extends State<ChatScreen> {
         tags: extractTags(caption),
         media: name,
         mediaName: name,
+        boardId: _newBoardId(),
       ));
       HapticFeedback.lightImpact();
       if (mounted) setState(() {});
@@ -626,6 +669,7 @@ class _ChatScreenState extends State<ChatScreen> {
         duration: secs,
         mediaSize: sizeLabel,
         waveform: _downsampleWaveform(levels, 40),
+        boardId: _newBoardId(),
       ));
       await widget.model.save();
       if (mounted) setState(() {});
@@ -679,7 +723,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     // Сохраняем как задачу или заметку в зависимости от типа чата — локально.
-    final isTasks = _chat.kind == 'tasks';
+    final isTasks = _isTaskLike;
     final entry = Entry(
       id: uid('e'),
       chatId: widget.chatId,
@@ -688,6 +732,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: isTasks ? '' : text,
       items: isTasks ? [TodoItem(id: uid('t'), text: text)] : null,
       tags: extractTags(text),
+      boardId: _newBoardId(),
     );
     widget.model.state.entries.add(entry);
     await widget.model.save();
@@ -775,7 +820,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _saveTranscribedAsTaskOrNote(String text) async {
     final t = text.trim();
     if (t.isEmpty) return;
-    final isTasks = _chat.kind == 'tasks';
+    final isTasks = _isTaskLike;
     if (isTasks) {
       // Показать меню времени/важности как перед отправкой задачи (последний фикс сегодня)
       final sched = await showScheduleSheet(context, widget.model, showPriority: true);
@@ -796,6 +841,7 @@ class _ChatScreenState extends State<ChatScreen> {
         recurrence: sched.recurrence,
         recurrenceDays: sched.recurrenceDays,
         monthDay: sched.monthDay,
+        boardId: _newBoardId(),
       );
       widget.model.state.entries.add(entry);
       await widget.model.save();
@@ -815,6 +861,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ts: DateTime.now().millisecondsSinceEpoch,
       text: t,
       tags: extractTags(t),
+      boardId: _newBoardId(),
     );
     widget.model.state.entries.add(entry);
     await widget.model.save();
@@ -1104,12 +1151,118 @@ class _ChatScreenState extends State<ChatScreen> {
         if (target == null || target.id == widget.chatId) return;
         await _forwardEntries([entry], target);
         break;
+      case EntryAction.boardMove:
+        await _pickAndMoveBoard(entry);
+        break;
       case EntryAction.delete:
         final deleted = List<Entry>.of([entry]);
         await UndoService.deleteEntries(widget.model, [entry]);
         if (mounted) setState(() {});
         if (mounted) _showUndoBar(deleted);
         break;
+    }
+  }
+
+  /// Kanban: "…" picker → move to any column (backwards allowed here).
+  Future<void> _pickAndMoveBoard(Entry entry) async {
+    if (!_isKanban || !mounted) return;
+    final targetId = await showBoardMoveSheet(context, widget.model, _chat, entry);
+    if (targetId == null) return;
+    await _moveKanbanEntry(entry, targetId);
+  }
+
+  /// Core kanban move with Done auto-check + alarm healing + Undo snackbar.
+  Future<void> _moveKanbanEntry(Entry entry, String targetId) async {
+    final chat = _chatOrNull;
+    if (chat == null || !chat.isKanban) return;
+    final tr = widget.model.tr;
+    final boards = chat.effectiveBoard(tr);
+    final target = boards.firstWhere((b) => b.id == targetId, orElse: () => boards.first);
+    final prevBoard = resolvedBoardId(entry, chat, tr);
+    if (prevBoard == target.id) return;
+    final prevDone = (entry.items ?? const <TodoItem>[]).map((i) => i.done).toList();
+    moveEntryToBoard(entry, chat, target.id, tr);
+    await widget.model.save();
+    // Done tasks must not ring; revived ones re-arm when still future-dated.
+    if (entry.isDone) {
+      await _cancelEntryReminder(entry);
+    } else {
+      await _scheduleEntryReminder(entry);
+    }
+    if (mounted) {
+      setState(() {
+        // Stay on the source tab so a swipe doesn't yank the list away;
+        // the card simply disappears (it now lives in the target tab).
+        // If the user moved via picker from search/all view, jump to target.
+        if (_searching) _boardTab = target.id;
+      });
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(SnackBar(
+        content: Text(tr('board_moved', [target.name])),
+        action: SnackBarAction(
+          label: tr('undo'),
+          onPressed: () async {
+            entry.boardId = prevBoard == boards.first.id ? null : prevBoard;
+            // Restore checkmarks exactly (undo of auto-check).
+            final items = entry.items;
+            if (items != null && items.length == prevDone.length) {
+              for (var i = 0; i < items.length; i++) {
+                items[i].done = prevDone[i];
+              }
+            }
+            entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+            await widget.model.save();
+            if (entry.isDone) {
+              await _cancelEntryReminder(entry);
+            } else {
+              await _scheduleEntryReminder(entry);
+            }
+            if (mounted) setState(() {});
+          },
+        ),
+      ));
+    }
+  }
+
+  /// Swipe right: forward-only (idea → work → done). Last column = stop.
+  Future<void> _moveKanbanForward(Entry entry) async {
+    final chat = _chatOrNull;
+    if (chat == null) return;
+    final next = nextBoardId(entry, chat, widget.model.tr);
+    if (next == null) {
+      if (mounted) _toast(widget.model.tr('board_last'));
+      return;
+    }
+    HapticFeedback.lightImpact();
+    await _moveKanbanEntry(entry, next);
+  }
+
+  /// Bulk move from selection bar (kanban only).
+  Future<void> _moveSelectedToBoard() async {
+    final chat = _chatOrNull;
+    if (chat == null || !chat.isKanban) return;
+    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    if (entries.isEmpty) return;
+    // Use first entry as anchor for the picker (current column highlight).
+    final targetId = await showBoardMoveSheet(context, widget.model, chat, entries.first);
+    if (targetId == null) return;
+    final tr = widget.model.tr;
+    final boards = chat.effectiveBoard(tr);
+    final target = boards.firstWhere((b) => b.id == targetId, orElse: () => boards.first);
+    for (final e in entries) {
+      final prev = resolvedBoardId(e, chat, tr);
+      if (prev == target.id) continue;
+      moveEntryToBoard(e, chat, target.id, tr);
+      if (e.isDone) {
+        await _cancelEntryReminder(e);
+      } else {
+        await _scheduleEntryReminder(e);
+      }
+    }
+    await widget.model.save();
+    if (mounted) {
+      setState(() => _selectedIds.clear());
+      _toast(tr('board_moved', [target.name]));
     }
   }
 
@@ -1129,6 +1282,15 @@ class _ChatScreenState extends State<ChatScreen> {
             ..media = newName
             ..mediaName = e.type == 'image' ? newName : e.mediaName;
         }
+      }
+      if (target.isKanban) {
+        target.ensureBoard(widget.model.tr);
+        final boards = target.effectiveBoard(widget.model.tr);
+        // Forwarded cards land in the first column; Done auto-check only
+        // applies to explicit moves, never to forwards.
+        copy.boardId = boards.isEmpty ? null : boards.first.id;
+      } else {
+        copy.boardId = null;
       }
       widget.model.state.entries.add(copy);
     }
@@ -1161,14 +1323,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Tappable timestamp under every message: opens the unified schedule
-  /// sheet (date + time + repeat presets) — only in tasks chats.
+  /// sheet (date + time + repeat presets) — in tasks and kanban chats.
   Widget _timeLabel(Entry e) {
     final label = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       child: Text(_timeWithEdited(e),
           style: TextStyle(fontSize: 10.5, color: p.textFaint)),
     );
-    if (_chat.kind != 'tasks') return label;
+    if (!_isTaskLike) return label;
     return InkWell(
       borderRadius: BorderRadius.circular(4),
       onTap: () => _editEntrySchedule(e),
@@ -1625,6 +1787,7 @@ class _ChatScreenState extends State<ChatScreen> {
               Column(
                 children: [
                   _buildTopbar(chat),
+                  if (chat.isKanban) _buildBoardTabs(chat),
                   _buildPinnedBanner(),
                   Expanded(child: _buildMessages(model)),
                   _buildComposer(),
@@ -1665,6 +1828,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else if (v == 'edit' && one != null) {
                   if (mounted) setState(() => _selectedIds.clear());
                   await _onCtxAction(one, EntryAction.edit);
+                } else if (v == 'move' && _isKanban) {
+                  await _moveSelectedToBoard();
                 } else if (v == 'pin') {
                   for (final e in matches) {
                     e.pinned = !e.pinned;
@@ -1683,7 +1848,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
               },
               itemBuilder: (_) => [
-                if (_chat.kind == 'tasks')
+                if (_isKanban)
+                  PopupMenuItem(
+                      value: 'move',
+                      height: 42,
+                      child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('board_move_to'), style: TextStyle(fontSize: 14, color: p.text))])),
+                if (_isTaskLike)
                   PopupMenuItem(
                       value: 'time',
                       enabled: one != null,
@@ -1775,6 +1945,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 case ChatTopAction.delete:
                   await _deleteChat();
                   break;
+                case ChatTopAction.boardManage:
+                  _ensureBoardTab();
+                  final changed = await showBoardManageSheet(context, widget.model, _chat);
+                  if (changed && mounted) setState(() {});
+                  _ensureBoardTab();
+                  if (mounted) setState(() {});
+                  break;
                 case ChatTopAction.toggleHide:
                   _chat.tasksHideDone = !_chat.tasksHideDone;
                   await widget.model.save();
@@ -1812,11 +1989,99 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(width: 10),
                       Text(_chat.tasksHideDone ? widget.model.tr('show_done') : widget.model.tr('hide_done'), style: TextStyle(color: p.text))
                     ])),
+              if (_chat.isKanban)
+                PopupMenuItem(
+                    value: ChatTopAction.boardManage,
+                    child: Row(children: [
+                      Icon(Icons.view_column_outlined, size: 18, color: p.accent),
+                      const SizedBox(width: 10),
+                      Text(widget.model.tr('board_manage'), style: TextStyle(color: p.text))
+                    ])),
               PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('edit_chat'), style: TextStyle(color: p.text))])),
               PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))])),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBoardTabs(Chat chat) {
+    _ensureBoardTab();
+    final boards = chat.effectiveBoard(widget.model.tr);
+    final cur = _currentBoardId();
+    // Counts per column for the tab badges.
+    final counts = <String, int>{for (final b in boards) b.id: 0};
+    for (final e in widget.model.state.entries.where((e) => e.chatId == chat.id)) {
+      final id = resolvedBoardId(e, chat, widget.model.tr);
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return Container(
+      color: p.bgList,
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < boards.length; i++)
+              Padding(
+                padding: EdgeInsets.only(right: i + 1 == boards.length ? 0 : 6),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _boardTab = boards[i].id);
+                  },
+                  onLongPress: () async {
+                    final changed = await showBoardManageSheet(context, widget.model, chat);
+                    if (changed && mounted) setState(() {});
+                    _ensureBoardTab();
+                    if (mounted) setState(() {});
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: cur == boards[i].id ? p.accent : p.bgChat,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: cur == boards[i].id ? p.accent : p.divider.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          boards[i].name,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: cur == boards[i].id ? Colors.white : p.text,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: cur == boards[i].id
+                                ? Colors.white.withValues(alpha: 0.22)
+                                : p.accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${counts[boards[i].id] ?? 0}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: cur == boards[i].id ? Colors.white : p.accent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1831,7 +2096,15 @@ class _ChatScreenState extends State<ChatScreen> {
         return items.any((i) => !i.done);
       }).toList();
     }
-    if (_searching && _searchQuery.isNotEmpty) {
+    final isKanbanView = _chat.isKanban;
+    if (isKanbanView) _ensureBoardTab();
+    final searchingActive = _searching && _searchQuery.isNotEmpty;
+    if (isKanbanView && !searchingActive) {
+      final cur = _currentBoardId();
+      final tr = model.tr;
+      entries = entries.where((e) => resolvedBoardId(e, _chat, tr) == cur).toList();
+    }
+    if (searchingActive) {
       final q = _searchQuery;
       entries = entries.where((e) => e.text.toLowerCase().contains(q) || e.tags.any((t) => t.toLowerCase().contains(q)) || (e.items?.any((i) => i.text.toLowerCase().contains(q)) ?? false)).toList();
     }
@@ -1880,7 +2153,7 @@ class _ChatScreenState extends State<ChatScreen> {
         },
         child: bubble,
       );
-      return AnimatedContainer(
+      final base = AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
         color: isSelected ? p.accent.withValues(alpha: .08) : Colors.transparent,
@@ -1903,6 +2176,38 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(child: row),
           ],
         ),
+      );
+      // Kanban swipe right → next column (forward-only). Last column = no swipe.
+      if (!isKanbanView || _selecting || searchingActive) return base;
+      final nextId = nextBoardId(e, _chat, tr);
+      if (nextId == null) return base;
+      final boards = _chat.effectiveBoard(tr);
+      final nextName = boards.firstWhere((b) => b.id == nextId, orElse: () => boards.first).name;
+      return Dismissible(
+        key: ValueKey('kanban-${e.id}-${resolvedBoardId(e, _chat, tr)}'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          await _moveKanbanForward(e);
+          return false;
+        },
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: p.accent.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_forward_rounded, color: p.accent),
+              const SizedBox(width: 6),
+              Text(nextName,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: p.accent)),
+            ],
+          ),
+        ),
+        child: base,
       );
     }
 
@@ -1966,8 +2271,60 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
       );
 
+  Widget _kanbanCardHeader(AppModel model, Entry entry) {
+    final chat = _chatOrNull;
+    if (chat == null) return const SizedBox.shrink();
+    final colName = boardNameFor(entry, chat, model.tr);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () async {
+              // From global search (all columns visible): tap badge → jump to column.
+              if (_searching) {
+                final target = resolvedBoardId(entry, chat, model.tr);
+                setState(() {
+                  _boardTab = target;
+                  _searching = false;
+                  _searchCtrl.clear();
+                  _searchQuery = '';
+                  _highlightId = entry.id;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToEntry(entry.id));
+              } else {
+                await _pickAndMoveBoard(entry);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: p.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: p.accent.withValues(alpha: 0.22)),
+              ),
+              child: Text(colName,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.accent)),
+            ),
+          ),
+          const Spacer(),
+          InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => _pickAndMoveBoard(entry),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.more_horiz_rounded, size: 18, color: p.textFaint),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBubble(AppModel model, Entry entry, {required bool highlight, bool selected = false}) {
-    final Widget content = switch (entry.type) {
+    Widget content = switch (entry.type) {
       'text' => _buildTextBubble(model, entry),
       'image' => _buildImageBubble(model, entry),
       'audio' => _buildAudioBubble(model, entry),
@@ -1976,6 +2333,17 @@ class _ChatScreenState extends State<ChatScreen> {
       'doc' => _buildDocBubble(model, entry),
       _ => const SizedBox(),
     };
+    // Kanban: column badge + "…" move menu on every card (spec: hold → "…" menu).
+    if (_isKanban && _editingId != entry.id) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _kanbanCardHeader(model, entry),
+          content,
+        ],
+      );
+    }
 
     final isHl = highlight || selected;
     return Container(
@@ -2444,8 +2812,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   Wrap(spacing: 6, runSpacing: 6, children: [
                     FilledButton.icon(
                       style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                      icon: Icon(_chat.kind == 'tasks' ? Icons.checklist_rounded : Icons.note_add_rounded, size: 14, color: Colors.white),
-                      label: Text(_chat.kind == 'tasks' ? 'Как задачу' : 'Как заметку', style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w700)),
+                      icon: Icon(_isTaskLike ? Icons.checklist_rounded : Icons.note_add_rounded, size: 14, color: Colors.white),
+                      label: Text(_isTaskLike ? 'Как задачу' : 'Как заметку', style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w700)),
                       onPressed: () => _saveTranscribedAsTaskOrNote(_transcribed[entry.id] ?? entry.text),
                     ),
                   ]),
@@ -3014,7 +3382,7 @@ class _ChatScreenState extends State<ChatScreen> {
               final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
               return hasSomething
                   ? GestureDetector(
-                      onLongPressStart: _chat.kind == 'tasks'
+                      onLongPressStart: _isTaskLike
                           ? (d) => _addSubtaskGroup()
                           : null,
                       child: IconButton.filled(
@@ -3293,7 +3661,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildDictationPanel() {
     final model = widget.model;
-    final isTasks = _chat.kind == 'tasks';
+    final isTasks = _isTaskLike;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       decoration: BoxDecoration(
