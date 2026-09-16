@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0-beta.3] - 2026-09-16
+
+- **Kanban icon:** board-columns glyph instead of the notebook (chat type emoji + widget header)
+- **Shortcuts:** long-press actions now use distinct emoji icons (memo = quick note, calendar = agenda)
+- **Kanban demo:** board widget verified on-device with live cards
+
 ## [1.29.0-beta.2] - 2026-09-16
 
 - **Second home-screen widget (Kanban):** undone todos from kanban chats, grouped by board column — check off cards right on the widget, tap a row to jump to the card; refreshes together with the day widget (toggle, midnight, save)

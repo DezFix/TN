@@ -77,24 +77,40 @@ class MainActivity : FlutterFragmentActivity() {
         publishShortcuts()
     }
 
+    /** Renders an emoji into a bitmap for shortcut icons — the two long-press
+     * actions must be instantly distinguishable (memo vs calendar). */
+    private fun emojiIcon(emoji: String): android.graphics.drawable.Icon {
+        val density = resources.displayMetrics.density
+        val size = (48 * density).toInt().coerceAtLeast(48)
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = size * 0.72f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val fm = paint.fontMetrics
+        canvas.drawText(emoji, size / 2f, size / 2f - (fm.ascent + fm.descent) / 2f, paint)
+        return android.graphics.drawable.Icon.createWithBitmap(bmp)
+    }
+
     private fun publishShortcuts() {
         try {
             if (Build.VERSION.SDK_INT < 25) return
             val sm = getSystemService(android.content.pm.ShortcutManager::class.java) ?: return
             if (sm.isRequestPinShortcutSupported) {
                 // Static shortcuts already declared in XML, but ensure dynamic for launchers that need it.
-                // NOTE: each shortcut gets its OWN icon (plus = quick note, check = agenda) —
+                // NOTE: each shortcut gets its OWN emoji icon (memo = quick note, calendar = agenda) —
                 // sharing ic_launcher for both made them indistinguishable in the long-press menu.
                 val quick = android.content.pm.ShortcutInfo.Builder(this, "quick_note")
                     .setShortLabel(getString(R.string.shortcut_quick_note))
                     .setLongLabel(getString(R.string.shortcut_quick_note_long))
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dw_add))
+                    .setIcon(emojiIcon("\uD83D\uDCDD")) // 📝 memo
                     .setIntent(Intent("app.tn.tn.SHORTCUT_QUICK_NOTE").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
                     .build()
                 val agenda = android.content.pm.ShortcutInfo.Builder(this, "agenda")
                     .setShortLabel(getString(R.string.shortcut_agenda))
                     .setLongLabel(getString(R.string.shortcut_agenda_long))
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dw_check_on))
+                    .setIcon(emojiIcon("\uD83D\uDCC5")) // 📅 calendar
                     .setIntent(Intent("app.tn.tn.SHORTCUT_AGENDA").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
                     .build()
                 sm.dynamicShortcuts = listOf(quick, agenda)

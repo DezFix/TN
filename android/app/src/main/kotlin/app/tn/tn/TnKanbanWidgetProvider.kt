@@ -216,6 +216,7 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
 
             val ws = TnDayWidgetProvider.widgetStrings(context)
             rv.setTextViewText(R.id.dw_title, kanbanTitle(context))
+            rv.setInt(R.id.dw_icon, "setImageResource", R.drawable.ic_kb_board)
             val fontScale = TnDayWidgetProvider.readFontScale(context)
             rv.setFloat(R.id.dw_title, "setTextSize", 13f * fontScale)
             rv.setFloat(R.id.dw_empty, "setTextSize", 13f * fontScale)

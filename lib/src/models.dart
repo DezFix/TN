@@ -38,7 +38,7 @@ const chatKinds = [
   ('note', '📝'),
   ('rss', '📡'),
   ('tasks', '✅'),
-  ('kanban', '📋'),
+  ('kanban', '🗂️'),
 ];
 
 /// One kanban column (tab inside a kanban chat).
