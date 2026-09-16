@@ -82,18 +82,19 @@ class MainActivity : FlutterFragmentActivity() {
             if (Build.VERSION.SDK_INT < 25) return
             val sm = getSystemService(android.content.pm.ShortcutManager::class.java) ?: return
             if (sm.isRequestPinShortcutSupported) {
-                // Static shortcuts already declared in XML, but ensure dynamic for launchers that need it
-                val icon = android.graphics.drawable.Icon.createWithResource(this, R.mipmap.ic_launcher)
+                // Static shortcuts already declared in XML, but ensure dynamic for launchers that need it.
+                // NOTE: each shortcut gets its OWN icon (plus = quick note, check = agenda) —
+                // sharing ic_launcher for both made them indistinguishable in the long-press menu.
                 val quick = android.content.pm.ShortcutInfo.Builder(this, "quick_note")
                     .setShortLabel(getString(R.string.shortcut_quick_note))
                     .setLongLabel(getString(R.string.shortcut_quick_note_long))
-                    .setIcon(icon)
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dw_add))
                     .setIntent(Intent("app.tn.tn.SHORTCUT_QUICK_NOTE").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
                     .build()
                 val agenda = android.content.pm.ShortcutInfo.Builder(this, "agenda")
                     .setShortLabel(getString(R.string.shortcut_agenda))
                     .setLongLabel(getString(R.string.shortcut_agenda_long))
-                    .setIcon(icon)
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_dw_check_on))
                     .setIntent(Intent("app.tn.tn.SHORTCUT_AGENDA").setPackage(packageName).setClassName(packageName, "app.tn.tn.MainActivity"))
                     .build()
                 sm.dynamicShortcuts = listOf(quick, agenda)
@@ -155,6 +156,7 @@ class MainActivity : FlutterFragmentActivity() {
                 when (call.method) {
                     "update" -> {
                         TnDayWidgetProvider.updateAll(applicationContext)
+                        TnKanbanWidgetProvider.updateAll(applicationContext)
                         result.success(null)
                     }
                     "getPendingOpenChat" -> {

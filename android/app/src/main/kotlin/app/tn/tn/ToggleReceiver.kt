@@ -50,6 +50,7 @@ class ToggleReceiver : BroadcastReceiver() {
                 }
                 // Always refresh: unchecking also changes state but returns false.
                 TnDayWidgetProvider.updateAll(context)
+                TnKanbanWidgetProvider.updateAll(context)
             } catch (_: Exception) {
             } finally {
                 result.finish()

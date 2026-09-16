@@ -19,6 +19,7 @@ class TnMidnightReceiver : BroadcastReceiver() {
         // app is never opened (see Recurrence.rollover).
         Recurrence.rollover(context)
         TnDayWidgetProvider.updateAll(context)
+        TnKanbanWidgetProvider.updateAll(context)
         scheduleNext(context)
     }
 

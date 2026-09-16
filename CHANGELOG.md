@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0-beta.2] - 2026-09-16
+
+- **Second home-screen widget (Kanban):** undone todos from kanban chats, grouped by board column — check off cards right on the widget, tap a row to jump to the card; refreshes together with the day widget (toggle, midnight, save)
+- **Shortcuts:** long-press app icon actions finally have distinct icons (plus = quick note, check = agenda) — the dynamic shortcuts reused the launcher icon for both
+- **Docs:** README rewritten as a user guide with screenshots (`doc/screen`, English UI)
+
 ## [1.29.0-beta.1] - 2026-09-16
 
 - **Kanban chats (beta):** new chat type with columns (Idea / In progress / Done by default) — tabs with counters above the messages, swipe a card right to push it forward, long-press send creates a checklist card, tap a card's column badge or "…" to move it anywhere

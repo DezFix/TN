@@ -2,6 +2,7 @@
 <resources>
     <string name="dw_title_tasks">Задачи</string>
     <string name="tn_widget_desc">Задачи из всех чатов</string>
+    <string name="kb_widget_desc">Задачи канбан-досок по колонкам</string>
     <string name="dw_title_notes">Заметки</string>
     <string name="dw_empty">Пока ничего нет</string>
     <string name="dw_overdue">%1$s — просрочено</string>
