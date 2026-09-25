@@ -1,4 +1,4 @@
-﻿import 'dart:io' show Platform;
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
@@ -76,8 +76,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setSmartFolder(String kind, bool v) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(kind == 'tasks' ? 'tn-smartfolder-tasks' : 'tn-smartfolder-notes', v);
-      if (mounted) setState(() => kind == 'tasks' ? _smartTasks = v : _smartNotes = v);
+      await prefs.setBool(
+        kind == 'tasks' ? 'tn-smartfolder-tasks' : 'tn-smartfolder-notes',
+        v,
+      );
+      if (mounted)
+        setState(() => kind == 'tasks' ? _smartTasks = v : _smartNotes = v);
     } catch (_) {}
   }
 
@@ -85,24 +89,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: widget.model.p.modalBg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 36, height: 4, decoration: BoxDecoration(color: widget.model.p.divider, borderRadius: BorderRadius.circular(2))),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: widget.model.p.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               const SizedBox(height: 12),
-              Text(widget.model.tr('smart_folders'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: widget.model.p.text)),
+              Text(
+                widget.model.tr('smart_folders'),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: widget.model.p.text,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(widget.model.tr('smart_folders_hint'), style: TextStyle(fontSize: 12, color: widget.model.p.textFaint)),
+              Text(
+                widget.model.tr('smart_folders_hint'),
+                style: TextStyle(fontSize: 12, color: widget.model.p.textFaint),
+              ),
               const SizedBox(height: 16),
-              _smartFolderToggle(p: widget.model.p, icon: Icons.check_circle_outline, title: widget.model.tr('smart_tasks'), subtitle: widget.model.tr('smart_tasks_hint'), value: _smartTasks, onChanged: (v) => _setSmartFolder('tasks', v)),
+              _smartFolderToggle(
+                p: widget.model.p,
+                icon: Icons.check_circle_outline,
+                title: widget.model.tr('smart_tasks'),
+                subtitle: widget.model.tr('smart_tasks_hint'),
+                value: _smartTasks,
+                onChanged: (v) => _setSmartFolder('tasks', v),
+              ),
               const SizedBox(height: 8),
-              _smartFolderToggle(p: widget.model.p, icon: Icons.note_alt_outlined, title: widget.model.tr('smart_notes'), subtitle: widget.model.tr('smart_notes_hint'), value: _smartNotes, onChanged: (v) { _setSmartFolder('notes', v); setState(() {}); }),
+              _smartFolderToggle(
+                p: widget.model.p,
+                icon: Icons.note_alt_outlined,
+                title: widget.model.tr('smart_notes'),
+                subtitle: widget.model.tr('smart_notes_hint'),
+                value: _smartNotes,
+                onChanged: (v) {
+                  _setSmartFolder('notes', v);
+                  setState(() {});
+                },
+              ),
               const SizedBox(height: 8),
-              Text(widget.model.tr('smart_folders_future'), style: TextStyle(fontSize: 11, color: widget.model.p.textFaint, fontStyle: FontStyle.italic)),
+              Text(
+                widget.model.tr('smart_folders_future'),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: widget.model.p.textFaint,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ],
           ),
         ),
@@ -133,7 +180,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     final tr = widget.model.tr;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('cache_cleared', [humanBytes(_cacheTrash + _cacheTemp)]))),
+      SnackBar(
+        content: Text(
+          tr('cache_cleared', [humanBytes(_cacheTrash + _cacheTemp)]),
+        ),
+      ),
     );
   }
 
@@ -183,8 +234,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
-  String _cacheMaxLabel(int v) =>
-      v == 0 ? '∞' : v >= 1024 ? '${v ~/ 1024} GB' : '$v MB';
+  String _cacheMaxLabel(int v) => v == 0
+      ? '∞'
+      : v >= 1024
+      ? '${v ~/ 1024} GB'
+      : '$v MB';
 
   @override
   Widget build(BuildContext context) {
@@ -198,8 +252,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: p.bgList,
         foregroundColor: p.text,
         elevation: 0,
-        title: Text(tr('settings'),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.text)),
+        title: Text(
+          tr('settings'),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: p.text,
+          ),
+        ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: p.textSoft),
           onPressed: () => Navigator.of(context).pop(),
@@ -214,15 +274,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(tr('theme'),
-                    style: TextStyle(fontSize: 14.5, color: p.text)),
+                Text(
+                  tr('theme'),
+                  style: TextStyle(fontSize: 14.5, color: p.text),
+                ),
                 _themeToggle(p, model.state.theme),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          Text(tr('chat_hint'),
-              style: TextStyle(fontSize: 12, color: p.textFaint)),
+          Text(
+            tr('chat_hint'),
+            style: TextStyle(fontSize: 12, color: p.textFaint),
+          ),
           _sectionLabel(tr('section_language'), p),
           _card(
             p,
@@ -234,11 +298,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   GestureDetector(
                     onTap: () => model.setLang(code),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
-                        color: model.state.lang == code
-                            ? p.accent
-                            : p.bgChat,
+                        color: model.state.lang == code ? p.accent : p.bgChat,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -246,7 +311,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: model.state.lang == code ? Colors.white : p.textSoft,
+                          color: model.state.lang == code
+                              ? Colors.white
+                              : p.textSoft,
                         ),
                       ),
                     ),
@@ -261,37 +328,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 InkWell(
                   borderRadius: BorderRadius.circular(10),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BackupScreen(model: model))),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BackupScreen(model: model),
+                    ),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(children: [
-                      Icon(Icons.settings_backup_restore, size: 20, color: p.accent),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(tr('backup_open'), style: TextStyle(fontSize: 14.5, color: p.text))),
-                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
-                    ]),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.settings_backup_restore,
+                          size: 20,
+                          color: p.accent,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('backup_open'),
+                            style: TextStyle(fontSize: 14.5, color: p.text),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                      ],
+                    ),
                   ),
                 ),
                 Divider(height: 20, color: p.divider),
                 InkWell(
                   borderRadius: BorderRadius.circular(10),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrashScreen(model: model))),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TrashScreen(model: model),
+                    ),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(children: [
-                      Icon(Icons.delete_outline, size: 20, color: p.danger),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(tr('trash'), style: TextStyle(fontSize: 14.5, color: p.text))),
-                      if (model.state.chats.any((c) => c.isTrashed))
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: p.danger.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                          child: Text('${model.state.chats.where((c) => c.isTrashed).length}',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.danger)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 20, color: p.danger),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('trash'),
+                            style: TextStyle(fontSize: 14.5, color: p.text),
+                          ),
                         ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.chevron_right, size: 20, color: p.textFaint),
-                    ]),
+                        if (model.state.chats.any((c) => c.isTrashed))
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: p.danger.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${model.state.chats.where((c) => c.isTrashed).length}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: p.danger,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.chevron_right, size: 20, color: p.textFaint),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -312,16 +419,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await model.save();
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('folder_created', [result.name]))));
+                      SnackBar(
+                        content: Text(tr('folder_created', [result.name])),
+                      ),
+                    );
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Row(
                     children: [
-                      Icon(Icons.create_new_folder_outlined, size: 20, color: p.accent),
+                      Icon(
+                        Icons.create_new_folder_outlined,
+                        size: 20,
+                        color: p.accent,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(tr('new_folder'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                        child: Text(
+                          tr('new_folder'),
+                          style: TextStyle(fontSize: 14.5, color: p.text),
+                        ),
                       ),
                     ],
                   ),
@@ -332,14 +448,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: Row(
                     children: [
-                      Icon(Icons.auto_awesome_mosaic_outlined, size: 20, color: p.accent),
+                      Icon(
+                        Icons.auto_awesome_mosaic_outlined,
+                        size: 20,
+                        color: p.accent,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tr('smart_folder'), style: TextStyle(fontSize: 14.5, color: p.text)),
-                            Text(tr('smart_folders_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                            Text(
+                              tr('smart_folder'),
+                              style: TextStyle(fontSize: 14.5, color: p.text),
+                            ),
+                            Text(
+                              tr('smart_folders_hint'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: p.textFaint,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -350,8 +479,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Divider(height: 20, color: p.divider),
                 InkWell(
                   onTap: () => Navigator.push(
-                     context,
-                     MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
+                    context,
+                    MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
                   ),
                   borderRadius: BorderRadius.circular(12),
                   child: Row(
@@ -359,8 +488,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(Icons.tag, size: 20, color: p.accent),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(tr('tags_title'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                        child: Text(
+                          tr('tags_title'),
+                          style: TextStyle(fontSize: 14.5, color: p.text),
+                        ),
                       ),
                       Icon(Icons.chevron_right, color: p.textFaint),
                     ],
@@ -370,7 +501,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 InkWell(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => FoldersEditScreen(model: model)),
+                    MaterialPageRoute(
+                      builder: (_) => FoldersEditScreen(model: model),
+                    ),
                   ),
                   borderRadius: BorderRadius.circular(12),
                   child: Row(
@@ -378,8 +511,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(Icons.swap_vert, size: 20, color: p.accent),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(tr('folders_reorder'),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
+                        child: Text(
+                          tr('folders_reorder'),
+                          style: TextStyle(fontSize: 14.5, color: p.text),
+                        ),
                       ),
                       Icon(Icons.chevron_right, color: p.textFaint),
                     ],
@@ -390,26 +525,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           // Home-screen widgets are an Android feature — hide on desktop.
           if (!Platform.isWindows) ...[
-            _sectionLabel(tr('section_widget'), p),            _card(
+            _sectionLabel(tr('section_widget'), p),
+            _card(
               p,
               child: InkWell(
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => WidgetSettingsScreen(model: model)),
+                  MaterialPageRoute(
+                    builder: (_) => WidgetSettingsScreen(model: model),
+                  ),
                 ),
-                 borderRadius: BorderRadius.circular(12),
-                 child: Row(
-                   children: [
-                     Expanded(
-                       child: Text(tr('widget_settings_title'),
-                           style: TextStyle(fontSize: 14.5, color: p.text)),
-                     ),
-                     Icon(Icons.chevron_right, color: p.textFaint),
-                   ],
-                 ),
-               ),
-             ),
-           ],
+                borderRadius: BorderRadius.circular(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tr('widget_settings_title'),
+                        style: TextStyle(fontSize: 14.5, color: p.text),
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: p.textFaint),
+                  ],
+                ),
+              ),
+            ),
+          ],
           // Biometric app lock — Android/iOS only (local_auth support).
           if (AppLock.supported) ...[
             _sectionLabel(tr('lock_enable'), p),
@@ -420,30 +560,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => LockSettingsScreen(model: model)),
+                      builder: (_) => LockSettingsScreen(model: model),
+                    ),
                   );
                   await _loadLockPref();
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Row(
                   children: [
-                    Icon(Icons.fingerprint,
-                        size: 22, color: _lockOn ? p.accent : p.textSoft),
+                    Icon(
+                      Icons.fingerprint,
+                      size: 22,
+                      color: _lockOn ? p.accent : p.textSoft,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tr('lock_menu'),
-                              style:
-                                  TextStyle(fontSize: 14.5, color: p.text)),
-                          Text(tr(_lockOn
+                          Text(
+                            tr('lock_menu'),
+                            style: TextStyle(fontSize: 14.5, color: p.text),
+                          ),
+                          Text(
+                            tr(
+                              _lockOn
                                   ? (_methodKey == 'methods_multi'
-                                      ? 'lock_methods_multi'
-                                      : 'lock_method_${_methodKey}')
-                                  : 'lock_hint'),
-                              style: TextStyle(
-                                  fontSize: 11, color: p.textFaint)),
+                                        ? 'lock_methods_multi'
+                                        : 'lock_method_${_methodKey}')
+                                  : 'lock_hint',
+                            ),
+                            style: TextStyle(fontSize: 11, color: p.textFaint),
+                          ),
                         ],
                       ),
                     ),
@@ -453,7 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-           const SizedBox(height: 12),
+          const SizedBox(height: 12),
           _sectionLabel(tr('cache_section'), p),
           _card(
             p,
@@ -464,13 +612,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(tr('cache_total'),
-                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: p.text)),
+                    Text(
+                      tr('cache_total'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
+                    ),
                     _cacheLoading
-                        ? Text(tr('cache_calculating'),
-                            style: TextStyle(fontSize: 13, color: p.textFaint))
-                        : Text(humanBytes(_cacheTotal),
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.accent)),
+                        ? Text(
+                            tr('cache_calculating'),
+                            style: TextStyle(fontSize: 13, color: p.textFaint),
+                          )
+                        : Text(
+                            humanBytes(_cacheTotal),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: p.accent,
+                            ),
+                          ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -482,22 +644,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _cacheRow(tr('cache_temp'), _cacheTemp, p, isTrash: true),
                 ],
                 const SizedBox(height: 10),
-                Text(tr('cache_hint'), style: TextStyle(fontSize: 11, color: p.textFaint, height: 1.35)),
+                Text(
+                  tr('cache_hint'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: p.textFaint,
+                    height: 1.35,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: p.danger.withValues(alpha: 0.9)),
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 18, color: Colors.white),
-                    label: Text(tr('cache_clear'), style: const TextStyle(color: Colors.white)),
-                    onPressed: (_cacheTrash + _cacheTemp) == 0 && !_cacheLoading ? null : _clearCacheTrash,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: p.danger.withValues(alpha: 0.9),
+                    ),
+                    icon: const Icon(
+                      Icons.delete_sweep_outlined,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      tr('cache_clear'),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    onPressed: (_cacheTrash + _cacheTemp) == 0 && !_cacheLoading
+                        ? null
+                        : _clearCacheTrash,
                   ),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: _loadCacheSize,
-                    child: Text(tr('rss_refresh'), style: TextStyle(color: p.accent)),
+                    child: Text(
+                      tr('rss_refresh'),
+                      style: TextStyle(color: p.accent),
+                    ),
                   ),
                 ),
                 Divider(height: 24, color: p.divider),
@@ -505,27 +688,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(tr('rss_cache_channels'), style: TextStyle(fontSize: 14.5, color: p.text)),
+                    Text(
+                      tr('rss_cache_channels'),
+                      style: TextStyle(fontSize: 14.5, color: p.text),
+                    ),
                     TextButton(
                       onPressed: () async {
-                        await RssService.clearCache();
+                        await RssService.clearCache(widget.model.state);
                         await _loadCacheSize();
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('rss_cache_cleared'))));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(tr('rss_cache_cleared'))),
+                        );
                       },
-                      child: Text(tr('rss_clear'), style: TextStyle(color: p.accent)),
+                      child: Text(
+                        tr('rss_clear'),
+                        style: TextStyle(color: p.accent),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(tr('rss_cache_max_size'),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                        color: p.textFaint)),
+                Text(
+                  tr('rss_cache_max_size'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: p.textFaint,
+                  ),
+                ),
                 Slider(
-                  value: [1024, 3072, 5120, 0].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
+                  value: [
+                    1024,
+                    3072,
+                    5120,
+                    0,
+                  ].indexOf(_cacheMaxGb).clamp(0, 3).toDouble(),
                   min: 0,
                   max: 3,
                   divisions: 3,
@@ -533,25 +732,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: p.accent,
                   inactiveColor: p.divider,
                   thumbColor: p.accent,
-                  onChanged: (v) => setState(() => _cacheMaxGb = [1024, 3072, 5120, 0][v.round()]),
-                  onChangeEnd: (v) => _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
+                  onChanged: (v) => setState(
+                    () => _cacheMaxGb = [1024, 3072, 5120, 0][v.round()],
+                  ),
+                  onChangeEnd: (v) =>
+                      _saveCacheMax([1024, 3072, 5120, 0][v.round()]),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(_cacheMaxLabel(_cacheMaxGb),
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: p.textSoft)),
+                  child: Text(
+                    _cacheMaxLabel(_cacheMaxGb),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: p.textSoft,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 4),
-                Text(tr('rss_cache_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                Text(
+                  tr('rss_cache_hint'),
+                  style: TextStyle(fontSize: 11, color: p.textFaint),
+                ),
                 const SizedBox(height: 8),
-                Text(tr('rss_cache_for'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                Text(
+                  tr('rss_cache_for'),
+                  style: TextStyle(fontSize: 11, color: p.textFaint),
+                ),
                 const SizedBox(height: 12),
                 // Автоочистка — один переключатель на всё
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: p.bgList,
                     borderRadius: BorderRadius.circular(10),
@@ -559,14 +773,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.auto_delete_outlined, size: 18, color: p.accent),
+                      Icon(
+                        Icons.auto_delete_outlined,
+                        size: 18,
+                        color: p.accent,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(tr('cache_auto_title'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
-                            Text(tr('cache_auto_hint'), style: TextStyle(fontSize: 11, color: p.textFaint)),
+                            Text(
+                              tr('cache_auto_title'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: p.text,
+                              ),
+                            ),
+                            Text(
+                              tr('cache_auto_hint'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: p.textFaint,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -581,8 +812,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _card(
             p,
             child: InkWell(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => AboutScreen(model: model))),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AboutScreen(model: model)),
+              ),
               borderRadius: BorderRadius.circular(12),
               child: Row(
                 children: [
@@ -592,10 +825,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('TN ' + appBuildVersion.replaceFirst('v', ''),
-                            style: TextStyle(fontSize: 14.5, color: p.text)),
-                        Text(tr('about_tagline'),
-                            style: TextStyle(fontSize: 11, color: p.textFaint)),
+                        Text(
+                          'TN ' + appBuildVersion.replaceFirst('v', ''),
+                          style: TextStyle(fontSize: 14.5, color: p.text),
+                        ),
+                        Text(
+                          tr('about_tagline'),
+                          style: TextStyle(fontSize: 11, color: p.textFaint),
+                        ),
                       ],
                     ),
                   ),
@@ -623,37 +860,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _sectionLabel(String label, Palette p) => Padding(
-        padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: p.textFaint)),
-      );
+    padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.6,
+        color: p.textFaint,
+      ),
+    ),
+  );
 
   Widget _card(Palette p, {required Widget child}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: p.bgChat,
-          borderRadius: BorderRadius.circular(TNRadii.md),
-          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
-          boxShadow: p.cardShadow,
-        ),
-        child: child,
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    decoration: BoxDecoration(
+      color: p.bgChat,
+      borderRadius: BorderRadius.circular(TNRadii.md),
+      border: Border.all(
+        color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35),
+      ),
+      boxShadow: p.cardShadow,
+    ),
+    child: child,
+  );
 
-  Widget _cacheRow(String label, int bytes, Palette p, {bool isTrash = false}) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12.5, color: p.textSoft)),
-          Text(humanBytes(bytes),
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: isTrash && bytes > 50 * 1024 * 1024 ? p.danger : p.text)),
-        ],
-      );
+  Widget _cacheRow(
+    String label,
+    int bytes,
+    Palette p, {
+    bool isTrash = false,
+  }) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label, style: TextStyle(fontSize: 12.5, color: p.textSoft)),
+      Text(
+        humanBytes(bytes),
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: isTrash && bytes > 50 * 1024 * 1024 ? p.danger : p.text,
+        ),
+      ),
+    ],
+  );
 
   Widget _smartFolderToggle({
     required Palette p,
@@ -662,49 +912,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-  }) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: value ? p.accent.withValues(alpha: 0.08) : p.bgList,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: value ? p.accent.withValues(alpha: 0.4) : p.divider.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: value ? p.accent : p.textFaint),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.text)),
-                  Text(subtitle, style: TextStyle(fontSize: 11, color: p.textFaint)),
-                ],
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: value ? p.accent.withValues(alpha: 0.08) : p.bgList,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: value
+            ? p.accent.withValues(alpha: 0.4)
+            : p.divider.withValues(alpha: 0.5),
+      ),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: value ? p.accent : p.textFaint),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: p.text,
+                ),
               ),
-            ),
-            Switch(value: value, activeColor: p.accent, onChanged: onChanged),
-          ],
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 11, color: p.textFaint),
+              ),
+            ],
+          ),
         ),
-      );
+        Switch(value: value, activeColor: p.accent, onChanged: onChanged),
+      ],
+    ),
+  );
 
   Widget _themeToggle(Palette p, String current) {
     Widget opt(String label, String value) => GestureDetector(
-          onTap: () => widget.model.setTheme(value),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: current == value ? p.accent : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Text(label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: current == value ? Colors.white : p.textSoft,
-                )),
+      onTap: () => widget.model.setTheme(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: current == value ? p.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: current == value ? Colors.white : p.textSoft,
           ),
-        );
+        ),
+      ),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -720,5 +985,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
 }

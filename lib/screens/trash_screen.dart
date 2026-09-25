@@ -43,15 +43,21 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _restore(Chat chat) async {
     chat.deletedAt = null;
     await widget.model.save();
+    await widget.model.rescheduleAlarms();
     if (mounted) setState(() {});
   }
 
   Future<void> _deleteForever(Chat chat) async {
     final model = widget.model;
-    for (final e in model.state.entriesFor(chat.id)) {
+    final deleting = model.state.ownEntriesFor(chat.id);
+    final deletingIds = deleting.map((e) => e.id).toSet();
+    for (final e in deleting) {
       try {
-        final store = MediaStore();
-        await store.remove(e.media);
+        await MediaStore().removeIfUnreferenced(
+              e.media,
+              model.state.entries,
+              ignoredIds: deletingIds,
+            );
       } catch (_) {}
     }
     for (final r in model.state.reminders.toList()) {
@@ -60,19 +66,27 @@ class _TrashScreenState extends State<TrashScreen> {
     model.state.entries.removeWhere((e) => e.chatId == chat.id);
     model.state.chats.removeWhere((c) => c.id == chat.id);
     await model.save();
+    await model.rescheduleAlarms();
     if (mounted) setState(() {});
   }
 
   Future<void> _emptyTrash() async {
     final model = widget.model;
     final trashed = model.state.chats.where((c) => c.isTrashed).toList();
+    final deleting = <Entry>[
+      for (final chat in trashed) ...model.state.ownEntriesFor(chat.id),
+    ];
+    final deletingIds = deleting.map((e) => e.id).toSet();
+    for (final e in deleting) {
+      try {
+        await MediaStore().removeIfUnreferenced(
+              e.media,
+              model.state.entries,
+              ignoredIds: deletingIds,
+            );
+      } catch (_) {}
+    }
     for (final chat in trashed) {
-      for (final e in model.state.entriesFor(chat.id)) {
-        try {
-          final store = MediaStore();
-          await store.remove(e.media);
-        } catch (_) {}
-      }
       for (final r in model.state.reminders.toList()) {
         if (r.chatId == chat.id) model.state.reminders.remove(r);
       }
@@ -80,6 +94,7 @@ class _TrashScreenState extends State<TrashScreen> {
     }
     model.state.chats.removeWhere((c) => c.isTrashed);
     await model.save();
+    await model.rescheduleAlarms();
     if (mounted) setState(() {});
   }
 
@@ -114,8 +129,14 @@ class _TrashScreenState extends State<TrashScreen> {
         backgroundColor: p.bgList,
         foregroundColor: p.text,
         elevation: 0,
-        title: Text(tr('trash'),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.text)),
+        title: Text(
+          tr('trash'),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: p.text,
+          ),
+        ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: p.textSoft),
           onPressed: () => Navigator.of(context).pop(),
@@ -130,17 +151,33 @@ class _TrashScreenState extends State<TrashScreen> {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: p.modalBg,
-                    title: Text(tr('empty_trash'),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
-                    content: Text(tr('empty_trash_confirm'),
-                        style: TextStyle(fontSize: 14, color: p.textSoft)),
+                    title: Text(
+                      tr('empty_trash'),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
+                    ),
+                    content: Text(
+                      tr('empty_trash_confirm'),
+                      style: TextStyle(fontSize: 14, color: p.textSoft),
+                    ),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(
+                          tr('cancel'),
+                          style: TextStyle(color: p.textSoft),
+                        ),
+                      ),
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: Text(tr('delete'), style: TextStyle(color: p.danger))),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(
+                          tr('delete'),
+                          style: TextStyle(color: p.danger),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -153,59 +190,83 @@ class _TrashScreenState extends State<TrashScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _sectionLabel(tr('retention'), p),
-          _card(p, child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(tr('retention_hint'),
+          _card(
+            p,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr('retention_hint'),
                   style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                      color: p.textFaint)),
-              Slider(
-                value: _retentionValues.indexOf(_retentionDays).clamp(0, 3).toDouble(),
-                min: 0,
-                max: 3,
-                divisions: 3,
-                label: _retentionLabel(_retentionDays),
-                activeColor: p.accent,
-                inactiveColor: p.divider,
-                thumbColor: p.accent,
-                onChanged: (v) =>
-                    setState(() => _retentionDays = _retentionValues[v.round()]),
-                onChangeEnd: (v) => _saveRetention(_retentionValues[v.round()]),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(_retentionLabel(_retentionDays),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: p.textFaint,
+                  ),
+                ),
+                Slider(
+                  value: _retentionValues
+                      .indexOf(_retentionDays)
+                      .clamp(0, 3)
+                      .toDouble(),
+                  min: 0,
+                  max: 3,
+                  divisions: 3,
+                  label: _retentionLabel(_retentionDays),
+                  activeColor: p.accent,
+                  inactiveColor: p.divider,
+                  thumbColor: p.accent,
+                  onChanged: (v) => setState(
+                    () => _retentionDays = _retentionValues[v.round()],
+                  ),
+                  onChangeEnd: (v) =>
+                      _saveRetention(_retentionValues[v.round()]),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _retentionLabel(_retentionDays),
                     style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: p.textSoft)),
-              ),
-            ],
-          )),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: p.textSoft,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 8),
           _sectionLabel('${tr('trash')} (${trashed.length})', p),
           if (trashed.isEmpty)
-            _card(p, child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(tr('trash_empty'),
-                    style: TextStyle(fontSize: 14, color: p.textFaint)),
+            _card(
+              p,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text(
+                    tr('trash_empty'),
+                    style: TextStyle(fontSize: 14, color: p.textFaint),
+                  ),
+                ),
               ),
-            ))
+            )
           else
-            for (final chat in trashed)
-              _trashChatRow(chat, p, tr),
+            for (final chat in trashed) _trashChatRow(chat, p, tr),
         ],
       ),
     );
   }
 
-  Widget _trashChatRow(Chat chat, Palette p, String Function(String, [List<String>?]) tr) {
+  Widget _trashChatRow(
+    Chat chat,
+    Palette p,
+    String Function(String, [List<String>?]) tr,
+  ) {
     final deletedAgo = chat.deletedAt != null
-        ? _formatDeletedAgo(DateTime.now().millisecondsSinceEpoch - chat.deletedAt!)
+        ? _formatDeletedAgo(
+            DateTime.now().millisecondsSinceEpoch - chat.deletedAt!,
+          )
         : '';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -213,7 +274,9 @@ class _TrashScreenState extends State<TrashScreen> {
       decoration: BoxDecoration(
         color: p.bgChat,
         borderRadius: BorderRadius.circular(TNRadii.md),
-        border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
+        border: Border.all(
+          color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35),
+        ),
         boxShadow: p.cardShadow,
       ),
       child: Column(
@@ -227,11 +290,19 @@ class _TrashScreenState extends State<TrashScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(chat.name,
-                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: p.text)),
+                    Text(
+                      chat.name,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: p.text,
+                      ),
+                    ),
                     if (deletedAgo.isNotEmpty)
-                      Text(deletedAgo,
-                          style: TextStyle(fontSize: 12, color: p.textFaint)),
+                      Text(
+                        deletedAgo,
+                        style: TextStyle(fontSize: 12, color: p.textFaint),
+                      ),
                   ],
                 ),
               ),
@@ -250,7 +321,10 @@ class _TrashScreenState extends State<TrashScreen> {
               TextButton.icon(
                 onPressed: () => _deleteForever(chat),
                 icon: Icon(Icons.delete_forever, size: 18, color: p.danger),
-                label: Text(tr('delete_forever'), style: TextStyle(color: p.danger)),
+                label: Text(
+                  tr('delete_forever'),
+                  style: TextStyle(color: p.danger),
+                ),
               ),
             ],
           ),
@@ -269,19 +343,28 @@ class _TrashScreenState extends State<TrashScreen> {
   }
 
   Widget _sectionLabel(String label, Palette p) => Padding(
-        padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
-        child: Text(label,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: p.textFaint)),
-      );
+    padding: const EdgeInsets.only(top: 20, bottom: 8, left: 2),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.6,
+        color: p.textFaint,
+      ),
+    ),
+  );
 
   Widget _card(Palette p, {required Widget child}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: p.bgChat,
-          borderRadius: BorderRadius.circular(TNRadii.md),
-          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
-          boxShadow: p.cardShadow,
-        ),
-        child: child,
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    decoration: BoxDecoration(
+      color: p.bgChat,
+      borderRadius: BorderRadius.circular(TNRadii.md),
+      border: Border.all(
+        color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35),
+      ),
+      boxShadow: p.cardShadow,
+    ),
+    child: child,
+  );
 }

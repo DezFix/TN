@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../src/app_model.dart';
 import '../src/models.dart';
-import '../src/reminders.dart';
 import '../src/sound.dart';
 import '../src/state.dart';
 import '../src/theme.dart';
@@ -288,25 +287,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
     if (snapped || rolled > 0) {
       await widget.model.save();
     }
-    try {
-      if (e.isDone) {
-        await RemindersService.instance.cancel(
-          Reminder(id: e.id, chatId: e.chatId, when: e.dueAt ?? 0),
-        );
-      } else if (e.dueAt != null &&
-          e.dueAt! > DateTime.now().millisecondsSinceEpoch) {
-        await RemindersService.instance.requestPermissions();
-        await RemindersService.instance.schedule(
-          Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
-          widget.model.tr('remind_title', [widget.model.state.chatById(e.chatId)?.name ?? 'TN']),
-          entryNotifBody(e, widget.model.tr),
-          actionLabels: [
-            widget.model.tr('notif_postpone'),
-            widget.model.tr('notif_done')
-          ],
-        );
-      }
-    } catch (_) {}
+    await widget.model.rescheduleAlarms();
     widget.model.refresh();
     if (mounted) setState(() {});
   }

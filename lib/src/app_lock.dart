@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:async';
 import 'dart:math';
@@ -38,7 +38,8 @@ class AppLock {
   static const _keyMode = 'tn-lock-mode'; // legacy single-method, migrated
   static const _keySecret = 'tn-lock-secret'; // legacy shared key
   static const _keySecretPin = 'tn-lock-secret-pin'; // 'saltHex:sha256Hex'
-  static const _keySecretPattern = 'tn-lock-secret-pattern'; // 'saltHex:sha256Hex'
+  static const _keySecretPattern =
+      'tn-lock-secret-pattern'; // 'saltHex:sha256Hex'
   static const _keyGrace = 'tn-lock-grace-minutes'; // 0 | 5 | 10
 
   static final LocalAuthentication _auth = LocalAuthentication();
@@ -133,8 +134,7 @@ class AppLock {
     if (methods.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-          _keyMethods, methods.map((m) => m.name).join(','));
+      await prefs.setString(_keyMethods, methods.map((m) => m.name).join(','));
       // Keep legacy key in sync — write the first method as primary.
       await prefs.setString(_keyMode, methods.first.name);
     } catch (_) {}
@@ -174,10 +174,10 @@ class AppLock {
 
   /// Per-method secret key.
   static String _secretKey(LockMethod m) => switch (m) {
-        LockMethod.pin => _keySecretPin,
-        LockMethod.pattern => _keySecretPattern,
-        _ => _keySecret,
-      };
+    LockMethod.pin => _keySecretPin,
+    LockMethod.pattern => _keySecretPattern,
+    _ => _keySecret,
+  };
 
   // ---- secret hashing ----
 
@@ -194,8 +194,9 @@ class AppLock {
   static String randomSalt() {
     final rnd = Random.secure();
     return List.generate(
-        8, (_) => rnd.nextInt(256).toRadixString(16).padLeft(2, '0'))
-        .join();
+      8,
+      (_) => rnd.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   /// Saves a freshly confirmed PIN/pattern code.
@@ -204,7 +205,10 @@ class AppLock {
     await prefs.setString(_secretKey(method), hashSecret(code, randomSalt()));
     // Migrate legacy shared key so old installs still verify.
     if (method == LockMethod.pattern) {
-      await prefs.setString(_keySecret, prefs.getString(_secretKey(method)) ?? '');
+      await prefs.setString(
+        _keySecret,
+        prefs.getString(_secretKey(method)) ?? '',
+      );
     }
   }
 
@@ -257,7 +261,8 @@ class AppLock {
             stickyAuth: true,
             useErrorDialogs: true,
           ),
-        )) return true;
+        ))
+          return true;
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 120));
       // 2) Allow weak + device credential
@@ -269,7 +274,8 @@ class AppLock {
             stickyAuth: true,
             useErrorDialogs: true,
           ),
-        )) return true;
+        ))
+          return true;
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 120));
       // 3) Samsung weak fallback
@@ -282,7 +288,8 @@ class AppLock {
             useErrorDialogs: false,
             sensitiveTransaction: false,
           ),
-        )) return true;
+        ))
+          return true;
       } catch (_) {}
       return false;
     } catch (_) {
@@ -309,7 +316,8 @@ class AppLock {
           stickyAuth: true,
           useErrorDialogs: true,
         ),
-      )) return true;
+      ))
+        return true;
     } catch (_) {}
     await Future<void>.delayed(const Duration(milliseconds: 150));
 
@@ -323,7 +331,8 @@ class AppLock {
             stickyAuth: true,
             useErrorDialogs: true,
           ),
-        )) return true;
+        ))
+          return true;
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 150));
       // 3) Samsung weak biometric fallback — no error dialogs, not sensitive
@@ -336,7 +345,8 @@ class AppLock {
             useErrorDialogs: false,
             sensitiveTransaction: false,
           ),
-        )) return true;
+        ))
+          return true;
       } catch (_) {}
     }
     return false;
@@ -345,7 +355,9 @@ class AppLock {
   /// Cancels any in-progress biometric prompt (fixes Samsung where the
   /// sheet lingers after the widget is disposed).
   static void cancelAuth() {
-    try { _auth.stopAuthentication(); } catch (_) {}
+    try {
+      _auth.stopAuthentication();
+    } catch (_) {}
   }
 
   /// Whether any biometrics are actually enrolled — used to gray out the
@@ -451,6 +463,9 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_enabled == null) {
+      return const Scaffold(body: SizedBox.shrink());
+    }
     if (_enabled != true || _open) {
       if (!_notifiedFirstUnlock) {
         _notifiedFirstUnlock = true;
@@ -493,16 +508,19 @@ class _LockScreenState extends State<LockScreen> {
   final List<int> _pattern = <int>[];
 
   bool get _hasBiometric => _methods.contains(LockMethod.biometric);
-  bool get _hasCode => _methods.contains(LockMethod.pattern) ||
+  bool get _hasCode =>
+      _methods.contains(LockMethod.pattern) ||
       _methods.contains(LockMethod.pin);
 
   // Samsung users expect fingerprint as primary — prioritize biometric over code
   LockMethod get _currentMethod =>
       _activeMethod ??
-      (_hasBiometric ? LockMethod.biometric : _hasCode
+      (_hasBiometric
+          ? LockMethod.biometric
+          : _hasCode
           ? _methods.contains(LockMethod.pattern)
-              ? LockMethod.pattern
-              : LockMethod.pin
+                ? LockMethod.pattern
+                : LockMethod.pin
           : LockMethod.biometric);
 
   @override
@@ -588,12 +606,16 @@ class _LockScreenState extends State<LockScreen> {
     final tr = widget.tr;
     final method = _currentMethod;
     final multiCode =
-        _methods.contains(LockMethod.pattern) && _methods.contains(LockMethod.pin);
+        _methods.contains(LockMethod.pattern) &&
+        _methods.contains(LockMethod.pin);
 
     Widget input;
     switch (method) {
       case LockMethod.pattern:
-        input = PatternLockView(selectedColor: accent, onCompleted: _submitCode);
+        input = PatternLockView(
+          selectedColor: accent,
+          onCompleted: _submitCode,
+        );
         break;
       case LockMethod.pin:
         input = PinPadView(accent: accent, onSubmit: _submitCode);
@@ -611,15 +633,22 @@ class _LockScreenState extends State<LockScreen> {
                 child: SizedBox(
                   width: 84,
                   height: 84,
-                  child: Icon(Icons.fingerprint,
-                      size: 46, color: _busy ? Colors.white24 : accent),
+                  child: Icon(
+                    Icons.fingerprint,
+                    size: 46,
+                    color: _busy ? Colors.white24 : accent,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            Text(tr('lock_title'),
-                style:
-                    TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: .5))),
+            Text(
+              tr('lock_title'),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: .5),
+              ),
+            ),
           ],
         );
         break;
@@ -660,109 +689,123 @@ class _LockScreenState extends State<LockScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF141B23),
-              Color(0xFF1C232C),
-              Color(0xFF22303D)
-            ],
+            colors: [Color(0xFF141B23), Color(0xFF1C232C), Color(0xFF22303D)],
           ),
         ),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // App logo with an accent glow.
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // App logo with an accent glow.
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
                           color: accent.withValues(alpha: .35),
                           blurRadius: 34,
-                          offset: const Offset(0, 10)),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: Image.asset('assets/icon.png',
-                        width: 84, height: 84, fit: BoxFit.cover),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  method == LockMethod.pattern
-                      ? tr('lock_draw_unlock')
-                      : method == LockMethod.pin
-                          ? tr('lock_enter_pin')
-                          : tr('lock_menu'),
-                  style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: .9)),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF07575).withValues(alpha: .14),
-                        borderRadius: BorderRadius.circular(10),
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset(
+                        'assets/icon.png',
+                        width: 84,
+                        height: 84,
+                        fit: BoxFit.cover,
                       ),
-                      child: Text(_error!,
-                          style: const TextStyle(
-                              fontSize: 12.5, color: Color(0xFFF07575))),
                     ),
                   ),
-                const SizedBox(height: 18),
-                // Frosted input card.
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .05),
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: .08)),
+                  const SizedBox(height: 20),
+                  Text(
+                    method == LockMethod.pattern
+                        ? tr('lock_draw_unlock')
+                        : method == LockMethod.pin
+                        ? tr('lock_enter_pin')
+                        : tr('lock_menu'),
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: .9),
+                    ),
                   ),
-                  child: Center(child: input),
-                ),
-                // Biometric button when code is primary input.
-                if (_hasBiometric && _hasCode)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Material(
-                      color: Colors.white.withValues(alpha: .06),
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _busy ? null : () => _tryBiometrics(),
-                        child: SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: Icon(Icons.fingerprint,
-                              size: 32,
-                              color: _busy ? Colors.white24 : accent),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF07575).withValues(alpha: .14),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFFF07575),
+                          ),
                         ),
                       ),
                     ),
+                  const SizedBox(height: 18),
+                  // Frosted input card.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .05),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .08),
+                      ),
+                    ),
+                    child: Center(child: input),
                   ),
-                if (switcher != null) switcher,
-                const SizedBox(height: 28),
-                Text('TN',
+                  // Biometric button when code is primary input.
+                  if (_hasBiometric && _hasCode)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Material(
+                        color: Colors.white.withValues(alpha: .06),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _busy ? null : () => _tryBiometrics(),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: Icon(
+                              Icons.fingerprint,
+                              size: 32,
+                              color: _busy ? Colors.white24 : accent,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (switcher != null) switcher,
+                  const SizedBox(height: 28),
+                  Text(
+                    'TN',
                     style: TextStyle(
-                        fontSize: 12,
-                        letterSpacing: 4,
-                        color: Colors.white.withValues(alpha: .25))),
-              ],
+                      fontSize: 12,
+                      letterSpacing: 4,
+                      color: Colors.white.withValues(alpha: .25),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -774,18 +817,23 @@ class _LockScreenState extends State<LockScreen> {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: active ? accent.withValues(alpha: .16) : Colors.white.withValues(alpha: .06),
+      color: active
+          ? accent.withValues(alpha: .16)
+          : Colors.white.withValues(alpha: .06),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: active ? accent : Colors.white54)),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: active ? accent : Colors.white54,
+            ),
+          ),
         ),
       ),
     );
@@ -855,13 +903,14 @@ class _PatternLockViewState extends State<PatternLockView> {
       onPanUpdate: (d) => _onUpdate(d.localPosition),
       onPanEnd: (_) {
         final result = List<int>.of(_hits);
-        if (mounted) setState(() {
-          _hits.clear();
-          _pointer = null;
-        });
+        if (mounted)
+          setState(() {
+            _hits.clear();
+            _pointer = null;
+          });
         if (result.length >= 4) {
-        widget.onCompleted(result.join('-'));
-      }
+          widget.onCompleted(result.join('-'));
+        }
       },
       child: CustomPaint(
         size: const Size(_side, _side),
@@ -897,7 +946,9 @@ class _PatternPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dotPaint = Paint()..style = PaintingStyle.stroke..strokeWidth = 2;
+    final dotPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
     for (var i = 0; i < 9; i++) {
       final c = centerOf(i);
       final active = hits.contains(i);
@@ -960,30 +1011,30 @@ class _PinPadViewState extends State<PinPadView> {
     setState(() => _code = _code.substring(0, _code.length - 1));
   }
 
-  Widget _key(String label, {VoidCallback? onTap, IconData? icon}) =>
-      Expanded(
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Material(
-            color: Colors.white.withValues(alpha: .06),
-            borderRadius: BorderRadius.circular(14),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: onTap,
-              child: SizedBox(
-                height: 56,
-                child: Center(
-                  child: icon != null
-                      ? Icon(icon, color: Colors.white70, size: 22)
-                      : Text(label,
-                          style: const TextStyle(
-                              fontSize: 20, color: Colors.white)),
-                ),
-              ),
+  Widget _key(String label, {VoidCallback? onTap, IconData? icon}) => Expanded(
+    child: Padding(
+      padding: const EdgeInsets.all(5),
+      child: Material(
+        color: Colors.white.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: SizedBox(
+            height: 56,
+            child: Center(
+              child: icon != null
+                  ? Icon(icon, color: Colors.white70, size: 22)
+                  : Text(
+                      label,
+                      style: const TextStyle(fontSize: 20, color: Colors.white),
+                    ),
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -993,8 +1044,10 @@ class _PinPadViewState extends State<PinPadView> {
         if (widget.title != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(widget.title!,
-                style: const TextStyle(fontSize: 13, color: Colors.white70)),
+            child: Text(
+              widget.title!,
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
+            ),
           ),
         SizedBox(
           height: 28,
@@ -1007,7 +1060,9 @@ class _PinPadViewState extends State<PinPadView> {
                   height: 10,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   decoration: BoxDecoration(
-                      shape: BoxShape.circle, color: widget.accent),
+                    shape: BoxShape.circle,
+                    color: widget.accent,
+                  ),
                 ),
             ],
           ),
@@ -1017,27 +1072,39 @@ class _PinPadViewState extends State<PinPadView> {
           width: 264,
           child: Column(
             children: [
-              Row(children: [
-                _key('1', onTap: () => _tap('1')),
-                _key('2', onTap: () => _tap('2')),
-                _key('3', onTap: () => _tap('3')),
-              ]),
-              Row(children: [
-                _key('4', onTap: () => _tap('4')),
-                _key('5', onTap: () => _tap('5')),
-                _key('6', onTap: () => _tap('6')),
-              ]),
-              Row(children: [
-                _key('7', onTap: () => _tap('7')),
-                _key('8', onTap: () => _tap('8')),
-                _key('9', onTap: () => _tap('9')),
-              ]),
-              Row(children: [
-                _key('', onTap: _back, icon: Icons.backspace_outlined),
-                _key('0', onTap: () => _tap('0')),
-                _key('✓',
-                    onTap: _code.length >= 4 ? () => widget.onSubmit(_code) : null),
-              ]),
+              Row(
+                children: [
+                  _key('1', onTap: () => _tap('1')),
+                  _key('2', onTap: () => _tap('2')),
+                  _key('3', onTap: () => _tap('3')),
+                ],
+              ),
+              Row(
+                children: [
+                  _key('4', onTap: () => _tap('4')),
+                  _key('5', onTap: () => _tap('5')),
+                  _key('6', onTap: () => _tap('6')),
+                ],
+              ),
+              Row(
+                children: [
+                  _key('7', onTap: () => _tap('7')),
+                  _key('8', onTap: () => _tap('8')),
+                  _key('9', onTap: () => _tap('9')),
+                ],
+              ),
+              Row(
+                children: [
+                  _key('', onTap: _back, icon: Icons.backspace_outlined),
+                  _key('0', onTap: () => _tap('0')),
+                  _key(
+                    '✓',
+                    onTap: _code.length >= 4
+                        ? () => widget.onSubmit(_code)
+                        : null,
+                  ),
+                ],
+              ),
             ],
           ),
         ),

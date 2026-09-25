@@ -79,11 +79,25 @@ object Recurrence {
         val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return false
         return try {
             val data = JSONObject(raw)
+            val trashedChats = HashSet<String>()
+            data.optJSONArray("chats")?.let { chats ->
+                for (i in 0 until chats.length()) {
+                    val chat = chats.getJSONObject(i)
+                    if (chat.has("deletedAt") && !chat.isNull("deletedAt")) {
+                        trashedChats.add(chat.optString("id"))
+                    }
+                }
+            }
             val entries = data.optJSONArray("entries") ?: return false
             val now = System.currentTimeMillis()
             var changed = false
             for (i in 0 until entries.length()) {
                 val e = entries.optJSONObject(i) ?: continue
+                fun markChanged() {
+                    changed = true
+                    e.put("updatedAt", now)
+                }
+                if (trashedChats.contains(e.optString("chatId"))) continue
                 val rec = e.optString("recurrence", "")
                 if (rec.isEmpty() || !e.has("dueAt")) continue
                 val items = e.optJSONArray("items") ?: continue
@@ -132,7 +146,7 @@ object Recurrence {
                     if (dueDayStart >= todayStart) continue // still today's period
                     e.put("dueAt", resetToTodaySameTime())
                     uncheckAll()
-                    changed = true
+                    markChanged()
                     continue
                 }
                 if (rec == "weekly") {
@@ -147,7 +161,7 @@ object Recurrence {
                     if (set.contains(isoWeekday(Calendar.getInstance()))) {
                         e.put("dueAt", resetToTodaySameTime())
                         uncheckAll()
-                        changed = true
+                        markChanged()
                         continue
                     }
                     var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
@@ -157,7 +171,7 @@ object Recurrence {
                     }
                     e.put("dueAt", candidate)
                     uncheckAll()
-                    changed = true
+                    markChanged()
                     continue
                 }
                 // Monthly: calendar-day semantics — reset at 00:00 of the due
@@ -177,7 +191,7 @@ object Recurrence {
                 for (j in 0 until items.length()) {
                     items.getJSONObject(j).put("done", false)
                 }
-                changed = true
+                markChanged()
             }
             if (!changed) return false
             prefs.edit()

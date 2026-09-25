@@ -65,6 +65,17 @@ class ToggleReceiver : BroadcastReceiver() {
         const val ACTION_TOGGLE = "app.tn.tn.ACTION_TOGGLE_ENTRY"
         const val ACTION_OPEN_CHAT = "app.tn.tn.ACTION_OPEN_CHAT"
 
+        private fun isChatDeleted(data: JSONObject, chatId: String): Boolean {
+            val chats = data.optJSONArray("chats") ?: return true
+            for (i in 0 until chats.length()) {
+                val chat = chats.getJSONObject(i)
+                if (chat.optString("id") == chatId) {
+                    return chat.has("deletedAt") && !chat.isNull("deletedAt")
+                }
+            }
+            return true
+        }
+
         private fun toggleEntry(context: Context, entryId: String): Boolean {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return false
@@ -73,16 +84,51 @@ class ToggleReceiver : BroadcastReceiver() {
             for (i in 0 until entries.length()) {
                 val e = entries.getJSONObject(i)
                 if (e.optString("id") != entryId) continue
+                if (isChatDeleted(data, e.optString("chatId"))) return false
                 val items = e.optJSONArray("items") ?: return false
                 if (items.length() == 0) return false
-                var allDone = true
-                for (j in 0 until items.length()) {
-                    if (!items.getJSONObject(j).optBoolean("done")) { allDone = false; break }
+
+                fun parentIdOf(value: JSONObject): String =
+                    value.optString("pid", value.optString("parentId", ""))
+
+                fun hasUnfinishedDescendant(id: String, seen: MutableSet<String>): Boolean {
+                    if (!seen.add(id)) return false
+                    for (k in 0 until items.length()) {
+                        val child = items.getJSONObject(k)
+                        if (parentIdOf(child) != id) continue
+                        if (!child.optBoolean("done") ||
+                            hasUnfinishedDescendant(child.optString("id"), seen)) return true
+                    }
+                    return false
                 }
-                for (j in 0 until items.length()) {
-                    items.getJSONObject(j).put("done", !allDone)
+
+                fun setSubtree(target: JSONObject, value: Boolean, seen: MutableSet<String>) {
+                    if (!seen.add(target.optString("id"))) return
+                    target.put("done", value)
+                    for (k in 0 until items.length()) {
+                        val child = items.getJSONObject(k)
+                        if (parentIdOf(child) == target.optString("id")) {
+                            setSubtree(child, value, seen)
+                        }
+                    }
                 }
-                if (!allDone) snapCompletedRecurring(e)
+
+                val allDone = (0 until items.length()).all { items.getJSONObject(it).optBoolean("done") }
+                val nextValue = !allDone
+                val roots = (0 until items.length()).filter {
+                    parentIdOf(items.getJSONObject(it)).isEmpty()
+                }
+                val targets = if (roots.isEmpty()) listOf(0) else roots
+                var changed = false
+                for (index in targets) {
+                    val root = items.getJSONObject(index)
+                    if (nextValue && hasUnfinishedDescendant(root.optString("id"), mutableSetOf())) continue
+                    setSubtree(root, nextValue, mutableSetOf())
+                    changed = true
+                }
+                if (!changed) return false
+                if (nextValue) snapCompletedRecurring(e)
+                e.put("updatedAt", System.currentTimeMillis())
                 prefs.edit()
                     .putString("flutter.tn-notes-data-v1", data.toString())
                     .putLong("flutter.tn-state-stamp", System.currentTimeMillis())
@@ -92,7 +138,6 @@ class ToggleReceiver : BroadcastReceiver() {
             return false
         }
 
-        /** Toggles a single checklist item; returns true when it became done. */
         private fun toggleItem(context: Context, entryId: String, itemId: String): Boolean {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return false
@@ -101,23 +146,45 @@ class ToggleReceiver : BroadcastReceiver() {
             for (i in 0 until entries.length()) {
                 val e = entries.getJSONObject(i)
                 if (e.optString("id") != entryId) continue
+                if (isChatDeleted(data, e.optString("chatId"))) return false
                 val items = e.optJSONArray("items") ?: return false
                 for (j in 0 until items.length()) {
                     val item = items.getJSONObject(j)
                     if (item.optString("id") != itemId) continue
                     val currentlyDone = item.optBoolean("done")
-                    // Блок: нельзя завершить родителя пока есть незавершённые подзадачи
-                    if (!currentlyDone) {
+
+                    fun parentIdOf(value: JSONObject): String =
+                        value.optString("pid", value.optString("parentId", ""))
+
+                    fun hasUnfinishedDescendant(id: String, seen: MutableSet<String>): Boolean {
+                        if (!seen.add(id)) return false
                         for (k in 0 until items.length()) {
                             val child = items.getJSONObject(k)
-                            if (child.optString("parentId", "") == itemId && !child.optBoolean("done")) {
-                                return false
+                            if (parentIdOf(child) != id) continue
+                            if (!child.optBoolean("done") ||
+                                hasUnfinishedDescendant(child.optString("id"), seen)) {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+
+                    fun setSubtree(target: JSONObject, value: Boolean, seen: MutableSet<String>) {
+                        if (!seen.add(target.optString("id"))) return
+                        target.put("done", value)
+                        for (k in 0 until items.length()) {
+                            val child = items.getJSONObject(k)
+                            if (parentIdOf(child) == target.optString("id")) {
+                                setSubtree(child, value, seen)
                             }
                         }
                     }
+
                     val nowDone = !currentlyDone
-                    item.put("done", nowDone)
+                    if (nowDone && hasUnfinishedDescendant(itemId, mutableSetOf())) return false
+                    setSubtree(item, nowDone, mutableSetOf())
                     if (nowDone) snapCompletedRecurring(e)
+                    e.put("updatedAt", System.currentTimeMillis())
                     prefs.edit()
                         .putString("flutter.tn-notes-data-v1", data.toString())
                         .putLong("flutter.tn-state-stamp", System.currentTimeMillis())

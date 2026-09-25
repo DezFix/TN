@@ -14,7 +14,13 @@ import 'win_toast.dart';
 /// One reminder that is due right now, already formatted for delivery.
 @visibleForTesting
 class DueItem {
-  DueItem({required this.key, required this.chatId, required this.when, required this.title, required this.body});
+  DueItem({
+    required this.key,
+    required this.chatId,
+    required this.when,
+    required this.title,
+    required this.body,
+  });
 
   /// Unique per (reminder id, target time) so a rescheduled reminder fires
   /// again but the same deadline never fires twice.
@@ -39,6 +45,7 @@ List<DueItem> collectDue({
   required List<Reminder> reminders,
   required List<Entry> entries,
   required bool Function(String chatId) chatTrashed,
+  bool Function(String chatId)? chatNotificationsEnabled,
   required String Function(String chatId) chatNameOf,
   required String Function(String, [List<String>?]) tr,
   required int now,
@@ -56,13 +63,19 @@ List<DueItem> collectDue({
   for (final r in reminders) {
     if (r.when > now || r.when < floor) continue;
     if (chatTrashed(r.chatId)) continue;
-    add(DueItem(
-      key: '${r.id}|${r.when}',
-      chatId: r.chatId,
-      when: r.when,
-      title: tr('remind_title', [chatNameOf(r.chatId)]),
-      body: tr('remind_body'),
-    ));
+    if (chatNotificationsEnabled != null &&
+        !chatNotificationsEnabled(r.chatId)) {
+      continue;
+    }
+    add(
+      DueItem(
+        key: '${r.id}|${r.when}',
+        chatId: r.chatId,
+        when: r.when,
+        title: tr('remind_title', [chatNameOf(r.chatId)]),
+        body: tr('remind_body'),
+      ),
+    );
   }
   for (final e in entries) {
     if (e.dueAt == null) continue;
@@ -70,13 +83,19 @@ List<DueItem> collectDue({
     // Done tasks never fire (Windows engine mirrors rescheduleAlarms).
     if (e.isDone) continue;
     if (chatTrashed(e.chatId)) continue;
-    add(DueItem(
-      key: '${e.id}|${e.dueAt}',
-      chatId: e.chatId,
-      when: e.dueAt!,
-      title: tr('remind_title', [chatNameOf(e.chatId)]),
-      body: entryNotifBody(e, tr),
-    ));
+    if (chatNotificationsEnabled != null &&
+        !chatNotificationsEnabled(e.chatId)) {
+      continue;
+    }
+    add(
+      DueItem(
+        key: '${e.id}|${e.dueAt}',
+        chatId: e.chatId,
+        when: e.dueAt!,
+        title: tr('remind_title', [chatNameOf(e.chatId)]),
+        body: entryNotifBody(e, tr),
+      ),
+    );
   }
   return out;
 }
@@ -124,6 +143,8 @@ class ReminderEngine {
       reminders: model.state.reminders,
       entries: model.state.entries,
       chatTrashed: (id) => model.state.chatById(id)?.isTrashed ?? true,
+      chatNotificationsEnabled: (id) =>
+          model.state.chatById(id)?.notificationsEnabled ?? false,
       chatNameOf: (id) => model.state.chatById(id)?.name ?? 'TN',
       tr: model.tr,
       now: now,
@@ -159,8 +180,7 @@ class ReminderEngine {
         onAction: (actionKey) {
           final parts = actionKey.split('|');
           // key format here is `<dueKey>|<minutes|done>`; rebuild the due key.
-          final dueKey =
-              parts.sublist(0, parts.length - 1).join('|');
+          final dueKey = parts.sublist(0, parts.length - 1).join('|');
           if (parts.last == 'done') {
             _completeDueItem(dueKey);
             return;
@@ -181,9 +201,13 @@ class ReminderEngine {
     // In-app banner for other desktop platforms.
     final ctx = _navKey?.currentContext;
     if (ctx == null || !ctx.mounted) return;
-    showInAppBanner(ctx, model.p,
-        title: d.title, body: d.body,
-        onTap: () => _openChat(d.chatId));
+    showInAppBanner(
+      ctx,
+      model.p,
+      title: d.title,
+      body: d.body,
+      onTap: () => _openChat(d.chatId),
+    );
   }
 
   /// "Выполнено" straight from the toast: checks the whole entry (or drops
@@ -222,7 +246,10 @@ class ReminderEngine {
     if (model == null) return;
     final ctx = _navKey?.currentContext;
     if (ctx == null || !ctx.mounted) return;
-    Navigator.of(ctx).push(MaterialPageRoute(
-        builder: (_) => ChatScreen(model: model, chatId: chatId)));
+    Navigator.of(ctx).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(model: model, chatId: chatId),
+      ),
+    );
   }
 }

@@ -16,6 +16,7 @@ const backupPrefKeys = [
   'tn-widget-alpha',
   'tn-widget-font',
   'tn-daywidget-period',
+  'tn-widget-lang',
 ];
 
 /// Raised when a backup is [BackupCrypto]-encrypted and no password was
@@ -139,9 +140,13 @@ class BackupService {
         if (p.endsWith('.zip') && p.contains('tn-backup')) files.add(e);
       }
       if (files.length <= max) return;
-      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      files.sort(
+        (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
+      );
       for (var i = max; i < files.length; i++) {
-        try { await files[i].delete(); } catch (_) {}
+        try {
+          await files[i].delete();
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -168,7 +173,11 @@ class BackupService {
 
   /// Build the zip and write it silently to [dir] (or Downloads). No share
   /// sheet — "back up now" should just save the file.
-  static Future<String> export(AppState state, {String? dir, String? password}) async {
+  static Future<String> export(
+    AppState state, {
+    String? dir,
+    String? password,
+  }) async {
     final name = _fileName();
     var zip = await _buildZip(state);
     // E2E: with a password set, the archive never leaves the device in
@@ -217,7 +226,9 @@ class BackupService {
         if (v != null) snap[k] = v;
       }
       if (snap.isNotEmpty) {
-        archive.add(ArchiveFile.bytes('prefs.json', utf8.encode(jsonEncode(snap))));
+        archive.add(
+          ArchiveFile.bytes('prefs.json', utf8.encode(jsonEncode(snap))),
+        );
       }
     } catch (_) {}
     try {
@@ -257,16 +268,31 @@ class BackupService {
     return files;
   }
 
-  static Future<void> importFrom(File file, AppState state, {String? password}) async {
+  static Future<void> importFrom(
+    File file,
+    AppState state, {
+    String? password,
+    bool merge = false,
+  }) async {
     final bytes = await file.readAsBytes();
-    await importFromBytes(bytes, file.path, state, password: password);
+    await importFromBytes(
+      bytes,
+      file.path,
+      state,
+      password: password,
+      merge: merge,
+    );
   }
 
   /// Accepts raw bytes of a .zip (or legacy .json) backup — used by cloud
   /// restore where there is no local file yet.
   static Future<void> importFromBytes(
-      List<int> bytes, String sourceName, AppState state,
-      {String? password}) async {
+    List<int> bytes,
+    String sourceName,
+    AppState state, {
+    String? password,
+    bool merge = false,
+  }) async {
     if (BackupCrypto.isEncrypted(bytes)) {
       if (password == null || password.isEmpty) {
         throw const BackupEncryptedException();
@@ -280,14 +306,22 @@ class BackupService {
       bytes = plain;
     }
     if (sourceName.toLowerCase().endsWith('.zip')) {
-      await _importZipBytes(bytes, state);
+      await _importZipBytes(bytes, state, merge: merge);
     } else {
-      state.loadFromJson(utf8.decode(bytes));
+      if (merge) {
+        state.mergeFromJson(utf8.decode(bytes));
+      } else {
+        state.loadFromJson(utf8.decode(bytes));
+      }
       await state.save();
     }
   }
 
-  static Future<void> _importZipBytes(List<int> bytes, AppState state) async {
+  static Future<void> _importZipBytes(
+    List<int> bytes,
+    AppState state, {
+    bool merge = false,
+  }) async {
     final archive = ZipDecoder().decodeBytes(bytes);
     ArchiveFile? data;
     ArchiveFile? prefsFile;
@@ -298,13 +332,18 @@ class BackupService {
       }
     }
     if (data == null) throw const FormatException('no data.json in backup');
-    state.loadFromJson(utf8.decode(data.content));
+    if (merge) {
+      state.mergeFromJson(utf8.decode(data.content));
+    } else {
+      state.loadFromJson(utf8.decode(data.content));
+    }
 
     // apply saved app settings
     if (prefsFile != null) {
       try {
         final prefs = await SharedPreferences.getInstance();
-        final snap = jsonDecode(utf8.decode(prefsFile.content)) as Map<String, dynamic>;
+        final snap =
+            jsonDecode(utf8.decode(prefsFile.content)) as Map<String, dynamic>;
         for (final e in snap.entries) {
           if (!backupPrefKeys.contains(e.key)) continue;
           final v = e.value;
@@ -328,8 +367,9 @@ class BackupService {
         if (!f.isFile) continue;
         final parts = f.name.split('/');
         if (parts.length != 2 || parts.first != 'media') continue;
-        final dest =
-            File('${mediaDir.path}${Platform.pathSeparator}${parts.last}');
+        final dest = File(
+          '${mediaDir.path}${Platform.pathSeparator}${parts.last}',
+        );
         if (await dest.exists()) continue;
         await dest.writeAsBytes(f.content, flush: true);
       }

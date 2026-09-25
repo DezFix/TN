@@ -1,4 +1,4 @@
-﻿// ignore_for_file: unnecessary_non_null_assertion
+// ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
 import 'dart:io';
 
@@ -92,7 +92,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Palette get p => widget.model.p;
 
   bool get _isKanban => _chatOrNull?.isKanban ?? false;
-  bool get _isTaskLike => _chatOrNull?.kind == 'tasks' || _chatOrNull?.kind == 'kanban';
+  bool get _isTaskLike =>
+      _chatOrNull?.kind == 'tasks' || _chatOrNull?.kind == 'kanban';
 
   List<BoardColumn> _boards() {
     final c = _chatOrNull;
@@ -103,7 +104,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentBoardId() {
     final boards = _boards();
     if (boards.isEmpty) return null;
-    if (_boardTab != null && boards.any((b) => b.id == _boardTab)) return _boardTab;
+    if (_boardTab != null && boards.any((b) => b.id == _boardTab))
+      return _boardTab;
     return boards.first.id;
   }
 
@@ -135,15 +137,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<String> _pathOf(String media) =>
       _pathFutures.putIfAbsent(media, () => MediaStore().pathOf(media));
 
-  Future<LinkPreviewData?> _previewFor(String url) => _previewFutures
-      .putIfAbsent(url, () => LinkPreview.fetch(url));
+  Future<LinkPreviewData?> _previewFor(String url) =>
+      _previewFutures.putIfAbsent(url, () => LinkPreview.fetch(url));
 
   String? _tagQuery;
 
   void _updateTagQuery() {
     final txt = _text.text;
     final sel = _text.selection.baseOffset;
-    if (sel < 0 || txt.isEmpty) { _tagQuery = null; return; }
+    if (sel < 0 || txt.isEmpty) {
+      _tagQuery = null;
+      return;
+    }
     final before = txt.substring(0, sel);
     final m = RegExp(r'#([\wа-яёіїєґА-ЯЁІЇЄҐ]*)$').firstMatch(before);
     if (m != null) {
@@ -212,13 +217,16 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToBottom({bool animate = true}) {
     if (!_listCtrl.hasClients) return;
     if (animate) {
-      _listCtrl.animateTo(0,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic);
+      _listCtrl.animateTo(
+        0,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
     } else {
       _listCtrl.jumpTo(0);
     }
   }
+
   void _onModel() {
     if (mounted) setState(() {});
   }
@@ -269,7 +277,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String _fmtDue(int ms, String Function(String, [List<String>?]) tr) {
     final d = DateTime.fromMillisecondsSinceEpoch(ms);
     final now = DateTime.now();
-    final today = d.year == now.year && d.month == now.month && d.day == now.day;
+    final today =
+        d.year == now.year && d.month == now.month && d.day == now.day;
     String two(int v) => v.toString().padLeft(2, '0');
     final date = d.year == now.year
         ? '${d.day}.${two(d.month)}'
@@ -285,28 +294,48 @@ class _ChatScreenState extends State<ChatScreen> {
     _text.clear();
     _clearDraft();
     final isTasksChat = _chat.kind == 'tasks';
-    widget.model.state.entries.add(Entry(
-      id: uid('e'),
-      chatId: widget.chatId,
-      type: isTasksChat ? 'todo' : 'text',
-      ts: DateTime.now().millisecondsSinceEpoch,
-      text: isTasksChat ? '' : text,
-      items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
-      tags: extractTags(text),
-      boardId: _newBoardId(),
-    ));
+    widget.model.state.entries.add(
+      Entry(
+        id: uid('e'),
+        chatId: widget.chatId,
+        type: isTasksChat ? 'todo' : 'text',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        text: isTasksChat ? '' : text,
+        items: isTasksChat ? [TodoItem(id: uid('t'), text: text)] : null,
+        tags: extractTags(text),
+        boardId: _newBoardId(),
+      ),
+    );
     HapticFeedback.lightImpact();
     if (mounted) setState(() {});
     widget.model.save();
   }
 
   /// Date/time/recurrence pipeline shared by attach-todo and long-press send.
-  Future<({int? dueAt, String? recurrence, List<int>? recurrenceDays, int? monthDay, int priority})>
-      _pickTaskSchedule() async {
+  Future<
+    ({
+      int? dueAt,
+      String? recurrence,
+      List<int>? recurrenceDays,
+      int? monthDay,
+      int priority,
+    })
+  >
+  _pickTaskSchedule() async {
     if (!mounted) {
-      return (dueAt: null, recurrence: null, recurrenceDays: null, monthDay: null, priority: 0);
+      return (
+        dueAt: null,
+        recurrence: null,
+        recurrenceDays: null,
+        monthDay: null,
+        priority: 0,
+      );
     }
-    final res = await showScheduleSheet(context, widget.model, showPriority: true);
+    final res = await showScheduleSheet(
+      context,
+      widget.model,
+      showPriority: true,
+    );
     return (
       dueAt: res?.dueAt,
       recurrence: res?.recurrence,
@@ -325,6 +354,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _scheduleEntryReminder(Entry entry) async {
+    final chat = _chatOrNull;
+    if (chat == null || chat.isTrashed || !chat.notificationsEnabled) return;
     // Never arm the past (fires instantly) or a completed task.
     if (entry.dueAt == null) return;
     if (entry.dueAt! <= DateTime.now().millisecondsSinceEpoch) return;
@@ -336,7 +367,7 @@ class _ChatScreenState extends State<ChatScreen> {
       widget.model.tr('remind_body'),
       actionLabels: [
         widget.model.tr('notif_postpone'),
-        widget.model.tr('notif_done')
+        widget.model.tr('notif_done'),
       ],
     );
   }
@@ -357,12 +388,16 @@ class _ChatScreenState extends State<ChatScreen> {
       chatId: widget.chatId,
       type: isTaskLike ? 'todo' : 'text',
       ts: DateTime.now().millisecondsSinceEpoch,
-      items: isTaskLike ? [TodoItem(id: uid('t'), text: text, priority: sched.priority)] : null,
+      items: isTaskLike
+          ? [TodoItem(id: uid('t'), text: text, priority: sched.priority)]
+          : null,
       text: isTaskLike ? '' : text,
       tags: extractTags(text),
       dueAt: sched.dueAt,
       recurrence: sched.recurrence,
-      recurrenceDays: sched.recurrenceDays == null ? null : List.of(sched.recurrenceDays!),
+      recurrenceDays: sched.recurrenceDays == null
+          ? null
+          : List.of(sched.recurrenceDays!),
       monthDay: sched.monthDay,
       boardId: _newBoardId(),
     );
@@ -407,7 +442,10 @@ class _ChatScreenState extends State<ChatScreen> {
       monthDay: res.schedule?.monthDay,
       boardId: _newBoardId(),
     );
-    if (res.schedule != null && res.schedule!.priority != 0 && entry.items!.isNotEmpty && entry.items!.first.priority == 0) {
+    if (res.schedule != null &&
+        res.schedule!.priority != 0 &&
+        entry.items!.isNotEmpty &&
+        entry.items!.first.priority == 0) {
       entry.items!.first.priority = res.schedule!.priority;
     }
     widget.model.state.entries.add(entry);
@@ -433,23 +471,36 @@ class _ChatScreenState extends State<ChatScreen> {
     final result = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: p.modalBg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36, height: 4, margin: const EdgeInsets.only(top: 10, bottom: 16),
-              decoration: BoxDecoration(color: p.textFaint.withValues(alpha: .3), borderRadius: BorderRadius.circular(2)),
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 16),
+              decoration: BoxDecoration(
+                color: p.textFaint.withValues(alpha: .3),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             ListTile(
               leading: Icon(Icons.photo_outlined, color: p.accent),
-              title: Text(model.tr('attach_photo'), style: TextStyle(color: p.text)),
+              title: Text(
+                model.tr('attach_photo'),
+                style: TextStyle(color: p.text),
+              ),
               onTap: () => Navigator.pop(ctx, 'photo'),
             ),
             ListTile(
               leading: Icon(Icons.insert_drive_file_outlined, color: p.accent),
-              title: Text(model.tr('attach_doc'), style: TextStyle(color: p.text)),
+              title: Text(
+                model.tr('attach_doc'),
+                style: TextStyle(color: p.text),
+              ),
               onTap: () => Navigator.pop(ctx, 'doc'),
             ),
             const SizedBox(height: 8),
@@ -466,9 +517,28 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickDocument() async {
     try {
-      final file = await openFile(acceptedTypeGroups: [
-        XTypeGroup(label: 'documents', extensions: ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'json', 'xml', 'html', 'md', 'zip', 'rar']),
-      ]);
+      final file = await openFile(
+        acceptedTypeGroups: [
+          XTypeGroup(
+            label: 'documents',
+            extensions: [
+              'pdf',
+              'txt',
+              'doc',
+              'docx',
+              'xls',
+              'xlsx',
+              'csv',
+              'json',
+              'xml',
+              'html',
+              'md',
+              'zip',
+              'rar',
+            ],
+          ),
+        ],
+      );
       if (file == null) return;
       HapticFeedback.lightImpact();
       // Save to media store and create doc entry directly.
@@ -509,17 +579,19 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final store = MediaStore();
       final name = await store.quickCopy(tmp);
-      widget.model.state.entries.add(Entry(
-        id: uid('e'),
-        chatId: widget.chatId,
-        type: 'image',
-        ts: DateTime.now().millisecondsSinceEpoch,
-        text: caption,
-        tags: extractTags(caption),
-        media: name,
-        mediaName: name,
-        boardId: _newBoardId(),
-      ));
+      widget.model.state.entries.add(
+        Entry(
+          id: uid('e'),
+          chatId: widget.chatId,
+          type: 'image',
+          ts: DateTime.now().millisecondsSinceEpoch,
+          text: caption,
+          tags: extractTags(caption),
+          media: name,
+          mediaName: name,
+          boardId: _newBoardId(),
+        ),
+      );
       HapticFeedback.lightImpact();
       if (mounted) setState(() {});
       widget.model.save();
@@ -541,8 +613,6 @@ class _ChatScreenState extends State<ChatScreen> {
     await _sendText();
   }
 
-
-
   Future<void> _beginRecord() async {
     if (_recording || _finishing) return;
     try {
@@ -551,8 +621,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _toast(widget.model.tr('record_error'), error: true);
         return;
       }
-      final tmp = '${Directory.systemTemp.path}${Platform.pathSeparator}${uid('rec')}.m4a';
-      await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: tmp);
+      final tmp =
+          '${Directory.systemTemp.path}${Platform.pathSeparator}${uid('rec')}.m4a';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: tmp,
+      );
       _recordSec = 0;
       _recLevels.clear();
       _dragDx = 0;
@@ -564,15 +638,17 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) setState(() => _recordSec++);
       });
       _ampSub?.cancel();
-      _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((a) {
-        // dBFS: silence ≈ -60, loud ≈ 0
-        final level = ((a.max + 60) / 60).clamp(0.05, 1.0);
-        if (!mounted) return;
-        setState(() {
-          _recLevels.add(level);
-          if (_recLevels.length > 60) _recLevels.removeAt(0);
-        });
-      });
+      _ampSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 100))
+          .listen((a) {
+            // dBFS: silence ≈ -60, loud ≈ 0
+            final level = ((a.max + 60) / 60).clamp(0.05, 1.0);
+            if (!mounted) return;
+            setState(() {
+              _recLevels.add(level);
+              if (_recLevels.length > 60) _recLevels.removeAt(0);
+            });
+          });
       setState(() {});
     } catch (_) {
       _toast(widget.model.tr('record_error'), error: true);
@@ -651,7 +727,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path == null || path.isEmpty || secs < 1) {
       await _deleteTemp(path);
       _finishing = false;
-      if (secs < 1 && wasLocked == false) _toast(widget.model.tr('rec_too_short'));
+      if (secs < 1 && wasLocked == false)
+        _toast(widget.model.tr('rec_too_short'));
       return;
     }
     try {
@@ -660,17 +737,19 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         sizeLabel = _fmtDocSize(await File(path!).length());
       } catch (_) {}
-      widget.model.state.entries.add(Entry(
-        id: uid('e'),
-        chatId: widget.chatId,
-        type: 'audio',
-        ts: DateTime.now().millisecondsSinceEpoch,
-        media: name,
-        duration: secs,
-        mediaSize: sizeLabel,
-        waveform: _downsampleWaveform(levels, 40),
-        boardId: _newBoardId(),
-      ));
+      widget.model.state.entries.add(
+        Entry(
+          id: uid('e'),
+          chatId: widget.chatId,
+          type: 'audio',
+          ts: DateTime.now().millisecondsSinceEpoch,
+          media: name,
+          duration: secs,
+          mediaSize: sizeLabel,
+          waveform: _downsampleWaveform(levels, 40),
+          boardId: _newBoardId(),
+        ),
+      );
       await widget.model.save();
       if (mounted) setState(() {});
     } catch (_) {}
@@ -739,7 +818,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) {
       setState(() => _dictationText = '');
       _scrollToBottom();
-      _toast(isTasks ? widget.model.tr('todo_added', [_chat.name]) : widget.model.tr('copied'));
+      _toast(
+        isTasks
+            ? widget.model.tr('todo_added', [_chat.name])
+            : widget.model.tr('copied'),
+      );
     }
     HapticFeedback.lightImpact();
   }
@@ -765,7 +848,8 @@ class _ChatScreenState extends State<ChatScreen> {
       // Первый раз модель base ~150MB качается — показываем что это локальный ИИ, телефоном обрабатывается
       final ready = await VoiceAi.isModelReady();
       if (!ready) {
-        if (mounted) _toast('Загрузка AI модели ~150MB base — нужен интернет один раз');
+        if (mounted)
+          _toast('Загрузка AI модели ~150MB base — нужен интернет один раз');
         final ok = await VoiceAi.ensureModelDownloaded();
         if (!ok) {
           if (!mounted) return;
@@ -773,7 +857,9 @@ class _ChatScreenState extends State<ChatScreen> {
             _transcribing[entry.id] = false;
             _transcribeProgress.remove(entry.id);
           });
-          _toast('Модель не загружена — подключите интернет и попробуйте снова');
+          _toast(
+            'Модель не загружена — подключите интернет и попробуйте снова',
+          );
           return;
         }
         if (mounted) _toast('Модель загружена — расшифровываю локально');
@@ -798,14 +884,17 @@ class _ChatScreenState extends State<ChatScreen> {
         entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
         await widget.model.save();
         if (mounted) setState(() {});
-        final preview = text.trim().length > 30 ? '${text.trim().substring(0, 30)}…' : text.trim();
+        final preview = text.trim().length > 30
+            ? '${text.trim().substring(0, 30)}…'
+            : text.trim();
         _toast('✓ $preview');
       } else {
         setState(() {
           _transcribing[entry.id] = false;
           _transcribeProgress.remove(entry.id);
         });
-        if (mounted) _toast('Не удалось распознать — попробуйте громче и чётче');
+        if (mounted)
+          _toast('Не удалось распознать — попробуйте громче и чётче');
       }
     } catch (e) {
       if (!mounted) return;
@@ -823,7 +912,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final isTasks = _isTaskLike;
     if (isTasks) {
       // Показать меню времени/важности как перед отправкой задачи (последний фикс сегодня)
-      final sched = await showScheduleSheet(context, widget.model, showPriority: true);
+      final sched = await showScheduleSheet(
+        context,
+        widget.model,
+        showPriority: true,
+      );
       if (sched == null || sched.dueAt == null) {
         // Пользователь отменил — не создаём задачу, или создаём без времени? Пока не создаём
         if (sched == null) return;
@@ -894,47 +987,55 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _showImage(Entry entry) {
     if (entry.media == null) return;
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FutureBuilder<String>(
-        future: MediaStore().pathOf(entry.media!),
-        builder: (ctx, snap) {
-          if (!snap.hasData) return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
-          return Scaffold(
-            backgroundColor: Colors.black,
-            appBar: AppBar(
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FutureBuilder<String>(
+          future: MediaStore().pathOf(entry.media!),
+          builder: (ctx, snap) {
+            if (!snap.hasData)
+              return const Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(child: CircularProgressIndicator()),
+              );
+            return Scaffold(
               backgroundColor: Colors.black,
-              iconTheme: const IconThemeData(color: Colors.white),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.share, color: Colors.white),
-                  tooltip: widget.model.tr('share'),
-                  onPressed: () => _shareEntry(entry),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download, color: Colors.white),
-                  tooltip: widget.model.tr('download'),
-                  onPressed: () async {
-                    await _downloadEntry(entry);
-                  },
-                ),
-              ],
-            ),
-            body: GestureDetector(
-              onTap: () => Navigator.pop(ctx),
-              child: Center(
-                child: InteractiveViewer(child: Image.file(File(snap.data!))),
+              appBar: AppBar(
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.share, color: Colors.white),
+                    tooltip: widget.model.tr('share'),
+                    onPressed: () => _shareEntry(entry),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.download, color: Colors.white),
+                    tooltip: widget.model.tr('download'),
+                    onPressed: () async {
+                      await _downloadEntry(entry);
+                    },
+                  ),
+                ],
               ),
-            ),
-          );
-        },
+              body: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Center(
+                  child: InteractiveViewer(child: Image.file(File(snap.data!))),
+                ),
+              ),
+            );
+          },
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _editChat() async {
     final result = await Navigator.push<Chat>(
       context,
-      MaterialPageRoute(builder: (_) => ChatEditScreen(model: widget.model, chat: _chat)),
+      MaterialPageRoute(
+        builder: (_) => ChatEditScreen(model: widget.model, chat: _chat),
+      ),
     );
     if (result == null) return;
     await widget.model.save();
@@ -946,10 +1047,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final when = await showReminderPicker(context, widget.model);
     if (when == null) return;
     final r = Reminder(
-        id: uid('rm'), chatId: widget.chatId, when: when.millisecondsSinceEpoch);
-    widget.model.state.reminders.add(r);
-    await widget.model.save();
-    await RemindersService.instance.requestPermissions();
+      id: uid('rm'),
+      chatId: widget.chatId,
+      when: when.millisecondsSinceEpoch,
+    );
+     widget.model.state.reminders.add(r);
+     await widget.model.save();
+     if (!_chat.notificationsEnabled) return;
+     await RemindersService.instance.requestPermissions();
     await RemindersService.instance.schedule(
       r,
       widget.model.tr('remind_title', [_chat.name]),
@@ -962,7 +1067,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final ok = await showDeleteChatDialog(context, widget.model);
     if (ok != true) return;
     final now = DateTime.now().millisecondsSinceEpoch;
-    for (final c in widget.model.state.chats.where((c) => c.id == widget.chatId)) {
+    for (final c in widget.model.state.chats.where(
+      (c) => c.id == widget.chatId,
+    )) {
       c.deletedAt = now;
     }
     for (final r in widget.model.state.reminders.toList()) {
@@ -971,9 +1078,20 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.model.state.reminders.remove(r);
       }
     }
+    for (final e in widget.model.state.ownEntriesFor(widget.chatId)) {
+      await RemindersService.instance.cancelById(stableHash(e.id));
+    }
     await widget.model.save();
+    await widget.model.rescheduleAlarms();
     if (mounted) Navigator.of(context).pop();
   }
+
+  List<Entry> get _selectedEntries => widget.model.state.entries
+      .where((e) => _selectedIds.contains(e.id))
+      .toList();
+
+  List<Entry> get _ownedSelectedEntries =>
+      _selectedEntries.where((e) => e.chatId == widget.chatId).toList();
 
   void _toggleSelect(String id) {
     HapticFeedback.selectionClick();
@@ -1005,7 +1123,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _shareSelected() async {
-    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    final entries = _selectedEntries;
     if (entries.isEmpty) return;
     try {
       await ShareService.shareEntries(entries);
@@ -1015,14 +1133,19 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _copySelected() async {
-    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    final entries = _selectedEntries;
     if (entries.isEmpty) return;
-    final texts = entries.map((e) {
-      if (e.type == 'todo') {
-        return (e.items ?? const <TodoItem>[]).map((i) => '${i.done ? '☑' : '☐'} ${i.text}').join('\n');
-      }
-      return e.text;
-    }).where((t) => t.isNotEmpty).join('\n\n');
+    final texts = entries
+        .map((e) {
+          if (e.type == 'todo') {
+            return (e.items ?? const <TodoItem>[])
+                .map((i) => '${i.done ? '☑' : '☐'} ${i.text}')
+                .join('\n');
+          }
+          return e.text;
+        })
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
     if (texts.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: texts));
     _toast(widget.model.tr('copied'));
@@ -1030,7 +1153,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _forwardSelected() async {
-    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    final entries = _selectedEntries;
     if (entries.isEmpty) return;
     final target = await showForwardDialog(context, widget.model);
     if (target == null) return;
@@ -1038,10 +1161,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _deleteSelected() async {
-    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    final entries = widget.model.state.entries
+        .where((e) => _selectedIds.contains(e.id) && e.chatId == widget.chatId)
+        .toList();
     if (entries.isEmpty) return;
     final ids = entries.map((e) => e.id).toSet();
-    await UndoService.deleteEntries(widget.model, entries);
+    await UndoService.deleteEntries(
+      widget.model,
+      entries,
+      ownerChatId: widget.chatId,
+    );
     _selectedIds.removeAll(ids);
     if (mounted) {
       setState(() {});
@@ -1061,6 +1190,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _onCtxAction(Entry entry, EntryAction action) async {
+    if (entry.chatId != widget.chatId &&
+        (action == EntryAction.schedTime ||
+            action == EntryAction.edit ||
+            action == EntryAction.pin ||
+            action == EntryAction.boardMove ||
+            action == EntryAction.delete)) {
+      return;
+    }
     switch (action) {
       case EntryAction.schedTime:
         if (!mounted) return;
@@ -1075,8 +1212,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (res == null || res.dueAt == null) return;
         entry.dueAt = res.dueAt;
         entry.recurrence = res.recurrence;
-        entry.recurrenceDays =
-            res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
+        entry.recurrenceDays = res.recurrenceDays == null
+            ? null
+            : List.of(res.recurrenceDays!);
         entry.monthDay = res.monthDay;
         entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
         await widget.model.save();
@@ -1105,22 +1243,28 @@ class _ChatScreenState extends State<ChatScreen> {
       case EntryAction.copy:
         final text = entry.type == 'todo'
             ? (entry.items ?? const <TodoItem>[])
-                .map((i) => '${i.done ? '☑' : '☐'} ${i.text}')
-                .join('\n')
+                  .map((i) => '${i.done ? '☑' : '☐'} ${i.text}')
+                  .join('\n')
             : entry.text;
         await Clipboard.setData(ClipboardData(text: text));
         _toast(widget.model.tr('copied'));
         break;
       case EntryAction.edit:
         if (entry.type == 'todo') {
-          final res = await showTodoEditorDialog(context, widget.model, entry: entry);
+          final res = await showTodoEditorDialog(
+            context,
+            widget.model,
+            entry: entry,
+          );
           if (res == null) return;
           entry.items = res.items;
           // Обновляем срок/повтор/важность из меню с часами.
           if (res.schedule != null) {
             entry.dueAt = res.schedule!.dueAt;
             entry.recurrence = res.schedule!.recurrence;
-            entry.recurrenceDays = res.schedule!.recurrenceDays == null ? null : List<int>.of(res.schedule!.recurrenceDays!);
+            entry.recurrenceDays = res.schedule!.recurrenceDays == null
+                ? null
+                : List<int>.of(res.schedule!.recurrenceDays!);
             entry.monthDay = res.schedule!.monthDay;
             // если приоритет выбран в шапке — синхронизируем у корневых задач, у которых 0.
             final pr = res.schedule!.priority;
@@ -1156,7 +1300,9 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case EntryAction.delete:
         final deleted = List<Entry>.of([entry]);
-        await UndoService.deleteEntries(widget.model, [entry]);
+        await UndoService.deleteEntries(widget.model, [
+          entry,
+        ], ownerChatId: widget.chatId);
         if (mounted) setState(() {});
         if (mounted) _showUndoBar(deleted);
         break;
@@ -1166,7 +1312,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Kanban: "…" picker → move to any column (backwards allowed here).
   Future<void> _pickAndMoveBoard(Entry entry) async {
     if (!_isKanban || !mounted) return;
-    final targetId = await showBoardMoveSheet(context, widget.model, _chat, entry);
+    final targetId = await showBoardMoveSheet(
+      context,
+      widget.model,
+      _chat,
+      entry,
+    );
     if (targetId == null) return;
     await _moveKanbanEntry(entry, targetId);
   }
@@ -1177,10 +1328,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (chat == null || !chat.isKanban) return;
     final tr = widget.model.tr;
     final boards = chat.effectiveBoard(tr);
-    final target = boards.firstWhere((b) => b.id == targetId, orElse: () => boards.first);
+    final target = boards.firstWhere(
+      (b) => b.id == targetId,
+      orElse: () => boards.first,
+    );
     final prevBoard = resolvedBoardId(entry, chat, tr);
     if (prevBoard == target.id) return;
-    final prevDone = (entry.items ?? const <TodoItem>[]).map((i) => i.done).toList();
+    final prevDone = (entry.items ?? const <TodoItem>[])
+        .map((i) => i.done)
+        .toList();
     moveEntryToBoard(entry, chat, target.id, tr);
     await widget.model.save();
     // Done tasks must not ring; revived ones re-arm when still future-dated.
@@ -1197,30 +1353,32 @@ class _ChatScreenState extends State<ChatScreen> {
         if (_searching) _boardTab = target.id;
       });
       final messenger = ScaffoldMessenger.of(context);
-      messenger.showSnackBar(SnackBar(
-        content: Text(tr('board_moved', [target.name])),
-        action: SnackBarAction(
-          label: tr('undo'),
-          onPressed: () async {
-            entry.boardId = prevBoard == boards.first.id ? null : prevBoard;
-            // Restore checkmarks exactly (undo of auto-check).
-            final items = entry.items;
-            if (items != null && items.length == prevDone.length) {
-              for (var i = 0; i < items.length; i++) {
-                items[i].done = prevDone[i];
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(tr('board_moved', [target.name])),
+          action: SnackBarAction(
+            label: tr('undo'),
+            onPressed: () async {
+              entry.boardId = prevBoard == boards.first.id ? null : prevBoard;
+              // Restore checkmarks exactly (undo of auto-check).
+              final items = entry.items;
+              if (items != null && items.length == prevDone.length) {
+                for (var i = 0; i < items.length; i++) {
+                  items[i].done = prevDone[i];
+                }
               }
-            }
-            entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
-            await widget.model.save();
-            if (entry.isDone) {
-              await _cancelEntryReminder(entry);
-            } else {
-              await _scheduleEntryReminder(entry);
-            }
-            if (mounted) setState(() {});
-          },
+              entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+              await widget.model.save();
+              if (entry.isDone) {
+                await _cancelEntryReminder(entry);
+              } else {
+                await _scheduleEntryReminder(entry);
+              }
+              if (mounted) setState(() {});
+            },
+          ),
         ),
-      ));
+      );
     }
   }
 
@@ -1241,14 +1399,22 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _moveSelectedToBoard() async {
     final chat = _chatOrNull;
     if (chat == null || !chat.isKanban) return;
-    final entries = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
+    final entries = _ownedSelectedEntries;
     if (entries.isEmpty) return;
     // Use first entry as anchor for the picker (current column highlight).
-    final targetId = await showBoardMoveSheet(context, widget.model, chat, entries.first);
+    final targetId = await showBoardMoveSheet(
+      context,
+      widget.model,
+      chat,
+      entries.first,
+    );
     if (targetId == null) return;
     final tr = widget.model.tr;
     final boards = chat.effectiveBoard(tr);
-    final target = boards.firstWhere((b) => b.id == targetId, orElse: () => boards.first);
+    final target = boards.firstWhere(
+      (b) => b.id == targetId,
+      orElse: () => boards.first,
+    );
     for (final e in entries) {
       final prev = resolvedBoardId(e, chat, tr);
       if (prev == target.id) continue;
@@ -1274,7 +1440,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final store = MediaStore();
     for (final e in list) {
       final copy = e.copyForForward(target.id);
-      if ((e.type == 'image' || e.type == 'audio' || e.type == 'video' || e.type == 'doc') &&
+      if ((e.type == 'image' ||
+              e.type == 'audio' ||
+              e.type == 'video' ||
+              e.type == 'doc') &&
           e.media != null) {
         final newName = await store.copyMedia(e.media!);
         if (newName != null) {
@@ -1327,8 +1496,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _timeLabel(Entry e) {
     final label = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      child: Text(_timeWithEdited(e),
-          style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+      child: Text(
+        _timeWithEdited(e),
+        style: TextStyle(fontSize: 10.5, color: p.textFaint),
+      ),
     );
     if (!_isTaskLike) return label;
     return InkWell(
@@ -1339,6 +1510,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _editEntrySchedule(Entry entry) async {
+    if (entry.chatId != widget.chatId) return;
     final res = await showScheduleSheet(
       context,
       widget.model,
@@ -1350,8 +1522,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (res == null || res.dueAt == null) return;
     entry.dueAt = res.dueAt;
     entry.recurrence = res.recurrence;
-    entry.recurrenceDays =
-        res.recurrenceDays == null ? null : List.of(res.recurrenceDays!);
+    entry.recurrenceDays = res.recurrenceDays == null
+        ? null
+        : List.of(res.recurrenceDays!);
     entry.monthDay = res.monthDay;
     entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
     await widget.model.save();
@@ -1363,17 +1536,21 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _toast(String msg, {bool error = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      duration: const Duration(milliseconds: 2500),
-      backgroundColor: error ? const Color(0xFF3A2020) : p.bgChat,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(milliseconds: 2500),
+        backgroundColor: error ? const Color(0xFF3A2020) : p.bgChat,
+      ),
+    );
   }
 
   // ---------------- pinned banner ----------------
 
   List<Entry> _pinnedEntries() =>
-      widget.model.state.entries.where((e) => e.chatId == widget.chatId && e.pinned).toList()
+      widget.model.state.entries
+          .where((e) => e.chatId == widget.chatId && e.pinned)
+          .toList()
         ..sort((a, b) => b.ts.compareTo(a.ts));
 
   Widget _buildPinnedBanner() {
@@ -1392,7 +1569,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: Text(
                   widget.model.tr('pinned_count', [pinned.length.toString()]),
-                  style: TextStyle(fontSize: 13, color: p.accent, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: p.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1421,7 +1602,8 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Container(
               margin: const EdgeInsets.only(top: 10),
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: p.textFaint.withValues(alpha: .3),
                 borderRadius: BorderRadius.circular(2),
@@ -1435,7 +1617,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   Text(
                     widget.model.tr('pinned_count', [pinned.length.toString()]),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.text),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: p.text,
+                    ),
                   ),
                 ],
               ),
@@ -1452,7 +1638,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       : e.text;
                   return ListTile(
                     leading: Icon(
-                      e.type == 'todo' ? Icons.check_circle_outline : Icons.article_outlined,
+                      e.type == 'todo'
+                          ? Icons.check_circle_outline
+                          : Icons.article_outlined,
                       size: 20,
                       color: p.textSoft,
                     ),
@@ -1512,10 +1700,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final ctx = _bubbleContexts[entryId];
     if (ctx == null) return false;
     try {
-      await Scrollable.ensureVisible(ctx,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-          alignment: .3);
+      await Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        alignment: .3,
+      );
     } catch (_) {
       return false;
     }
@@ -1561,11 +1751,14 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         var avg = 140.0;
         if (i1 != i0) {
-          avg = ((samples[i1]! - samples[i0]!).abs() / (i1 - i0))
-              .clamp(40.0, 3000.0);
+          avg = ((samples[i1]! - samples[i0]!).abs() / (i1 - i0)).clamp(
+            40.0,
+            3000.0,
+          );
         }
-        final refIdx =
-            (targetIdx - i0).abs() < (targetIdx - i1).abs() ? i0 : i1;
+        final refIdx = (targetIdx - i0).abs() < (targetIdx - i1).abs()
+            ? i0
+            : i1;
         final est = samples[refIdx]! + (targetIdx - refIdx) * avg;
         final max = _listCtrl.position.maxScrollExtent;
         if (max <= 0) return;
@@ -1580,7 +1773,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Long-press on a day pill → month calendar with dots on days that have
   /// (visible) notes; tap a dotted day to jump straight to it.
-  Future<void> _showDayPicker(DateTime initialMonth, List<Entry> visible) async {
+  Future<void> _showDayPicker(
+    DateTime initialMonth,
+    List<Entry> visible,
+  ) async {
     DateTime dayStartOf(int ts) {
       final d = DateTime.fromMillisecondsSinceEpoch(ts);
       return DateTime(d.year, d.month, d.day);
@@ -1600,7 +1796,8 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       backgroundColor: p.modalBg,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           final tr = widget.model.tr;
@@ -1635,8 +1832,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: !inMonth
                             ? p.textFaint.withValues(alpha: .35)
                             : count > 0
-                                ? p.text
-                                : p.textFaint.withValues(alpha: .55),
+                            ? p.text
+                            : p.textFaint.withValues(alpha: .55),
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -1657,12 +1854,13 @@ class _ChatScreenState extends State<ChatScreen> {
           }
 
           final cells = <Widget>[];
-          final firstVisible =
-              DateTime(cursor.year, cursor.month).subtract(Duration(days: leading));
+          final firstVisible = DateTime(
+            cursor.year,
+            cursor.month,
+          ).subtract(Duration(days: leading));
           for (var i = 0; i < 42; i++) {
             final day = firstVisible.add(Duration(days: i));
-            cells.add(dayCell(day,
-                inMonth: day.month == cursor.month));
+            cells.add(dayCell(day, inMonth: day.month == cursor.month));
           }
           // Drop trailing empty weeks for compactness.
           while (cells.length > 35 &&
@@ -1680,48 +1878,53 @@ class _ChatScreenState extends State<ChatScreen> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                        color: p.divider,
-                        borderRadius: BorderRadius.circular(2)),
+                      color: p.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       IconButton(
                         icon: Icon(Icons.chevron_left, color: p.textSoft),
-                        onPressed: () => setSheet(() => cursor =
-                            DateTime(cursor.year, cursor.month - 1)),
+                        onPressed: () => setSheet(
+                          () =>
+                              cursor = DateTime(cursor.year, cursor.month - 1),
+                        ),
                       ),
                       Expanded(
                         child: Text(
                           '${tr('month_${cursor.month}')} ${cursor.year}',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: p.text),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: p.text,
+                          ),
                         ),
                       ),
                       IconButton(
                         icon: Icon(Icons.chevron_right, color: p.textSoft),
-                        onPressed: () => setSheet(() => cursor =
-                            DateTime(cursor.year, cursor.month + 1)),
+                        onPressed: () => setSheet(
+                          () =>
+                              cursor = DateTime(cursor.year, cursor.month + 1),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      for (var i = 0;
-                          i < 7 && i < weekDays.length;
-                          i++)
+                      for (var i = 0; i < 7 && i < weekDays.length; i++)
                         Expanded(
                           child: Center(
                             child: Text(
                               weekDays[i],
                               style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: p.textFaint),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: p.textFaint,
+                              ),
                             ),
                           ),
                         ),
@@ -1765,9 +1968,11 @@ class _ChatScreenState extends State<ChatScreen> {
       return Scaffold(
         backgroundColor: p.bg,
         body: Center(
-          child: Text(model.tr('chat_deleted'),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, color: p.textFaint)),
+          child: Text(
+            model.tr('chat_deleted'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, color: p.textFaint),
+          ),
         ),
       );
     }
@@ -1793,8 +1998,20 @@ class _ChatScreenState extends State<ChatScreen> {
                   _buildComposer(),
                 ],
               ),
-              if (_recording) Positioned(left: 0, right: 0, bottom: 0, child: _buildRecordingPanel()),
-              if (_dictating) Positioned(left: 0, right: 0, bottom: 0, child: _buildDictationPanel()),
+              if (_recording)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildRecordingPanel(),
+                ),
+              if (_dictating)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _buildDictationPanel(),
+                ),
             ],
           ),
         ),
@@ -1804,21 +2021,36 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildTopbar(Chat chat) {
     if (_selecting) {
-      final matches = widget.model.state.entries.where((e) => _selectedIds.contains(e.id)).toList();
-      final one = matches.length == 1 ? matches.first : null;
+      final matches = _selectedEntries;
+      final ownedMatches = _ownedSelectedEntries;
+      final one = matches.length == 1 && ownedMatches.length == 1
+          ? ownedMatches.first
+          : null;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         color: p.accent.withValues(alpha: .12),
         child: Row(
           children: [
-            IconButton(icon: Icon(Icons.close, color: p.accent), onPressed: () => setState(() => _selectedIds.clear())),
-            Text(widget.model.tr('selected', ['${_selectedIds.length}']), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.accent)),
+            IconButton(
+              icon: Icon(Icons.close, color: p.accent),
+              onPressed: () => setState(() => _selectedIds.clear()),
+            ),
+            Text(
+              widget.model.tr('selected', ['${_selectedIds.length}']),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: p.accent,
+              ),
+            ),
             const Spacer(),
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, color: p.accent),
               tooltip: 'menu',
               color: p.modalBg,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               onSelected: (v) async {
                 if (v == 'time' && one != null) {
                   // Leave selection mode first — otherwise the checkboxes
@@ -1831,7 +2063,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else if (v == 'move' && _isKanban) {
                   await _moveSelectedToBoard();
                 } else if (v == 'pin') {
-                  for (final e in matches) {
+                  for (final e in ownedMatches) {
                     e.pinned = !e.pinned;
                     e.updatedAt = DateTime.now().millisecondsSinceEpoch;
                   }
@@ -1848,31 +2080,156 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
               },
               itemBuilder: (_) => [
-                if (_isKanban)
+                if (_isKanban && ownedMatches.isNotEmpty)
                   PopupMenuItem(
-                      value: 'move',
-                      height: 42,
-                      child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('board_move_to'), style: TextStyle(fontSize: 14, color: p.text))])),
+                    value: 'move',
+                    height: 42,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.swap_horiz_rounded,
+                          size: 18,
+                          color: p.accent,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.model.tr('board_move_to'),
+                          style: TextStyle(fontSize: 14, color: p.text),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_isTaskLike)
                   PopupMenuItem(
-                      value: 'time',
-                      enabled: one != null,
-                      height: 42,
-                      child: Row(children: [Icon(Icons.schedule_outlined, size: 18, color: one != null ? p.accent : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('change_time'), style: TextStyle(fontSize: 14, color: one != null ? p.text : p.textFaint))])),
-                PopupMenuItem(
-                    value: 'edit',
-                    enabled: one != null && (one.type == 'text' || one.type == 'todo'),
+                    value: 'time',
+                    enabled: one != null,
                     height: 42,
-                    child: Row(children: [Icon(Icons.edit, size: 18, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.textSoft : p.textFaint), const SizedBox(width: 10), Text(widget.model.tr('edit'), style: TextStyle(fontSize: 14, color: one != null && (one.type == 'text' || one.type == 'todo') ? p.text : p.textFaint))])),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.schedule_outlined,
+                          size: 18,
+                          color: one != null ? p.accent : p.textFaint,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.model.tr('change_time'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: one != null ? p.text : p.textFaint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 PopupMenuItem(
+                  value: 'edit',
+                  enabled:
+                      one != null && (one.type == 'text' || one.type == 'todo'),
+                  height: 42,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.edit,
+                        size: 18,
+                        color:
+                            one != null &&
+                                (one.type == 'text' || one.type == 'todo')
+                            ? p.textSoft
+                            : p.textFaint,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.tr('edit'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color:
+                              one != null &&
+                                  (one.type == 'text' || one.type == 'todo')
+                              ? p.text
+                              : p.textFaint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (ownedMatches.isNotEmpty)
+                  PopupMenuItem(
                     value: 'pin',
                     height: 42,
-                    child: Row(children: [Icon(Icons.push_pin_outlined, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('pin'), style: TextStyle(fontSize: 14, color: p.text))])),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.push_pin_outlined,
+                          size: 18,
+                          color: p.accent,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.model.tr('pin'),
+                          style: TextStyle(fontSize: 14, color: p.text),
+                        ),
+                      ],
+                    ),
+                  ),
                 const PopupMenuDivider(),
-                PopupMenuItem(value: 'copy', height: 42, child: Row(children: [Icon(Icons.copy, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('copy'), style: TextStyle(fontSize: 14, color: p.text))])),
-                PopupMenuItem(value: 'forward', height: 42, child: Row(children: [Icon(Icons.forward, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('forward'), style: TextStyle(fontSize: 14, color: p.text))])),
-                PopupMenuItem(value: 'share', height: 42, child: Row(children: [Icon(Icons.share, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('share'), style: TextStyle(fontSize: 14, color: p.text))])),
-                PopupMenuItem(value: 'delete', height: 42, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(fontSize: 14, color: p.danger))])),
+                PopupMenuItem(
+                  value: 'copy',
+                  height: 42,
+                  child: Row(
+                    children: [
+                      Icon(Icons.copy, size: 18, color: p.textSoft),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.tr('copy'),
+                        style: TextStyle(fontSize: 14, color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'forward',
+                  height: 42,
+                  child: Row(
+                    children: [
+                      Icon(Icons.forward, size: 18, color: p.textSoft),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.tr('forward'),
+                        style: TextStyle(fontSize: 14, color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'share',
+                  height: 42,
+                  child: Row(
+                    children: [
+                      Icon(Icons.share, size: 18, color: p.textSoft),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.tr('share'),
+                        style: TextStyle(fontSize: 14, color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
+                if (ownedMatches.isNotEmpty)
+                  PopupMenuItem(
+                    value: 'delete',
+                    height: 42,
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 18, color: p.danger),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.model.tr('delete'),
+                          style: TextStyle(fontSize: 14, color: p.danger),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ],
@@ -1885,9 +2242,37 @@ class _ChatScreenState extends State<ChatScreen> {
         color: p.bgList,
         child: Row(
           children: [
-            IconButton(icon: Icon(Icons.arrow_back, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
-            Expanded(child: TextField(controller: _searchCtrl, autofocus: true, onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()), style: TextStyle(color: p.text, fontSize: 14), decoration: InputDecoration(hintText: widget.model.tr('search'), hintStyle: TextStyle(color: p.textFaint), border: InputBorder.none, isDense: true))),
-            IconButton(icon: Icon(Icons.close, color: p.textSoft), onPressed: () => setState(() { _searching = false; _searchCtrl.clear(); _searchQuery = ''; })),
+            IconButton(
+              icon: Icon(Icons.arrow_back, color: p.textSoft),
+              onPressed: () => setState(() {
+                _searching = false;
+                _searchCtrl.clear();
+                _searchQuery = '';
+              }),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                onChanged: (v) =>
+                    setState(() => _searchQuery = v.trim().toLowerCase()),
+                style: TextStyle(color: p.text, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: widget.model.tr('search'),
+                  hintStyle: TextStyle(color: p.textFaint),
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.close, color: p.textSoft),
+              onPressed: () => setState(() {
+                _searching = false;
+                _searchCtrl.clear();
+                _searchQuery = '';
+              }),
+            ),
           ],
         ),
       );
@@ -1912,13 +2297,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     SizedBox(
                       width: 170,
-                      child: Text(chat.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w600,
-                              color: p.text)),
+                      child: Text(
+                        chat.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                          color: p.text,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1929,7 +2317,9 @@ class _ChatScreenState extends State<ChatScreen> {
           PopupMenuButton<ChatTopAction>(
             icon: Icon(Icons.more_vert, color: p.textSoft),
             color: p.modalBg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             onSelected: (v) async {
               switch (v) {
                 case ChatTopAction.search:
@@ -1937,7 +2327,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   break;
                 case ChatTopAction.export:
                   await ShareService.exportChatMarkdown(
-                      _chat.name, widget.model.state.entriesFor(widget.chatId));
+                    _chat.name,
+                    widget.model.state.entriesFor(widget.chatId),
+                  );
                   break;
                 case ChatTopAction.edit:
                   await _editChat();
@@ -1947,7 +2339,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   break;
                 case ChatTopAction.boardManage:
                   _ensureBoardTab();
-                  final changed = await showBoardManageSheet(context, widget.model, _chat);
+                  final changed = await showBoardManageSheet(
+                    context,
+                    widget.model,
+                    _chat,
+                  );
                   if (changed && mounted) setState(() {});
                   _ensureBoardTab();
                   if (mounted) setState(() {});
@@ -1960,11 +2356,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 case ChatTopAction.toggleNotifications:
                   _chat.notificationsEnabled = !_chat.notificationsEnabled;
                   await widget.model.save();
+                  await widget.model.rescheduleAlarms();
                   if (mounted) {
                     setState(() {});
-                    _toast(_chat.notificationsEnabled
-                        ? widget.model.tr('notifications_on')
-                        : widget.model.tr('notifications_off'));
+                    _toast(
+                      _chat.notificationsEnabled
+                          ? widget.model.tr('notifications_on')
+                          : widget.model.tr('notifications_off'),
+                    );
                   }
                   break;
                 case ChatTopAction.remind:
@@ -1972,33 +2371,119 @@ class _ChatScreenState extends State<ChatScreen> {
               }
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(value: ChatTopAction.search, child: Row(children: [Icon(Icons.search, size: 18, color: p.accent), const SizedBox(width: 10), Text(widget.model.tr('search_in_chat'), style: TextStyle(color: p.text))])),
-              PopupMenuItem(value: ChatTopAction.export, child: Row(children: [Icon(Icons.ios_share, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('export_chat'), style: TextStyle(color: p.text))])),
               PopupMenuItem(
-                  value: ChatTopAction.toggleNotifications,
-                  child: Row(children: [
-                    Icon(_chat.notificationsEnabled ? Icons.notifications : Icons.notifications_off, size: 18, color: p.textSoft),
+                value: ChatTopAction.search,
+                child: Row(
+                  children: [
+                    Icon(Icons.search, size: 18, color: p.accent),
                     const SizedBox(width: 10),
-                    Text(_chat.notificationsEnabled ? widget.model.tr('notifications_on') : widget.model.tr('notifications_off'), style: TextStyle(color: p.text))
-                  ])),
+                    Text(
+                      widget.model.tr('search_in_chat'),
+                      style: TextStyle(color: p.text),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: ChatTopAction.export,
+                child: Row(
+                  children: [
+                    Icon(Icons.ios_share, size: 18, color: p.textSoft),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.model.tr('export_chat'),
+                      style: TextStyle(color: p.text),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: ChatTopAction.toggleNotifications,
+                child: Row(
+                  children: [
+                    Icon(
+                      _chat.notificationsEnabled
+                          ? Icons.notifications
+                          : Icons.notifications_off,
+                      size: 18,
+                      color: p.textSoft,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      _chat.notificationsEnabled
+                          ? widget.model.tr('notifications_on')
+                          : widget.model.tr('notifications_off'),
+                      style: TextStyle(color: p.text),
+                    ),
+                  ],
+                ),
+              ),
               if (_chat.kind == 'tasks')
                 PopupMenuItem(
-                    value: ChatTopAction.toggleHide,
-                    child: Row(children: [
-                      Icon(_chat.tasksHideDone ? Icons.visibility_off : Icons.visibility, size: 18, color: p.textSoft),
+                  value: ChatTopAction.toggleHide,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _chat.tasksHideDone
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 18,
+                        color: p.textSoft,
+                      ),
                       const SizedBox(width: 10),
-                      Text(_chat.tasksHideDone ? widget.model.tr('show_done') : widget.model.tr('hide_done'), style: TextStyle(color: p.text))
-                    ])),
+                      Text(
+                        _chat.tasksHideDone
+                            ? widget.model.tr('show_done')
+                            : widget.model.tr('hide_done'),
+                        style: TextStyle(color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
               if (_chat.isKanban)
                 PopupMenuItem(
-                    value: ChatTopAction.boardManage,
-                    child: Row(children: [
-                      Icon(Icons.view_column_outlined, size: 18, color: p.accent),
+                  value: ChatTopAction.boardManage,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.view_column_outlined,
+                        size: 18,
+                        color: p.accent,
+                      ),
                       const SizedBox(width: 10),
-                      Text(widget.model.tr('board_manage'), style: TextStyle(color: p.text))
-                    ])),
-              PopupMenuItem(value: ChatTopAction.edit, child: Row(children: [Icon(Icons.edit_outlined, size: 18, color: p.textSoft), const SizedBox(width: 10), Text(widget.model.tr('edit_chat'), style: TextStyle(color: p.text))])),
-              PopupMenuItem(value: ChatTopAction.delete, child: Row(children: [Icon(Icons.delete_outline, size: 18, color: p.danger), const SizedBox(width: 10), Text(widget.model.tr('delete'), style: TextStyle(color: p.danger))])),
+                      Text(
+                        widget.model.tr('board_manage'),
+                        style: TextStyle(color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
+              PopupMenuItem(
+                value: ChatTopAction.edit,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18, color: p.textSoft),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.model.tr('edit_chat'),
+                      style: TextStyle(color: p.text),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: ChatTopAction.delete,
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 18, color: p.danger),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.model.tr('delete'),
+                      style: TextStyle(color: p.danger),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -2012,7 +2497,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final cur = _currentBoardId();
     // Counts per column for the tab badges.
     final counts = <String, int>{for (final b in boards) b.id: 0};
-    for (final e in widget.model.state.entries.where((e) => e.chatId == chat.id)) {
+    for (final e in widget.model.state.entries.where(
+      (e) => e.chatId == chat.id,
+    )) {
       final id = resolvedBoardId(e, chat, widget.model.tr);
       counts[id] = (counts[id] ?? 0) + 1;
     }
@@ -2032,18 +2519,27 @@ class _ChatScreenState extends State<ChatScreen> {
                     setState(() => _boardTab = boards[i].id);
                   },
                   onLongPress: () async {
-                    final changed = await showBoardManageSheet(context, widget.model, chat);
+                    final changed = await showBoardManageSheet(
+                      context,
+                      widget.model,
+                      chat,
+                    );
                     if (changed && mounted) setState(() {});
                     _ensureBoardTab();
                     if (mounted) setState(() {});
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: cur == boards[i].id ? p.accent : p.bgChat,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: cur == boards[i].id ? p.accent : p.divider.withValues(alpha: 0.6),
+                        color: cur == boards[i].id
+                            ? p.accent
+                            : p.divider.withValues(alpha: 0.6),
                       ),
                     ),
                     child: Row(
@@ -2059,7 +2555,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: cur == boards[i].id
                                 ? Colors.white.withValues(alpha: 0.22)
@@ -2071,7 +2570,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: cur == boards[i].id ? Colors.white : p.accent,
+                              color: cur == boards[i].id
+                                  ? Colors.white
+                                  : p.accent,
                             ),
                           ),
                         ),
@@ -2102,11 +2603,21 @@ class _ChatScreenState extends State<ChatScreen> {
     if (isKanbanView && !searchingActive) {
       final cur = _currentBoardId();
       final tr = model.tr;
-      entries = entries.where((e) => resolvedBoardId(e, _chat, tr) == cur).toList();
+      entries = entries
+          .where((e) => resolvedBoardId(e, _chat, tr) == cur)
+          .toList();
     }
     if (searchingActive) {
       final q = _searchQuery;
-      entries = entries.where((e) => e.text.toLowerCase().contains(q) || e.tags.any((t) => t.toLowerCase().contains(q)) || (e.items?.any((i) => i.text.toLowerCase().contains(q)) ?? false)).toList();
+      entries = entries
+          .where(
+            (e) =>
+                e.text.toLowerCase().contains(q) ||
+                e.tags.any((t) => t.toLowerCase().contains(q)) ||
+                (e.items?.any((i) => i.text.toLowerCase().contains(q)) ??
+                    false),
+          )
+          .toList();
     }
     final tr = model.tr;
     _bubbleContexts.clear();
@@ -2115,28 +2626,37 @@ class _ChatScreenState extends State<ChatScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(tr('no_messages'),
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, color: p.textFaint, height: 1.5)),
+          child: Text(
+            tr('no_messages'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, color: p.textFaint, height: 1.5),
+          ),
         ),
       );
     }
 
     Widget pill(String label, DateTime day) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: GestureDetector(
-            onLongPress: () => _showDayPicker(day, entries),
-            child: DayPill(label: label, p: p),
-          ),
-        );
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: GestureDetector(
+        onLongPress: () => _showDayPicker(day, entries),
+        child: DayPill(label: label, p: p),
+      ),
+    );
 
     Widget makeRow(Entry e) {
       final highlight = _highlightId == e.id;
       final isSelected = _selectedIds.contains(e.id);
-      final bubble = Builder(builder: (ctx) {
-        _bubbleContexts[e.id] = ctx;
-        return _buildBubble(model, e, highlight: highlight || isSelected, selected: isSelected);
-      });
+      final bubble = Builder(
+        builder: (ctx) {
+          _bubbleContexts[e.id] = ctx;
+          return _buildBubble(
+            model,
+            e,
+            highlight: highlight || isSelected,
+            selected: isSelected,
+          );
+        },
+      );
       Widget row = GestureDetector(
         onTap: _selecting ? () => _toggleSelect(e.id) : null,
         onLongPressStart: (d) {
@@ -2147,7 +2667,14 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_selecting) {
             _toggleSelect(e.id);
           } else {
-            final action = await showEntryCtxPopup(context, model, e, d.globalPosition, chatKind: _chat.kind);
+            final action = await showEntryCtxPopup(
+              context,
+              model,
+              e,
+              d.globalPosition,
+              chatKind: _chat.kind,
+              readOnly: e.chatId != widget.chatId,
+            );
             if (action != null) await _onCtxAction(e, action);
           }
         },
@@ -2156,7 +2683,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final base = AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        color: isSelected ? p.accent.withValues(alpha: .08) : Colors.transparent,
+        color: isSelected
+            ? p.accent.withValues(alpha: .08)
+            : Colors.transparent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -2168,7 +2697,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? Checkbox(
                       value: isSelected,
                       activeColor: p.accent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                       onChanged: (_) => _toggleSelect(e.id),
                     )
                   : const SizedBox.shrink(),
@@ -2182,7 +2713,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final nextId = nextBoardId(e, _chat, tr);
       if (nextId == null) return base;
       final boards = _chat.effectiveBoard(tr);
-      final nextName = boards.firstWhere((b) => b.id == nextId, orElse: () => boards.first).name;
+      final nextName = boards
+          .firstWhere((b) => b.id == nextId, orElse: () => boards.first)
+          .name;
       return Dismissible(
         key: ValueKey('kanban-${e.id}-${resolvedBoardId(e, _chat, tr)}'),
         direction: DismissDirection.startToEnd,
@@ -2202,8 +2735,14 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               Icon(Icons.arrow_forward_rounded, color: p.accent),
               const SizedBox(width: 6),
-              Text(nextName,
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: p.accent)),
+              Text(
+                nextName,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: p.accent,
+                ),
+              ),
             ],
           ),
         ),
@@ -2248,14 +2787,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // Unified bubble metrics — every message type shares one radius/shadow spec.
-  BoxDecoration _bubbleDeco({bool overdue = false, bool highlight = false}) => BoxDecoration(
+  BoxDecoration _bubbleDeco({bool overdue = false, bool highlight = false}) =>
+      BoxDecoration(
         color: p.bubbleOwn,
         border: Border.all(
           color: highlight
               ? p.accent
               : overdue
-                  ? p.danger.withValues(alpha: 0.45)
-                  : p.bubbleBorder,
+              ? p.danger.withValues(alpha: 0.45)
+              : p.bubbleBorder,
           width: highlight || overdue ? 1.4 : 1,
         ),
         borderRadius: const BorderRadius.only(
@@ -2267,7 +2807,11 @@ class _ChatScreenState extends State<ChatScreen> {
         boxShadow: p.isDark
             ? []
             : [
-                BoxShadow(color: const Color(0x0A0F1721), blurRadius: 8, offset: const Offset(0, 1)),
+                BoxShadow(
+                  color: const Color(0x0A0F1721),
+                  blurRadius: 8,
+                  offset: const Offset(0, 1),
+                ),
               ],
       );
 
@@ -2293,7 +2837,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   _searchQuery = '';
                   _highlightId = entry.id;
                 });
-                WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToEntry(entry.id));
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _jumpToEntry(entry.id),
+                );
               } else {
                 await _pickAndMoveBoard(entry);
               }
@@ -2305,8 +2851,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: p.accent.withValues(alpha: 0.22)),
               ),
-              child: Text(colName,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.accent)),
+              child: Text(
+                colName,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: p.accent,
+                ),
+              ),
             ),
           ),
           const Spacer(),
@@ -2315,7 +2867,11 @@ class _ChatScreenState extends State<ChatScreen> {
             onTap: () => _pickAndMoveBoard(entry),
             child: Padding(
               padding: const EdgeInsets.all(4),
-              child: Icon(Icons.more_horiz_rounded, size: 18, color: p.textFaint),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                size: 18,
+                color: p.textFaint,
+              ),
             ),
           ),
         ],
@@ -2323,7 +2879,12 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildBubble(AppModel model, Entry entry, {required bool highlight, bool selected = false}) {
+  Widget _buildBubble(
+    AppModel model,
+    Entry entry, {
+    required bool highlight,
+    bool selected = false,
+  }) {
     Widget content = switch (entry.type) {
       'text' => _buildTextBubble(model, entry),
       'image' => _buildImageBubble(model, entry),
@@ -2338,10 +2899,7 @@ class _ChatScreenState extends State<ChatScreen> {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        children: [
-          _kanbanCardHeader(model, entry),
-          content,
-        ],
+        children: [_kanbanCardHeader(model, entry), content],
       );
     }
 
@@ -2374,7 +2932,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: p.bubbleOwn, width: 1.5),
                 ),
-                child: const Icon(Icons.push_pin, size: 10, color: Colors.white),
+                child: const Icon(
+                  Icons.push_pin,
+                  size: 10,
+                  color: Colors.white,
+                ),
               ),
             ),
         ],
@@ -2391,8 +2953,12 @@ class _ChatScreenState extends State<ChatScreen> {
         maxLines: 6,
         style: TextStyle(color: p.text, fontSize: 14.5),
         decoration: InputDecoration(
-          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: p.accent)),
-          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: p.accent)),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: p.accent),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: p.accent),
+          ),
         ),
       );
       return Container(
@@ -2409,7 +2975,10 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 TextButton(
                   onPressed: () => setState(() => _editingId = null),
-                  child: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft)),
+                  child: Text(
+                    model.tr('cancel'),
+                    style: TextStyle(color: p.textSoft),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
@@ -2440,23 +3009,44 @@ class _ChatScreenState extends State<ChatScreen> {
                     selectable: true,
                     styleSheet: MarkdownStyleSheet(
                       p: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
-                      strong: TextStyle(fontWeight: FontWeight.w700, color: p.text),
+                      strong: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
                       em: TextStyle(fontStyle: FontStyle.italic, color: p.text),
-                      code: TextStyle(fontFamily: 'monospace', fontSize: 13, color: p.text, backgroundColor: p.bgChat),
-                      blockquote: TextStyle(color: p.textSoft, fontStyle: FontStyle.italic),
-                      tableHead: TextStyle(fontWeight: FontWeight.w700, color: p.text),
+                      code: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        color: p.text,
+                        backgroundColor: p.bgChat,
+                      ),
+                      blockquote: TextStyle(
+                        color: p.textSoft,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      tableHead: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
                       tableBody: TextStyle(color: p.text),
                       checkbox: TextStyle(color: p.accent),
                     ),
                     onTapLink: (text, href, title) {
                       if (href != null && href.isNotEmpty) {
-                        launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                        launchUrl(
+                          Uri.parse(href),
+                          mode: LaunchMode.externalApplication,
+                        );
                       }
                     },
                   )
                 : SelectableText.rich(
                     TextSpan(children: _highlightTags(entry.text, p)),
-                    style: TextStyle(fontSize: 14.5, color: p.text, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      color: p.text,
+                      height: 1.35,
+                    ),
                   ),
           ),
           // Link preview card: fetch OG metadata for the first URL in the text.
@@ -2467,7 +3057,27 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Wrap(
                 spacing: 6,
                 runSpacing: 4,
-                children: [for (final t in entry.tags) Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)), child: Text('#$t', style: TextStyle(fontSize: 11, color: p.accent, fontWeight: FontWeight.w600)))],
+                children: [
+                  for (final t in entry.tags)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '#$t',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: p.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           _timeLabel(entry),
@@ -2505,21 +3115,30 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       final match = m.group(0)!;
       if (match.startsWith('#')) {
-        spans.add(TextSpan(
-          text: match,
-          style: TextStyle(color: p.accent, fontWeight: FontWeight.w600),
-        ));
+        spans.add(
+          TextSpan(
+            text: match,
+            style: TextStyle(color: p.accent, fontWeight: FontWeight.w600),
+          ),
+        );
       } else {
         // URL: styled as a link and wrapped with tap gesture. Recognizers
         // are tracked and disposed with the State — a fresh one per build
         // used to leak native resources on every rebuild.
         final recognizer = _linkTapRecognizer(match);
         _recognizers.add(recognizer);
-        spans.add(TextSpan(
-          text: match,
-          style: TextStyle(color: Colors.blue[400], decoration: TextDecoration.underline, fontSize: 14.5, height: 1.35),
-          recognizer: recognizer,
-        ));
+        spans.add(
+          TextSpan(
+            text: match,
+            style: TextStyle(
+              color: Colors.blue[400],
+              decoration: TextDecoration.underline,
+              fontSize: 14.5,
+              height: 1.35,
+            ),
+            recognizer: recognizer,
+          ),
+        );
       }
       last = m.end;
     }
@@ -2528,9 +3147,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   GestureRecognizer _linkTapRecognizer(String url) {
-    return TapGestureRecognizer()..onTap = () {
-      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    };
+    return TapGestureRecognizer()
+      ..onTap = () {
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      };
   }
 
   /// If [text] contains a URL, return a widget list with a compact preview
@@ -2549,7 +3169,10 @@ class _ChatScreenState extends State<ChatScreen> {
             final d = snap.data!;
             return InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+              onTap: () => launchUrl(
+                Uri.parse(url),
+                mode: LaunchMode.externalApplication,
+              ),
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 280),
                 decoration: BoxDecoration(
@@ -2558,29 +3181,55 @@ class _ChatScreenState extends State<ChatScreen> {
                   border: Border.all(color: p.bubbleBorder),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (d.imageUrl != null)
-                    SizedBox(
-                      width: double.infinity, height: 100,
-                      child: Image.network(d.imageUrl!, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox()),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (d.imageUrl != null)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 100,
+                        child: Image.network(
+                          d.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            d.domain,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, color: p.textFaint),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            d.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: p.text,
+                            ),
+                          ),
+                          if (d.description.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              d.description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: p.textSoft),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(d.domain, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: p.textFaint)),
-                      const SizedBox(height: 2),
-                      Text(d.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
-                      if (d.description.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(d.description, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: p.textSoft)),
-                      ],
-                    ]),
-                  ),
-                ]),
+                  ],
+                ),
               ),
             );
           },
@@ -2597,29 +3246,36 @@ class _ChatScreenState extends State<ChatScreen> {
         width: 268,
         decoration: _bubbleDeco(),
         clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FutureBuilder<String>(
-                future: _pathOf(entry.media!),
-                builder: (ctx, snap) => snap.hasData
-                    ? SizedBox(
-                        width: 260,
-                        height: 300,
-                        // Decode at display resolution, not file size — a
-                        // 12 MP quickCopy used to allocate a full bitmap.
-                        child: Image.file(File(snap.data!),
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            cacheWidth: (260 * MediaQuery.devicePixelRatioOf(context)).round()),
-                      )
-                    : Container(width: 260, height: 300, color: p.bgChat),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FutureBuilder<String>(
+              future: _pathOf(entry.media!),
+              builder: (ctx, snap) => snap.hasData
+                  ? SizedBox(
+                      width: 260,
+                      height: 300,
+                      // Decode at display resolution, not file size — a
+                      // 12 MP quickCopy used to allocate a full bitmap.
+                      child: Image.file(
+                        File(snap.data!),
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                        cacheWidth:
+                            (260 * MediaQuery.devicePixelRatioOf(context))
+                                .round(),
+                      ),
+                    )
+                  : Container(width: 260, height: 300, color: p.bgChat),
             ),
             if (entry.text.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-                child: Text(entry.text, style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35)),
+                child: Text(
+                  entry.text,
+                  style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35),
+                ),
               ),
             Padding(
               padding: const EdgeInsets.only(right: 8, bottom: 4),
@@ -2696,7 +3352,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       width: 48,
                       height: 48,
                       child: Icon(
-                        playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                         color: Colors.white,
                         size: 28,
                       ),
@@ -2710,9 +3368,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   builder: (ctx, cts) {
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTapDown: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
-                      onHorizontalDragUpdate: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
-                      onHorizontalDragStart: (d) => seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      onTapDown: (d) =>
+                          seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      onHorizontalDragUpdate: (d) =>
+                          seekFromDx(d.localPosition.dx, cts.maxWidth),
+                      onHorizontalDragStart: (d) =>
+                          seekFromDx(d.localPosition.dx, cts.maxWidth),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -2727,15 +3388,28 @@ class _ChatScreenState extends State<ChatScreen> {
                           // Thumb at progress — только у играющего
                           if (playing && totalMs > 0)
                             Positioned(
-                              left: (progress * (cts.maxWidth - 8)).clamp(0.0, cts.maxWidth - 8),
+                              left: (progress * (cts.maxWidth - 8)).clamp(
+                                0.0,
+                                cts.maxWidth - 8,
+                              ),
                               child: Container(
                                 width: 8,
                                 height: 8,
                                 decoration: BoxDecoration(
                                   color: p.accent,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 1.2),
-                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 3)],
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      blurRadius: 3,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -2756,10 +3430,11 @@ class _ChatScreenState extends State<ChatScreen> {
               Text(
                 playing ? '$posLabel / $durLabel' : '$durLabel$sizeLabel',
                 style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: p.textSoft,
-                    fontFeatures: const [FontFeature.tabularFigures()]),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: p.textSoft,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
               const Spacer(),
               _timeLabel(entry),
@@ -2771,52 +3446,127 @@ class _ChatScreenState extends State<ChatScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: (_transcribeProgress[entry.id] ?? 0) > 0 ? (_transcribeProgress[entry.id]! / 100) : null,
+                value: (_transcribeProgress[entry.id] ?? 0) > 0
+                    ? (_transcribeProgress[entry.id]! / 100)
+                    : null,
                 minHeight: 3,
                 backgroundColor: p.divider,
                 valueColor: AlwaysStoppedAnimation(p.accent),
               ),
             ),
             const SizedBox(height: 4),
-            Row(children: [
-              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8, color: p.accent)),
-              const SizedBox(width: 6),
-              Text('AI расшифровывает локально...', style: TextStyle(fontSize: 11, color: p.textFaint, fontStyle: FontStyle.italic)),
-            ]),
-          ] else if (_transcribed[entry.id] != null || entry.text.isNotEmpty) ...[
+            Row(
+              children: [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: p.accent,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'AI расшифровывает локально...',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: p.textFaint,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ] else if (_transcribed[entry.id] != null ||
+              entry.text.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(10), border: Border.all(color: p.divider.withValues(alpha: .45))),
+              decoration: BoxDecoration(
+                color: p.bgChat,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: p.divider.withValues(alpha: .45)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Icon(Icons.auto_awesome_rounded, size: 12, color: p.accent),
-                    const SizedBox(width: 4),
-                    Text('Расшифровка:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: .3)),
-                    const Spacer(),
-                    InkWell(
-                      onTap: () async {
-                        final t = _transcribed[entry.id] ?? entry.text;
-                        await Clipboard.setData(ClipboardData(text: t));
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(model.tr('copied'))));
-                      },
-                      child: Icon(Icons.copy_rounded, size: 14, color: p.textFaint),
-                    ),
-                  ]),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 12,
+                        color: p.accent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Расшифровка:',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: p.accent,
+                          letterSpacing: .3,
+                        ),
+                      ),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () async {
+                          final t = _transcribed[entry.id] ?? entry.text;
+                          await Clipboard.setData(ClipboardData(text: t));
+                          if (context.mounted)
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(model.tr('copied'))),
+                            );
+                        },
+                        child: Icon(
+                          Icons.copy_rounded,
+                          size: 14,
+                          color: p.textFaint,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 4),
-                  Text(_transcribed[entry.id] ?? entry.text, style: TextStyle(fontSize: 13, color: p.text, height: 1.35)),
+                  Text(
+                    _transcribed[entry.id] ?? entry.text,
+                    style: TextStyle(fontSize: 13, color: p.text, height: 1.35),
+                  ),
                   const SizedBox(height: 6),
-                  Wrap(spacing: 6, runSpacing: 6, children: [
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                      icon: Icon(_isTaskLike ? Icons.checklist_rounded : Icons.note_add_rounded, size: 14, color: Colors.white),
-                      label: Text(_isTaskLike ? 'Как задачу' : 'Как заметку', style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w700)),
-                      onPressed: () => _saveTranscribedAsTaskOrNote(_transcribed[entry.id] ?? entry.text),
-                    ),
-                  ]),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: p.accent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: Icon(
+                          _isTaskLike
+                              ? Icons.checklist_rounded
+                              : Icons.note_add_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        label: Text(
+                          _isTaskLike ? 'Как задачу' : 'Как заметку',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onPressed: () => _saveTranscribedAsTaskOrNote(
+                          _transcribed[entry.id] ?? entry.text,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -2826,13 +3576,33 @@ class _ChatScreenState extends State<ChatScreen> {
               borderRadius: BorderRadius.circular(8),
               onTap: () => _transcribeVoice(entry),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(color: p.accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(20), border: Border.all(color: p.accent.withValues(alpha: .22))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.auto_awesome_rounded, size: 14, color: p.accent),
-                  const SizedBox(width: 5),
-                  Flexible(child: Text('Расшифровать', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent), overflow: TextOverflow.ellipsis)),
-                ]),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: p.accent.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: p.accent.withValues(alpha: .22)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_awesome_rounded, size: 14, color: p.accent),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'Расшифровать',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: p.accent,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -2865,21 +3635,31 @@ class _ChatScreenState extends State<ChatScreen> {
               Icon(Icons.videocam, color: p.accent),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(entry.mediaName ?? model.tr('video'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500, color: p.text)),
+                child: Text(
+                  entry.mediaName ?? model.tr('video'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: p.text,
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            if ((entry.mediaSize ?? '').isNotEmpty)
-              Text('${entry.mediaSize ?? ''} ·',
-                  style: TextStyle(fontSize: 11, color: p.textFaint)),
-            _timeLabel(entry),
-          ]),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if ((entry.mediaSize ?? '').isNotEmpty)
+                Text(
+                  '${entry.mediaSize ?? ''} ·',
+                  style: TextStyle(fontSize: 11, color: p.textFaint),
+                ),
+              _timeLabel(entry),
+            ],
+          ),
         ],
       ),
     );
@@ -2887,7 +3667,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildTodoBubble(AppModel model, Entry entry) {
     final allItems = entry.items ?? const <TodoItem>[];
-    final overdue = entry.dueAt != null &&
+    final overdue =
+        entry.dueAt != null &&
         entry.dueAt! < DateTime.now().millisecondsSinceEpoch &&
         allItems.any((i) => !i.done);
     final doneCount = allItems.where((i) => i.done).length;
@@ -2905,42 +3686,84 @@ class _ChatScreenState extends State<ChatScreen> {
               onTap: () => _editEntrySchedule(entry),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 7),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: overdue ? p.danger.withValues(alpha: .12) : p.accent.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(TNRadii.pill),
-                  border: Border.all(color: overdue ? p.danger.withValues(alpha: 0.22) : p.accent.withValues(alpha: 0.18)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(overdue ? Icons.warning_amber_rounded : Icons.schedule_rounded,
-                      size: 13, color: overdue ? p.danger : p.accent),
-                  const SizedBox(width: 5),
-                  Text(_fmtDue(entry.dueAt!, model.tr), style: TextStyle(fontSize: 11, color: overdue ? p.danger : p.accent, fontWeight: FontWeight.w700)),
-                ]),
+                decoration: BoxDecoration(
+                  color: overdue
+                      ? p.danger.withValues(alpha: .12)
+                      : p.accent.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(TNRadii.pill),
+                  border: Border.all(
+                    color: overdue
+                        ? p.danger.withValues(alpha: 0.22)
+                        : p.accent.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      overdue
+                          ? Icons.warning_amber_rounded
+                          : Icons.schedule_rounded,
+                      size: 13,
+                      color: overdue ? p.danger : p.accent,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _fmtDue(entry.dueAt!, model.tr),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: overdue ? p.danger : p.accent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           if (allItems.length > 1)
             Padding(
               padding: const EdgeInsets.only(bottom: 7),
-              child: Row(children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 4,
-                      backgroundColor: p.divider,
-                      valueColor: AlwaysStoppedAnimation(p.accent),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 4,
+                        backgroundColor: p.divider,
+                        valueColor: AlwaysStoppedAnimation(p.accent),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text('$doneCount/${allItems.length}',
-                    style: TextStyle(fontSize: 10.5, color: p.textFaint, fontWeight: FontWeight.w600)),
-              ]),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$doneCount/${allItems.length}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: p.textFaint,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           if (rows.isEmpty && allItems.isNotEmpty)
-            Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(model.tr('todo_all_done'), style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                model.tr('todo_all_done'),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: p.textFaint,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
           ...rows,
           Align(
             alignment: Alignment.centerLeft,
@@ -2949,11 +3772,21 @@ class _ChatScreenState extends State<ChatScreen> {
               onTap: () => _showTaskItemSheet(model, entry),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.add, size: 15, color: p.accent),
-                  const SizedBox(width: 3),
-                  Text(model.tr('todo_add'), style: TextStyle(fontSize: 11.5, color: p.accent, fontWeight: FontWeight.w600)),
-                ]),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 15, color: p.accent),
+                    const SizedBox(width: 3),
+                    Text(
+                      model.tr('todo_add'),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: p.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -3002,7 +3835,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: item.done ? p.textFaint.withValues(alpha: .4) : p.priority(item.priority),
+                  color: item.done
+                      ? p.textFaint.withValues(alpha: .4)
+                      : p.priority(item.priority),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -3019,9 +3854,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: item.done ? p.accent : Colors.transparent,
-                  border: Border.all(color: item.done ? p.accent : p.textFaint.withValues(alpha: .55), width: 2),
+                  border: Border.all(
+                    color: item.done
+                        ? p.accent
+                        : p.textFaint.withValues(alpha: .55),
+                    width: 2,
+                  ),
                 ),
-                child: item.done ? Icon(Icons.check, size: 12, color: Colors.white) : null,
+                child: item.done
+                    ? Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
               ),
             ),
           ),
@@ -3050,7 +3892,11 @@ class _ChatScreenState extends State<ChatScreen> {
               onTap: () => _showTaskItemSheet(model, entry, parentId: item.id),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 6, 0, 6),
-                child: Icon(Icons.subdirectory_arrow_right, size: 14, color: p.textFaint),
+                child: Icon(
+                  Icons.subdirectory_arrow_right,
+                  size: 14,
+                  color: p.textFaint,
+                ),
               ),
             ),
         ],
@@ -3058,7 +3904,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _toggleTodoItem(AppModel model, Entry entry, TodoItem item) async {
+  Future<void> _toggleTodoItem(
+    AppModel model,
+    Entry entry,
+    TodoItem item,
+  ) async {
     toggleTodoCascade(entry.items ??= <TodoItem>[], item.id);
     entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
     await model.save();
@@ -3066,7 +3916,9 @@ class _ChatScreenState extends State<ChatScreen> {
     // Completing an OVERDUE recurring task snaps its deadline forward so
     // the checkmark sticks until the new period ends (otherwise rollover
     // would instantly uncheck it).
-    final snapped = entry.recurrence != null && snapCompletedRecurring(entry, DateTime.now());
+    final snapped =
+        entry.recurrence != null &&
+        snapCompletedRecurring(entry, DateTime.now());
     final rolled = model.rolloverRecurring();
     if (snapped || rolled > 0) {
       await model.save();
@@ -3082,79 +3934,133 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Bottom sheet for creating / renaming / deleting a single task item.
   /// [parentId] starts a new subtask under that parent.
-  Future<void> _showTaskItemSheet(AppModel model, Entry entry, {TodoItem? item, String? parentId}) async {
+  Future<void> _showTaskItemSheet(
+    AppModel model,
+    Entry entry, {
+    TodoItem? item,
+    String? parentId,
+  }) async {
+    if (entry.chatId != widget.chatId) return;
     final ctrl = TextEditingController(text: item?.text ?? '');
     var priority = item?.priority ?? 0;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: p.modalBg,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => SafeArea(
-        top: false,
-        child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(item != null ? model.tr('edit') : model.tr('todo_add'),
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              maxLines: 3,
-              minLines: 1,
-              style: TextStyle(color: p.text, fontSize: 14),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: p.bgChat,
-                hintText: model.tr('todo_item_hint'),
-                hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              ),
-              onSubmitted: (_) => Navigator.pop(ctx, 'save'),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            const SizedBox(height: 12),
-            Row(children: [
-              Text(model.tr('priority'), style: TextStyle(fontSize: 12, color: p.textSoft, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
-              for (final pr in [0, 1, 2])
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    selected: priority == pr,
-                    onSelected: (_) => setSheetState(() => priority = pr),
-                    label: Text(model.tr('priority_$pr'), style: TextStyle(fontSize: 12, color: priority == pr ? Colors.white : p.text)),
-                    selectedColor: p.priority(pr),
-                    backgroundColor: p.bgChat,
-                    visualDensity: VisualDensity.compact,
-                    showCheckmark: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  item != null ? model.tr('edit') : model.tr('todo_add'),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: p.text,
                   ),
                 ),
-            ]),
-            const SizedBox(height: 4),
-            Row(children: [
-              if (item != null)
-                TextButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'delete'),
-                  icon: Icon(Icons.delete_outline, size: 18, color: p.danger),
-                  label: Text(model.tr('delete'), style: TextStyle(color: p.danger, fontSize: 13)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  maxLines: 3,
+                  minLines: 1,
+                  style: TextStyle(color: p.text, fontSize: 14),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: p.bgChat,
+                    hintText: model.tr('todo_item_hint'),
+                    hintStyle: TextStyle(color: p.textFaint, fontSize: 13.5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onSubmitted: (_) => Navigator.pop(ctx, 'save'),
                 ),
-              const Spacer(),
-              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft))),
-              const SizedBox(width: 8),
-               FilledButton(
-                 style: FilledButton.styleFrom(backgroundColor: p.accent),
-                 onPressed: () => Navigator.pop(ctx, 'save'),
-                 child: Text(model.tr('save')),
-               ),
-             ]),
-          ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      model.tr('priority'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: p.textSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    for (final pr in [0, 1, 2])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          selected: priority == pr,
+                          onSelected: (_) => setSheetState(() => priority = pr),
+                          label: Text(
+                            model.tr('priority_$pr'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: priority == pr ? Colors.white : p.text,
+                            ),
+                          ),
+                          selectedColor: p.priority(pr),
+                          backgroundColor: p.bgChat,
+                          visualDensity: VisualDensity.compact,
+                          showCheckmark: false,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (item != null)
+                      TextButton.icon(
+                        onPressed: () => Navigator.pop(ctx, 'delete'),
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: p.danger,
+                        ),
+                        label: Text(
+                          model.tr('delete'),
+                          style: TextStyle(color: p.danger, fontSize: 13),
+                        ),
+                      ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                        model.tr('cancel'),
+                        style: TextStyle(color: p.textSoft),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: p.accent),
+                      onPressed: () => Navigator.pop(ctx, 'save'),
+                      child: Text(model.tr('save')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      )),
     );
     if (action == null) return;
     final items = entry.items ?? <TodoItem>[];
@@ -3167,7 +4073,15 @@ class _ChatScreenState extends State<ChatScreen> {
         item.text = text;
         item.priority = priority;
       } else {
-        items.insert(_insertAfterSubtree(items, parentId), TodoItem(id: uid('t'), text: text, parentId: parentId, priority: priority));
+        items.insert(
+          _insertAfterSubtree(items, parentId),
+          TodoItem(
+            id: uid('t'),
+            text: text,
+            parentId: parentId,
+            priority: priority,
+          ),
+        );
       }
     }
     await model.save();
@@ -3218,7 +4132,27 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Whether the file extension is one we can display as readable text.
   static bool _isTextFile(String? name) {
     final ext = (name?.split('.').last ?? '').toLowerCase();
-    return const {'txt', 'log', 'csv', 'json', 'xml', 'html', 'htm', 'md', 'yaml', 'yml', 'ini', 'cfg', 'conf', 'sh', 'dart', 'py', 'js', 'ts', 'css'}.contains(ext);
+    return const {
+      'txt',
+      'log',
+      'csv',
+      'json',
+      'xml',
+      'html',
+      'htm',
+      'md',
+      'yaml',
+      'yml',
+      'ini',
+      'cfg',
+      'conf',
+      'sh',
+      'dart',
+      'py',
+      'js',
+      'ts',
+      'css',
+    }.contains(ext);
   }
 
   Widget _buildDocBubble(AppModel model, Entry entry) {
@@ -3230,31 +4164,66 @@ class _ChatScreenState extends State<ChatScreen> {
         constraints: const BoxConstraints(maxWidth: 310),
         padding: const EdgeInsets.all(13),
         decoration: _bubbleDeco(),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_fileIcon(entry.mediaName), color: p.accent, size: 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _fileIcon(entry.mediaName),
+                    color: p.accent,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.mediaName ?? entry.media ?? 'file',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: p.text,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${ext.isNotEmpty ? '$ext · ' : ''}${entry.mediaSize ?? ''}',
+                        style: TextStyle(fontSize: 11.5, color: p.textFaint),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(entry.mediaName ?? entry.media ?? 'file',
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.text)),
-              const SizedBox(height: 2),
-              Text('${ext.isNotEmpty ? '$ext · ' : ''}${entry.mediaSize ?? ''}',
-                  style: TextStyle(fontSize: 11.5, color: p.textFaint)),
-            ])),
-          ]),
-          if (entry.text.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(entry.text, maxLines: 6, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: p.textSoft, height: 1.4)),
+            if (entry.text.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                entry.text,
+                maxLines: 6,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: p.textSoft,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 4),
+            _timeLabel(entry),
           ],
-          const SizedBox(height: 4),
-          _timeLabel(entry),
-        ]),
+        ),
       ),
     );
   }
@@ -3269,29 +4238,40 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         final content = await File(path).readAsString();
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => Scaffold(
-            backgroundColor: p.bg,
-            appBar: AppBar(
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => Scaffold(
               backgroundColor: p.bg,
-              iconTheme: IconThemeData(color: p.text),
-              title: Text(entry.mediaName ?? 'file',
-                  style: TextStyle(color: p.text, fontSize: 15)),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.share),
-                  tooltip: widget.model.tr('share'),
-                  onPressed: () => _shareEntry(entry),
+              appBar: AppBar(
+                backgroundColor: p.bg,
+                iconTheme: IconThemeData(color: p.text),
+                title: Text(
+                  entry.mediaName ?? 'file',
+                  style: TextStyle(color: p.text, fontSize: 15),
                 ),
-              ],
-            ),
-            body: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: SelectableText(content,
-                  style: TextStyle(fontSize: 13.5, color: p.text, fontFamily: 'monospace', height: 1.5)),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.share),
+                    tooltip: widget.model.tr('share'),
+                    onPressed: () => _shareEntry(entry),
+                  ),
+                ],
+              ),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(
+                  content,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: p.text,
+                    fontFamily: 'monospace',
+                    height: 1.5,
+                  ),
+                ),
+              ),
             ),
           ),
-        ));
+        );
         return;
       } catch (_) {}
     }
@@ -3314,8 +4294,22 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Icon(Icons.rss_feed, color: p.textFaint, size: 20),
             const SizedBox(width: 8),
-            Expanded(child: Text(model.tr('rss_only_channel'), style: TextStyle(color: p.textFaint, fontSize: 13))),
-            TextButton(onPressed: () async { await RssService.fetchForChat(_chat, model.state); if (mounted) setState(() {}); }, child: Text(model.tr('rss_refresh'), style: TextStyle(color: p.accent))),
+            Expanded(
+              child: Text(
+                model.tr('rss_only_channel'),
+                style: TextStyle(color: p.textFaint, fontSize: 13),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                await RssService.fetchForChat(_chat, model.state);
+                if (mounted) setState(() {});
+              },
+              child: Text(
+                model.tr('rss_refresh'),
+                style: TextStyle(color: p.accent),
+              ),
+            ),
           ],
         ),
       );
@@ -3324,7 +4318,9 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.fromLTRB(4, 6, 4, 10),
       decoration: BoxDecoration(
         color: p.bgList,
-        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.5))),
+        border: Border(
+          top: BorderSide(color: p.divider.withValues(alpha: 0.5)),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3337,75 +4333,102 @@ class _ChatScreenState extends State<ChatScreen> {
               Container(
                 width: 42,
                 height: 42,
-                decoration: BoxDecoration(color: p.bgChat, shape: BoxShape.circle, border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+                decoration: BoxDecoration(
+                  color: p.bgChat,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                ),
                 child: IconButton(
-                  icon: Icon(Icons.attach_file_rounded, color: p.textSoft, size: 20),
+                  icon: Icon(
+                    Icons.attach_file_rounded,
+                    color: p.textSoft,
+                    size: 20,
+                  ),
                   tooltip: model.tr('attach'),
                   onPressed: () => _showAttachSheet(model),
                 ),
               ),
               const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _text,
-              style: TextStyle(color: p.text, fontSize: 14.5),
-              minLines: 1,
-              maxLines: 5,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: p.bgChat,
-                hintText: _pendingImagePath != null ? model.tr('caption_hint') : model.tr('message_hint'),
-                hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(TNRadii.lg),
-                  borderSide: BorderSide(color: p.divider.withValues(alpha: 0.45)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(TNRadii.lg),
-                  borderSide: BorderSide(color: p.divider.withValues(alpha: 0.45)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(TNRadii.lg),
-                  borderSide: BorderSide(color: p.accent, width: 1.6),
+              Expanded(
+                child: TextField(
+                  controller: _text,
+                  style: TextStyle(color: p.text, fontSize: 14.5),
+                  minLines: 1,
+                  maxLines: 5,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: p.bgChat,
+                    hintText: _pendingImagePath != null
+                        ? model.tr('caption_hint')
+                        : model.tr('message_hint'),
+                    hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.lg),
+                      borderSide: BorderSide(
+                        color: p.divider.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.lg),
+                      borderSide: BorderSide(
+                        color: p.divider.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(TNRadii.lg),
+                      borderSide: BorderSide(color: p.accent, width: 1.6),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          ListenableBuilder(
-            listenable: _text,
-            builder: (context, _) {
-              final hasSomething = _text.text.trim().isNotEmpty || _pendingImagePath != null;
-              return hasSomething
-                  ? GestureDetector(
-                      onLongPressStart: _isTaskLike
-                          ? (d) => _addSubtaskGroup()
-                          : null,
-                      child: IconButton.filled(
-                        icon: const Icon(Icons.send, color: Colors.white),
-                        style: IconButton.styleFrom(backgroundColor: p.accent),
-                        onPressed: _submitComposer,
-                      ),
-                    )
-                  : GestureDetector(
-                      onLongPressStart: (d) => _beginRecord(),
-                      onLongPressMoveUpdate: _onRecDrag,
-                      onLongPressEnd: _endRecPress,
-                      onLongPressCancel: () => _finishRecord(send: true),
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
-                        child: Icon(Icons.mic, color: Colors.white, size: 24),
-                      ),
-                    );
-            },
-          ),
-        ],
+              const SizedBox(width: 6),
+              ListenableBuilder(
+                listenable: _text,
+                builder: (context, _) {
+                  final hasSomething =
+                      _text.text.trim().isNotEmpty || _pendingImagePath != null;
+                  return hasSomething
+                      ? GestureDetector(
+                          onLongPressStart: _isTaskLike
+                              ? (d) => _addSubtaskGroup()
+                              : null,
+                          child: IconButton.filled(
+                            icon: const Icon(Icons.send, color: Colors.white),
+                            style: IconButton.styleFrom(
+                              backgroundColor: p.accent,
+                            ),
+                            onPressed: _submitComposer,
+                          ),
+                        )
+                      : GestureDetector(
+                          onLongPressStart: (d) => _beginRecord(),
+                          onLongPressMoveUpdate: _onRecDrag,
+                          onLongPressEnd: _endRecPress,
+                          onLongPressCancel: () => _finishRecord(send: true),
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: p.accent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.mic,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        );
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -3416,16 +4439,27 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(46, 4, 4, 6),
       padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: p.bgChat,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Row(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.file(File(_pendingImagePath!), width: 52, height: 52, fit: BoxFit.cover),
+            child: Image.file(
+              File(_pendingImagePath!),
+              width: 52,
+              height: 52,
+              fit: BoxFit.cover,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(model.tr('photo'), style: TextStyle(fontSize: 13.5, color: p.textSoft)),
+            child: Text(
+              model.tr('photo'),
+              style: TextStyle(fontSize: 13.5, color: p.textSoft),
+            ),
           ),
           IconButton(
             icon: Icon(Icons.close, size: 20, color: p.textFaint),
@@ -3440,7 +4474,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildTagSuggestions(Palette p) {
     // Collect all tags, filter by _tagQuery, show up to 8.
     final all = <String, int>{};
-    final trashed = widget.model.state.chats.where((c) => c.isTrashed).map((c) => c.id).toSet();
+    final trashed = widget.model.state.chats
+        .where((c) => c.isTrashed)
+        .map((c) => c.id)
+        .toSet();
     for (final e in widget.model.state.entries) {
       if (trashed.contains(e.chatId)) continue;
       for (final t in e.tags) all[t] = (all[t] ?? 0) + 1;
@@ -3469,13 +4506,29 @@ class _ChatScreenState extends State<ChatScreen> {
               if (m != null) {
                 final start = m.start;
                 final newText = txt.replaceRange(start, sel, '#$t ');
-                _text.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: start + t.length + 2));
+                _text.value = TextEditingValue(
+                  text: newText,
+                  selection: TextSelection.collapsed(
+                    offset: start + t.length + 2,
+                  ),
+                );
               }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(TNRadii.pill), border: Border.all(color: p.accent.withValues(alpha: 0.22))),
-              child: Text('#$t', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.accent)),
+              decoration: BoxDecoration(
+                color: p.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(TNRadii.pill),
+                border: Border.all(color: p.accent.withValues(alpha: 0.22)),
+              ),
+              child: Text(
+                '#$t',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: p.accent,
+                ),
+              ),
             ),
           );
         },
@@ -3495,9 +4548,15 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
       decoration: BoxDecoration(
         color: p.bgChat,
-        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.6))),
+        border: Border(
+          top: BorderSide(color: p.divider.withValues(alpha: 0.6)),
+        ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
         ],
       ),
       child: Column(
@@ -3511,14 +4570,20 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.keyboard_arrow_up_rounded,
-                      color: lockProgress > 0.5 ? p.accent : p.textFaint, size: 18),
+                  Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    color: lockProgress > 0.5 ? p.accent : p.textFaint,
+                    size: 18,
+                  ),
                   const SizedBox(width: 4),
-                  Text(model.tr('rec_lock_hint'),
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: lockProgress > 0.5 ? p.accent : p.textSoft)),
+                  Text(
+                    model.tr('rec_lock_hint'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: lockProgress > 0.5 ? p.accent : p.textSoft,
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   Container(
                     width: 44,
@@ -3554,7 +4619,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     onTap: () => _finishRecord(send: false),
                     child: Padding(
                       padding: const EdgeInsets.all(10),
-                      child: Icon(Icons.delete_outline, color: p.danger, size: 22),
+                      child: Icon(
+                        Icons.delete_outline,
+                        color: p.danger,
+                        size: 22,
+                      ),
                     ),
                   ),
                 )
@@ -3565,11 +4634,21 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.chevron_left_rounded, color: p.danger, size: 20),
+                      Icon(
+                        Icons.chevron_left_rounded,
+                        color: p.danger,
+                        size: 20,
+                      ),
                       Icon(Icons.delete_outline, color: p.danger, size: 20),
                       const SizedBox(width: 4),
-                      Text(model.tr('rec_cancel'),
-                          style: TextStyle(fontSize: 13, color: p.danger, fontWeight: FontWeight.w600)),
+                      Text(
+                        model.tr('rec_cancel'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: p.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -3577,7 +4656,10 @@ class _ChatScreenState extends State<ChatScreen> {
               // Center: timer + live waveform (expands)
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: p.bgList,
                     borderRadius: BorderRadius.circular(20),
@@ -3588,14 +4670,28 @@ class _ChatScreenState extends State<ChatScreen> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(color: Color(0xFFF04438), shape: BoxShape.circle),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF04438),
+                          shape: BoxShape.circle,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      Text(timeLabel,
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700, color: p.text, fontFeatures: const [FontFeature.tabularFigures()])),
+                      Text(
+                        timeLabel,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: p.text,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      Expanded(child: _LiveWaveform(levels: _recLevels, color: p.accent)),
+                      Expanded(
+                        child: _LiveWaveform(
+                          levels: _recLevels,
+                          color: p.accent,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -3606,11 +4702,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: p.accent,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(22),
+                    ),
                   ),
-                  icon: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                  label: Text(model.tr('send'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  icon: const Icon(
+                    Icons.send_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    model.tr('send'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   onPressed: () => _finishRecord(send: true),
                 )
               else
@@ -3619,8 +4730,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     Icon(Icons.mic_rounded, color: p.accent, size: 22),
                     const SizedBox(height: 2),
-                    Text(model.tr('rec_locked').isNotEmpty ? '↑' : '',
-                        style: TextStyle(fontSize: 10, color: p.textFaint)),
+                    Text(
+                      model.tr('rec_locked').isNotEmpty ? '↑' : '',
+                      style: TextStyle(fontSize: 10, color: p.textFaint),
+                    ),
                   ],
                 ),
             ],
@@ -3631,7 +4744,10 @@ class _ChatScreenState extends State<ChatScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: p.accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -3641,18 +4757,26 @@ class _ChatScreenState extends State<ChatScreen> {
                     children: [
                       Icon(Icons.lock, color: p.accent, size: 13),
                       const SizedBox(width: 4),
-                      Text(model.tr('rec_locked'),
-                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.accent)),
+                      Text(
+                        model.tr('rec_locked'),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: p.accent,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-          ]           else
+          ] else
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('< ${model.tr('rec_cancel')}  •  ${model.tr('rec_lock_hint')} ↑',
-                  style: TextStyle(fontSize: 10.5, color: p.textFaint)),
+              child: Text(
+                '< ${model.tr('rec_cancel')}  •  ${model.tr('rec_lock_hint')} ↑',
+                style: TextStyle(fontSize: 10.5, color: p.textFaint),
+              ),
             ),
         ],
       ),
@@ -3666,8 +4790,16 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       decoration: BoxDecoration(
         color: p.bgChat,
-        border: Border(top: BorderSide(color: p.divider.withValues(alpha: 0.6))),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, -2))],
+        border: Border(
+          top: BorderSide(color: p.divider.withValues(alpha: 0.6)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3677,19 +4809,35 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: p.accent.withValues(alpha: .12), shape: BoxShape.circle),
-                child: Icon(Icons.auto_awesome_rounded, color: p.accent, size: 18),
+                decoration: BoxDecoration(
+                  color: p.accent.withValues(alpha: .12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: p.accent,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('AI • ${isTasks ? model.tr('kind_tasks') : model.tr('kind_note')}',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.accent, letterSpacing: .4)),
+                    Text(
+                      'AI • ${isTasks ? model.tr('kind_tasks') : model.tr('kind_note')}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: p.accent,
+                        letterSpacing: .4,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(_dictating ? 'Слушаю... говорите' : 'Готово',
-                        style: TextStyle(fontSize: 12.5, color: p.textSoft)),
+                    Text(
+                      _dictating ? 'Слушаю... говорите' : 'Готово',
+                      style: TextStyle(fontSize: 12.5, color: p.textSoft),
+                    ),
                   ],
                 ),
               ),
@@ -3697,7 +4845,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: p.accent),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: p.accent,
+                  ),
                 ),
             ],
           ),
@@ -3706,10 +4857,24 @@ class _ChatScreenState extends State<ChatScreen> {
             width: double.infinity,
             constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.divider.withValues(alpha: .5))),
+            decoration: BoxDecoration(
+              color: p.bgList,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: p.divider.withValues(alpha: .5)),
+            ),
             child: _dictationText.isEmpty
-                ? Text(model.tr('rec_too_short'), style: TextStyle(fontSize: 13, color: p.textFaint, fontStyle: FontStyle.italic))
-                : Text(_dictationText, style: TextStyle(fontSize: 14, color: p.text, height: 1.35)),
+                ? Text(
+                    model.tr('rec_too_short'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: p.textFaint,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  )
+                : Text(
+                    _dictationText,
+                    style: TextStyle(fontSize: 14, color: p.text, height: 1.35),
+                  ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -3717,27 +4882,48 @@ class _ChatScreenState extends State<ChatScreen> {
               TextButton.icon(
                 onPressed: _cancelDictation,
                 icon: Icon(Icons.close, size: 18, color: p.textSoft),
-                label: Text(model.tr('cancel'), style: TextStyle(color: p.textSoft)),
+                label: Text(
+                  model.tr('cancel'),
+                  style: TextStyle(color: p.textSoft),
+                ),
               ),
               const Spacer(),
               OutlinedButton(
-                style: OutlinedButton.styleFrom(side: BorderSide(color: p.divider)),
-                onPressed: _dictating ? null : () => _stopDictation(save: false),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: p.divider),
+                ),
+                onPressed: _dictating
+                    ? null
+                    : () => _stopDictation(save: false),
                 child: Text(model.tr('rec_cancel')),
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: p.accent),
-                icon: Icon(isTasks ? Icons.checklist : Icons.note_add, size: 18, color: Colors.white),
-                label: Text(isTasks ? model.tr('todo_add') : model.tr('save'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                onPressed: (_dictationText.trim().isEmpty && !_dictating) ? null : () => _stopDictation(save: true),
+                icon: Icon(
+                  isTasks ? Icons.checklist : Icons.note_add,
+                  size: 18,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  isTasks ? model.tr('todo_add') : model.tr('save'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onPressed: (_dictationText.trim().isEmpty && !_dictating)
+                    ? null
+                    : () => _stopDictation(save: true),
               ),
             ],
           ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text('локально • on-device • ${SpeechService.isAvailable ? 'готов' : 'проверка...'}',
-                style: TextStyle(fontSize: 10, color: p.textFaint)),
+            child: Text(
+              'локально • on-device • ${SpeechService.isAvailable ? 'готов' : 'проверка...'}',
+              style: TextStyle(fontSize: 10, color: p.textFaint),
+            ),
           ),
         ],
       ),
@@ -3753,7 +4939,9 @@ class _LiveWaveform extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = levels.length > 36 ? levels.sublist(levels.length - 36) : levels;
+    final shown = levels.length > 36
+        ? levels.sublist(levels.length - 36)
+        : levels;
     return SizedBox(
       height: 30,
       width: 120,
@@ -3840,7 +5028,10 @@ class _WaveformPainter extends CustomPainter {
     final paintRest = Paint()..color = restColor;
     for (var i = 0; i < count; i++) {
       // stretch/compress sample list to fit the available width
-      final idx = (i * samples.length / count).floor().clamp(0, samples.length - 1);
+      final idx = (i * samples.length / count).floor().clamp(
+        0,
+        samples.length - 1,
+      );
       final h = ((samples[idx] / 100) * size.height).clamp(2.0, size.height);
       final x = i * step;
       final rect = Rect.fromLTWH(x, (size.height - h) / 2, barWidth, h);

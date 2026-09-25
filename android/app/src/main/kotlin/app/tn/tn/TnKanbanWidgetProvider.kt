@@ -64,6 +64,7 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
         private data class KbChat(
             val name: String,
             val columns: List<Pair<String, String>>, // (id, name) in order
+            val deleted: Boolean,
         )
 
         /** In-app language (same source as the day widget), fallback to system. */
@@ -112,7 +113,11 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                         }
                     }
                     if (cols.isEmpty()) cols.addAll(defaultColumns(lang))
-                    chats[c.optString("id")] = KbChat(c.optString("name", ""), cols)
+                    chats[c.optString("id")] = KbChat(
+                        c.optString("name", ""),
+                        cols,
+                        c.has("deletedAt") && !c.isNull("deletedAt"),
+                    )
                 }
             }
             if (chats.isEmpty()) return emptyList()
@@ -120,9 +125,9 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
             val entries = data.optJSONArray("entries") ?: return emptyList()
             for (i in 0 until entries.length()) {
                 val e = entries.getJSONObject(i)
-                if (!e.isNull("scheduledAt")) continue
                 if (e.optString("type", "") != "todo") continue
                 val chat = chats[e.optString("chatId", "")] ?: continue
+                if (chat.deleted) continue
                 val cols = chat.columns
                 var colIdx = cols.indexOfFirst { it.first == e.optString("boardId", "") }
                 if (colIdx < 0) colIdx = 0 // legacy null boardId lives in first column
@@ -139,13 +144,13 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                     undone.add(it)
                 }
                 if (undone.isEmpty()) continue
-                val roots = undone.filter { it.optString("parentId", "").isEmpty() }
+                val roots = undone.filter { it.optString("pid", it.optString("parentId", "")).isEmpty() }
                 val targets = if (roots.isNotEmpty()) roots else listOf(undone[0])
                 for (root in targets) {
                     val rootId = root.optString("id")
                     val title = root.optString("text", "").trim().take(90)
                     val childTexts = undone
-                        .filter { it.optString("parentId", "") == rootId }
+                        .filter { it.optString("pid", it.optString("parentId", "")) == rootId }
                         .map { it.optString("text", "").trim() }
                         .filter { it.isNotEmpty() }
                     val subPreview: String? = if (childTexts.isEmpty()) null else {

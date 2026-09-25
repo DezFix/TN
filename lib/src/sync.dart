@@ -1,13 +1,10 @@
-﻿import 'dart:convert';
-
-import 'package:archive/archive.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+﻿import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_log.dart';
 import 'app_model.dart';
 import 'backup.dart';
-import 'backup_crypto.dart';
 import 'gdrive.dart';
+import 'widget_bridge.dart';
 
 /// Google Drive / WebDAV backup sync. Upload is manual (button press).
 /// Download MERGES by `updatedAt` instead of replacing local state —
@@ -93,34 +90,16 @@ class SyncService {
       final bytes = await gd.download(fileId);
       if (bytes == null || bytes.isEmpty) return false;
 
-      // E2E: decrypt with the stored backup password before parsing.
-      var payload = bytes;
-      if (BackupCrypto.isEncrypted(bytes)) {
-        final password = await BackupService.getPassword();
-        if (password.isEmpty) {
-          AppLog.info('sync.pull', 'backup is encrypted but no password stored');
-          return false;
-        }
-        final plain = await BackupCrypto.decrypt(bytes, password);
-        if (plain == null) {
-          AppLog.info('sync.pull', 'decrypt failed (wrong password?)');
-          return false;
-        }
-        payload = plain;
-      }
-
-      // Extract data.json and merge record-by-record (LWW on updatedAt).
-      final archive = ZipDecoder().decodeBytes(payload);
-      ArchiveFile? data;
-      for (final f in archive) {
-        if (f.name == 'data.json' || f.name.endsWith('/data.json')) {
-          data = f;
-          break;
-        }
-      }
-      if (data == null) return false;
-      m.state.mergeFromJson(utf8.decode(data.content));
-      await m.save();
+      final password = await BackupService.getPassword();
+      await BackupService.importFromBytes(
+        bytes,
+        _syncFileName,
+        m.state,
+        password: password.isEmpty ? null : password,
+        merge: true,
+      );
+      await m.rescheduleAlarms();
+      WidgetBridge.refresh().catchError((_) {});
       m.refresh();
       return true;
     } catch (e, st) {

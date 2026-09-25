@@ -29,6 +29,7 @@ class AppModel extends ChangeNotifier {
     state
       ..theme = loaded.theme
       ..lang = loaded.lang
+       ..stateUpdatedAt = loaded.stateUpdatedAt
       ..folders.clear()
       ..folders.addAll(loaded.folders)
       ..chats.clear()
@@ -38,6 +39,11 @@ class AppModel extends ChangeNotifier {
       ..reminders.clear()
       ..reminders.addAll(loaded.reminders);
     _reloadLanguage();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tn-widget-lang', state.lang);
+    } catch (_) {}
+    WidgetBridge.refresh().catchError((_) {});
     _stamp = DateTime.now().millisecondsSinceEpoch;
     rolloverRecurring();
     await rescheduleAlarms();
@@ -57,7 +63,9 @@ class AppModel extends ChangeNotifier {
     for (final r in state.reminders) {
       if (r.when <= now) continue;
       final chat = state.chatById(r.chatId);
-      if (chat == null || chat.isTrashed) continue;
+      if (chat == null || chat.isTrashed || !chat.notificationsEnabled) {
+        continue;
+      }
       await RemindersService.instance.schedule(
         r,
         tr('remind_title', [chat.name]),
@@ -70,7 +78,9 @@ class AppModel extends ChangeNotifier {
       // Done tasks (incl. just-checked recurring) must not ring.
       if (e.isDone) continue;
       final chat = state.chatById(e.chatId);
-      if (chat == null || chat.isTrashed) continue;
+      if (chat == null || chat.isTrashed || !chat.notificationsEnabled) {
+        continue;
+      }
       await RemindersService.instance.schedule(
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat.name]),
@@ -89,8 +99,7 @@ class AppModel extends ChangeNotifier {
     final id = key.substring(0, sep);
     final when = int.tryParse(key.substring(sep + 1));
     if (when == null) return false;
-    final target =
-        DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
+    final target = DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
     var hit = false;
     for (final r in List.of(state.reminders)) {
       if (r.id == id && r.when == when) {
@@ -123,13 +132,17 @@ class AppModel extends ChangeNotifier {
     final rolled = rolloverRecurringTasks(state.entries, DateTime.now());
     for (final e in rolled) {
       final chat = state.chatById(e.chatId);
-      if (chat == null || chat.isTrashed) continue;
-      RemindersService.instance.schedule(
+      if (chat == null || chat.isTrashed || !chat.notificationsEnabled) {
+        continue;
+      }
+      RemindersService.instance
+          .schedule(
         Reminder(id: e.id, chatId: e.chatId, when: e.dueAt!),
         tr('remind_title', [chat.name]),
         entryNotifBody(e, tr),
         actionLabels: [tr('notif_postpone'), tr('notif_done')],
-      ).catchError((_) => false);
+          )
+          .catchError((_) => false);
     }
     return rolled.length;
   }
@@ -155,6 +168,10 @@ class AppModel extends ChangeNotifier {
       if (raw == null || raw.isEmpty) return false;
       state.loadFromJson(raw);
       _reloadLanguage();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('tn-widget-lang', state.lang);
+      } catch (_) {}
       _stamp = ext;
       final rolled = rolloverRecurring();
       if (rolled > 0) {
@@ -177,6 +194,11 @@ class AppModel extends ChangeNotifier {
     state.lang = lang;
     await state.save();
     _reloadLanguage();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tn-widget-lang', lang);
+    } catch (_) {}
+    WidgetBridge.refresh().catchError((_) {});
     notifyListeners();
   }
 
@@ -224,7 +246,8 @@ String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {
 String entryNotifBody(Entry e, String Function(String, [List<String>?]) tr) {
   if (e.type == 'todo') {
     final open = (e.items ?? const <TodoItem>[]).where((i) => !i.done).toList();
-    final t = (open.isNotEmpty ? open.map((i) => i.text).join('\n') : e.text).trim();
+    final t = (open.isNotEmpty ? open.map((i) => i.text).join('\n') : e.text)
+        .trim();
     if (t.isNotEmpty) return t;
   }
   return entryPreview(e, tr);

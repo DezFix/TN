@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited, Timer, runZonedGuarded;
 import 'dart:io' show Platform;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -34,28 +35,31 @@ Future<void> main() async {
   // Everything (incl. binding init) runs INSIDE the guarded zone — otherwise
   // Flutter throws "Zone mismatch" (bindings initialized in a different zone
   // than runApp), which we shipped in 1.27.14 and caught via Bugsink.
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    // Anonymous crash reports to Bugsink (opt-out in Settings, on by default).
-    try {
-      await CrashReports.init(appVersion: appBuildVersion);
-    } catch (_) {}
-    FlutterError.onError = (details) {
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      // Anonymous crash reports to Bugsink (opt-out in Settings, on by default).
       try {
-        CrashReports.capture('flutter', details.exception, details.stack);
+        await CrashReports.init(appVersion: appBuildVersion);
       } catch (_) {}
-    };
-    // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
-    // silently falls back to pure Dart otherwise.
-    try {
-      FlutterCryptography.enable();
-    } catch (_) {}
-    runApp(const TN());
-  }, (error, stack) {
-    try {
-      CrashReports.capture('zone', error, stack);
-    } catch (_) {}
-  });
+      FlutterError.onError = (details) {
+        try {
+          CrashReports.capture('flutter', details.exception, details.stack);
+        } catch (_) {}
+      };
+      // Hardware-backed AES/PBKDF2 where available (Android Keystore etc.);
+      // silently falls back to pure Dart otherwise.
+      try {
+        FlutterCryptography.enable();
+      } catch (_) {}
+      runApp(const TN());
+    },
+    (error, stack) {
+      try {
+        CrashReports.capture('zone', error, stack);
+      } catch (_) {}
+    },
+  );
 }
 
 class TN extends StatefulWidget {
@@ -91,22 +95,34 @@ Future<void> _initWindowAndTray(AppModel model) async {
   });
 
   final tray = SystemTray();
-  await tray.initSystemTray(title: 'TN', iconPath: 'assets/app_icon.ico', toolTip: 'TN');
+  await tray.initSystemTray(
+    title: 'TN',
+    iconPath: 'assets/app_icon.ico',
+    toolTip: 'TN',
+  );
   // Localized labels (the model is fully loaded by the time we get here).
   final menu = Menu();
   await menu.buildFrom([
-    MenuItemLabel(label: model.tr('tray_open'), onClicked: (_) => windowManager.show()),
+    MenuItemLabel(
+      label: model.tr('tray_open'),
+      onClicked: (_) => windowManager.show(),
+    ),
     MenuSeparator(),
-    MenuItemLabel(label: model.tr('tray_quit'), onClicked: (_) async {
-      _quitting = true;
-      await tray.destroy();
-      await windowManager.destroy();
-    }),
+    MenuItemLabel(
+      label: model.tr('tray_quit'),
+      onClicked: (_) async {
+        _quitting = true;
+        await tray.destroy();
+        await windowManager.destroy();
+      },
+    ),
   ]);
   await tray.setContextMenu(menu);
   tray.registerSystemTrayEventHandler((eventName) {
     if (eventName == kSystemTrayEventClick) {
-      windowManager.isVisible().then((v) => v ? windowManager.hide() : windowManager.show());
+      windowManager.isVisible().then(
+        (v) => v ? windowManager.hide() : windowManager.show(),
+      );
     } else if (eventName == kSystemTrayEventRightClick) {
       tray.popUpContextMenu();
     }
@@ -128,8 +144,6 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
   bool _shareInWired = false;
   bool _showWelcome = false;
   AppModel? _loadedModel;
-  Timer? _pendingOpenChatTimer;
-  Timer? _pendingShortcutTimer;
   bool _whatsNewShown = false;
 
   @override
@@ -140,66 +154,108 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       _navKey.currentState?.pushNamed('/widget-settings');
     };
     WidgetBridge.onOpenChat = (chatId, entryId) {
-      final m = _loadedModel;
-      if (m == null) return;
-      _navKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => ChatScreen(model: m, chatId: chatId, scrollToEntryId: entryId, highlightEntryId: entryId),
-      ));
+      unawaited(_openChatWhenReady(chatId, entryId));
     };
     WidgetBridge.onShortcutQuickNote = () {
-      final m = _loadedModel;
-      if (m == null) return;
-      _handleHotAdd(m);
+      unawaited(_runShortcutWhenReady('quick_note'));
     };
     WidgetBridge.onShortcutAgenda = () {
-      final m = _loadedModel;
-      if (m == null) return;
-      _navKey.currentState?.push(MaterialPageRoute(builder: (_) => AgendaScreen(model: m)));
+      unawaited(_runShortcutWhenReady('agenda'));
     };
     // Cold start: the app was launched by tapping a task text in the widget.
     _pendingOpenChatCheck();
     _pendingShortcutCheck();
   }
 
+  Future<void> _openChatWhenReady(String chatId, String? entryId) async {
+    try {
+      final model = _loadedModel ?? await _future;
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      _navKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            model: model,
+            chatId: chatId,
+            scrollToEntryId: entryId,
+            highlightEntryId: entryId,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _runShortcutWhenReady(String action) async {
+    try {
+      final model = _loadedModel ?? await _future;
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      if (action == 'quick_note') {
+        await _handleHotAdd(model);
+      } else if (action == 'agenda') {
+        _navKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => AgendaScreen(model: model)),
+        );
+      }
+    } catch (_) {}
+  }
+
   Future<void> _pendingOpenChatCheck() async {
-    _pendingOpenChatTimer = Timer(const Duration(milliseconds: 800), () async {
+    try {
+      final m = await _future;
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       final pending = await WidgetBridge.takePendingOpenChat();
       if (pending == null || !mounted) return;
       final chatId = pending['chatId'];
       final entryId = pending['entryId'];
       if (chatId == null || chatId.isEmpty || !mounted) return;
-      final m = _loadedModel;
-      if (m == null) return;
-      _navKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => ChatScreen(model: m, chatId: chatId, scrollToEntryId: entryId, highlightEntryId: entryId),
-      ));
-    });
+      _navKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            model: m,
+            chatId: chatId,
+            scrollToEntryId: entryId,
+            highlightEntryId: entryId,
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   Future<void> _pendingShortcutCheck() async {
     if (_isTestEnv) return;
-    _pendingShortcutTimer = Timer(const Duration(milliseconds: 950), () async {
+    try {
+      final m = await _future;
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       final action = await WidgetBridge.takePendingShortcut();
       if (action == null || !mounted) return;
-      final m = _loadedModel;
-      if (m == null) return;
       if (action == 'quick_note') {
-        _handleHotAdd(m);
+        await _handleHotAdd(m);
       } else if (action == 'agenda') {
-        _navKey.currentState?.push(MaterialPageRoute(builder: (_) => AgendaScreen(model: m)));
+        _navKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => AgendaScreen(model: m)),
+        );
       }
-    });
+    } catch (_) {}
   }
 
   Future<void> _handleHotAdd(AppModel model) async {
     final ctx = _navKey.currentContext;
     if (ctx == null) return;
     // Pick a tasks chat
-    final tasksChats = model.state.chats.where((c) => c.kind == 'tasks' && !c.isTrashed && !c.archived).toList();
+    final tasksChats = model.state.chats
+        .where((c) => c.kind == 'tasks' && !c.isTrashed && !c.archived)
+        .toList();
     if (tasksChats.isEmpty) {
-      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(model.tr('need_chat'))));
+      ScaffoldMessenger.of(
+        ctx,
+      ).showSnackBar(SnackBar(content: Text(model.tr('need_chat'))));
       return;
     }
     String? pickedId;
@@ -210,13 +266,17 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         context: ctx,
         builder: (dctx) => AlertDialog(
           backgroundColor: model.p.modalBg,
-          title: Text(model.tr('hot_add_pick'), style: TextStyle(color: model.p.text, fontWeight: FontWeight.w700)),
+          title: Text(
+            model.tr('hot_add_pick'),
+            style: TextStyle(color: model.p.text, fontWeight: FontWeight.w700),
+          ),
           content: SizedBox(
             width: 300,
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: tasksChats.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: model.p.divider),
+              separatorBuilder: (_, __) =>
+                  Divider(height: 1, color: model.p.divider),
               itemBuilder: (_, i) {
                 final c = tasksChats[i];
                 return ListTile(
@@ -246,19 +306,28 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       monthDay: res.schedule?.monthDay,
     );
     // Если приоритет выбран — применяем к первому элементу (если у него 0).
-    if (res.schedule != null && res.schedule!.priority != 0 && entry.items!.isNotEmpty && entry.items!.first.priority == 0) {
+    if (res.schedule != null &&
+        res.schedule!.priority != 0 &&
+        entry.items!.isNotEmpty &&
+        entry.items!.first.priority == 0) {
       entry.items!.first.priority = res.schedule!.priority;
     }
     model.state.entries.add(entry);
     await model.save();
     if (!ctx.mounted) return;
-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(model.tr('todo_added', [tasksChats.firstWhere((c) => c.id == pickedId).name]))));
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Text(
+          model.tr('todo_added', [
+            tasksChats.firstWhere((c) => c.id == pickedId).name,
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _pendingOpenChatTimer?.cancel();
-    _pendingShortcutTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -303,93 +372,123 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
             final pl = paletteFor('light');
             final pd = paletteFor('dark');
             ThemeData buildTheme(Palette p, Brightness b) => ThemeData(
-                  useMaterial3: true,
-                  colorScheme: ColorScheme(
-                    brightness: b,
-                    primary: p.accent,
-                    onPrimary: Colors.white,
-                    secondary: p.accentDk,
-                    onSecondary: Colors.white,
-                    error: p.danger,
-                    onError: Colors.white,
-                    surface: p.bgList,
-                    onSurface: p.text,
-                    surfaceContainerHighest: p.bgChat,
-                    outline: p.divider,
-                    outlineVariant: p.divider.withValues(alpha: 0.5),
+              useMaterial3: true,
+              colorScheme: ColorScheme(
+                brightness: b,
+                primary: p.accent,
+                onPrimary: Colors.white,
+                secondary: p.accentDk,
+                onSecondary: Colors.white,
+                error: p.danger,
+                onError: Colors.white,
+                surface: p.bgList,
+                onSurface: p.text,
+                surfaceContainerHighest: p.bgChat,
+                outline: p.divider,
+                outlineVariant: p.divider.withValues(alpha: 0.5),
+              ),
+              scaffoldBackgroundColor: p.bgList,
+              appBarTheme: AppBarTheme(
+                backgroundColor: p.bgList,
+                foregroundColor: p.text,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                surfaceTintColor: Colors.transparent,
+                centerTitle: false,
+                titleTextStyle: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: p.text,
+                ),
+                iconTheme: IconThemeData(color: p.textSoft),
+              ),
+              cardTheme: CardThemeData(
+                color: p.bgChat,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.md),
+                  side: BorderSide(color: p.divider.withValues(alpha: 0.45)),
+                ),
+                margin: EdgeInsets.zero,
+              ),
+              chipTheme: ChipThemeData(
+                backgroundColor: p.bgChat,
+                selectedColor: p.accent,
+                disabledColor: p.bgChat,
+                labelStyle: TextStyle(fontSize: 13, color: p.textSoft),
+                secondaryLabelStyle: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.pill),
+                ),
+                side: BorderSide(color: p.divider.withValues(alpha: 0.6)),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: p.bgChat,
+                hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.md),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.md),
+                  borderSide: BorderSide(color: p.accent, width: 1.4),
+                ),
+              ),
+              pageTransitionsTheme: PageTransitionsTheme(
+                builders: const {
+                  TargetPlatform.android:
+                      PredictiveBackPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                },
+              ),
+              snackBarTheme: SnackBarThemeData(
+                backgroundColor: p.bgChat,
+                contentTextStyle: TextStyle(color: p.text),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.md),
+                ),
+                behavior: SnackBarBehavior.floating,
+              ),
+              dialogTheme: DialogThemeData(
+                backgroundColor: p.modalBg,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(TNRadii.lg),
+                ),
+              ),
+              bottomSheetTheme: BottomSheetThemeData(
+                backgroundColor: p.modalBg,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(TNRadii.sheet),
                   ),
-                  scaffoldBackgroundColor: p.bgList,
-                  appBarTheme: AppBarTheme(
-                    backgroundColor: p.bgList,
-                    foregroundColor: p.text,
-                    elevation: 0,
-                    scrolledUnderElevation: 0,
-                    surfaceTintColor: Colors.transparent,
-                    centerTitle: false,
-                    titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.text),
-                    iconTheme: IconThemeData(color: p.textSoft),
-                  ),
-                  cardTheme: CardThemeData(
-                    color: p.bgChat,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(TNRadii.md),
-                      side: BorderSide(color: p.divider.withValues(alpha: 0.45)),
-                    ),
-                    margin: EdgeInsets.zero,
-                  ),
-                  chipTheme: ChipThemeData(
-                    backgroundColor: p.bgChat,
-                    selectedColor: p.accent,
-                    disabledColor: p.bgChat,
-                    labelStyle: TextStyle(fontSize: 13, color: p.textSoft),
-                    secondaryLabelStyle: const TextStyle(fontSize: 13, color: Colors.white),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.pill)),
-                    side: BorderSide(color: p.divider.withValues(alpha: 0.6)),
-                  ),
-                  inputDecorationTheme: InputDecorationTheme(
-                    filled: true,
-                    fillColor: p.bgChat,
-                    hintStyle: TextStyle(color: p.textFaint, fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(TNRadii.md),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(TNRadii.md),
-                      borderSide: BorderSide(color: p.accent, width: 1.4),
-                    ),
-                  ),
-                  pageTransitionsTheme: const PageTransitionsTheme(
-                    builders: {
-                      TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-                      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                    },
-                  ),
-                  snackBarTheme: SnackBarThemeData(
-                    backgroundColor: p.bgChat,
-                    contentTextStyle: TextStyle(color: p.text),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.md)),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                  dialogTheme: DialogThemeData(
-                    backgroundColor: p.modalBg,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.lg)),
-                  ),
-                  bottomSheetTheme: BottomSheetThemeData(
-                    backgroundColor: p.modalBg,
-                    shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(TNRadii.sheet))),
-                  ),
-                  dividerTheme: DividerThemeData(color: p.divider.withValues(alpha: 0.6), thickness: 1),
-                );
+                ),
+              ),
+              dividerTheme: DividerThemeData(
+                color: p.divider.withValues(alpha: 0.6),
+                thickness: 1,
+              ),
+            );
             return MaterialApp(
               title: 'TN',
               debugShowCheckedModeBanner: false,
               navigatorKey: _navKey,
               locale: Locale(model.state.lang),
-              supportedLocales: const [Locale('ru'), Locale('en'), Locale('uk'), Locale('de'), Locale('es'), Locale('fr')],
+              supportedLocales: const [
+                Locale('ru'),
+                Locale('en'),
+                Locale('uk'),
+                Locale('de'),
+                Locale('es'),
+                Locale('fr'),
+              ],
               localizationsDelegates: const [
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
@@ -408,8 +507,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                           _whatsNewShown = true;
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (!mounted) return;
-                            maybeShowWhatsNew(
-                                _navKey.currentContext!, model);
+                            maybeShowWhatsNew(_navKey.currentContext!, model);
                           });
                         },
                   child: child ?? const SizedBox.shrink(),
@@ -426,17 +524,22 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
                   if (!_shareInWired) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _shareInWired = true;
-                      ShareIn.init(model,
-                          getContext: () => _navKey.currentContext!,
-                          openChat: (chatId, entryId) {
-                            _navKey.currentState?.push(MaterialPageRoute(
+                      ShareIn.init(
+                        model,
+                        getContext: () => _navKey.currentContext!,
+                        openChat: (chatId, entryId) {
+                          _navKey.currentState?.push(
+                            MaterialPageRoute(
                               builder: (_) => ChatScreen(
-                                  model: model,
-                                  chatId: chatId,
-                                  scrollToEntryId: entryId,
-                                  highlightEntryId: entryId),
-                            ));
-                          });
+                                model: model,
+                                chatId: chatId,
+                                scrollToEntryId: entryId,
+                                highlightEntryId: entryId,
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     });
                   }
                   return ListScreen(model: model);
@@ -463,7 +566,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       } catch (_) {}
     };
     await RemindersService.instance.requestNotificationsPermission();
-    _purgeExpiredTrash(model);
+    await _purgeExpiredTrash(model);
     unawaited(MediaStore().purgeTrash());
     unawaited(ensureFirstLaunch());
     try {
@@ -478,8 +581,9 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       unawaited(_initSync(model));
       unawaited(BackupService.maybeAutoBackup(model.state));
       Timer.periodic(
-          const Duration(hours: 1),
-          (_) => unawaited(BackupService.maybeAutoBackup(model.state)));
+        const Duration(hours: 1),
+        (_) => unawaited(BackupService.maybeAutoBackup(model.state)),
+      );
     }
     return model;
   }
@@ -491,12 +595,24 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       if (retentionDays == 0) return; // forever
       final now = DateTime.now().millisecondsSinceEpoch;
       final cutoff = now - retentionDays * 86400000;
-      final expired = model.state.chats.where((c) => c.isTrashed && (c.deletedAt ?? 0) < cutoff).toList();
+      final expired = model.state.chats
+          .where((c) => c.isTrashed && (c.deletedAt ?? 0) < cutoff)
+          .toList();
       if (expired.isEmpty) return;
+      final deleting = <Entry>[
+        for (final chat in expired) ...model.state.ownEntriesFor(chat.id),
+      ];
+      final deletingIds = deleting.map((e) => e.id).toSet();
+      for (final e in deleting) {
+        try {
+          await MediaStore().removeIfUnreferenced(
+                e.media,
+                model.state.entries,
+                ignoredIds: deletingIds,
+              );
+        } catch (_) {}
+      }
       for (final chat in expired) {
-        for (final e in model.state.entriesFor(chat.id)) {
-          try { await MediaStore().remove(e.media); } catch (_) {}
-        }
         for (final r in model.state.reminders.toList()) {
           if (r.chatId == chat.id) model.state.reminders.remove(r);
         }
@@ -504,6 +620,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
       }
       model.state.chats.removeWhere((c) => expired.any((e) => e.id == c.id));
       await model.save();
+      await model.rescheduleAlarms();
     } catch (_) {}
   }
 

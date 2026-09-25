@@ -3,17 +3,17 @@ import 'package:tn/src/models.dart';
 import 'package:tn/src/reminder_engine.dart';
 
 void main() {
-String fakeTr(String key, [List<String>? args]) =>
-    key + (args == null ? '' : ':${args.join(",")}');
+  String fakeTr(String key, [List<String>? args]) =>
+      key + (args == null ? '' : ':${args.join(",")}');
 
   Entry todoEntry(String id, int? dueAt, {String type = 'todo'}) => Entry(
-        id: id,
-        chatId: 'c1',
-        type: type,
-        ts: 0,
-        items: [TodoItem(id: 'i1', text: 'task')],
-        dueAt: dueAt,
-      );
+    id: id,
+    chatId: 'c1',
+    type: type,
+    ts: 0,
+    items: [TodoItem(id: 'i1', text: 'task')],
+    dueAt: dueAt,
+  );
 
   group('collectDue', () {
     final now = 10 * 24 * 3600 * 1000; // some fixed "now"
@@ -65,21 +65,36 @@ String fakeTr(String key, [List<String>? args]) =>
       expect(due.single.key, 't1|$now');
     });
 
+    test('skips chats with notifications disabled', () {
+      final due = collectDue(
+        reminders: [Reminder(id: 'r1', chatId: 'c1', when: now)],
+        entries: [todoEntry('t1', now)],
+        chatTrashed: (_) => false,
+        chatNotificationsEnabled: (_) => false,
+        chatNameOf: (_) => 'X',
+        tr: fakeTr,
+        now: now,
+      );
+      expect(due, isEmpty);
+    });
+
     test('same id rescheduled to a new time fires again (distinct keys)', () {
       final a = collectDue(
-          reminders: [Reminder(id: 'r', chatId: 'c1', when: now)],
-          entries: const [],
-          chatTrashed: (_) => false,
+        reminders: [Reminder(id: 'r', chatId: 'c1', when: now)],
+        entries: const [],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
-          tr: fakeTr,
-          now: now);
+        tr: fakeTr,
+        now: now,
+      );
       final b = collectDue(
-          reminders: [Reminder(id: 'r', chatId: 'c1', when: now + hour)],
-          entries: const [],
-          chatTrashed: (_) => false,
+        reminders: [Reminder(id: 'r', chatId: 'c1', when: now + hour)],
+        entries: const [],
+        chatTrashed: (_) => false,
         chatNameOf: (_) => 'X',
-          tr: fakeTr,
-          now: now + hour);
+        tr: fakeTr,
+        now: now + hour,
+      );
       expect(a.single.key == b.single.key, isFalse);
     });
 
@@ -95,26 +110,29 @@ String fakeTr(String key, [List<String>? args]) =>
       expect(due.length, 1);
     });
 
-    test('fully done todo never fires (marked done, alarm must stay silent)', () {
-      final done = Entry(
-        id: 'd1',
-        chatId: 'c1',
-        type: 'todo',
-        ts: 0,
-        items: [TodoItem(id: 'i1', text: 'task', done: true)],
-        dueAt: now,
-      );
-      expect(done.isDone, isTrue);
-      final due = collectDue(
-        reminders: const [],
-        entries: [done, todoEntry('t1', now)],
-        chatTrashed: (_) => false,
-        chatNameOf: (_) => 'X',
-        tr: fakeTr,
-        now: now,
-      );
-      expect(due.map((d) => d.key), ['t1|$now']);
-    });
+    test(
+      'fully done todo never fires (marked done, alarm must stay silent)',
+      () {
+        final done = Entry(
+          id: 'd1',
+          chatId: 'c1',
+          type: 'todo',
+          ts: 0,
+          items: [TodoItem(id: 'i1', text: 'task', done: true)],
+          dueAt: now,
+        );
+        expect(done.isDone, isTrue);
+        final due = collectDue(
+          reminders: const [],
+          entries: [done, todoEntry('t1', now)],
+          chatTrashed: (_) => false,
+          chatNameOf: (_) => 'X',
+          tr: fakeTr,
+          now: now,
+        );
+        expect(due.map((d) => d.key), ['t1|$now']);
+      },
+    );
 
     test('isDone is false for undone / partial / non-todo', () {
       expect(todoEntry('t1', now).isDone, isFalse);
@@ -130,7 +148,13 @@ String fakeTr(String key, [List<String>? args]) =>
         dueAt: now,
       );
       expect(partial.isDone, isFalse);
-      final note = Entry(id: 'n1', chatId: 'c1', type: 'text', ts: 0, text: 'hi');
+      final note = Entry(
+        id: 'n1',
+        chatId: 'c1',
+        type: 'text',
+        ts: 0,
+        text: 'hi',
+      );
       expect(note.isDone, isFalse);
     });
   });

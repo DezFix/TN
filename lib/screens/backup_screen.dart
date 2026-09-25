@@ -1,4 +1,4 @@
-﻿import 'dart:async' show unawaited;
+import 'dart:async' show unawaited;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
@@ -10,6 +10,7 @@ import '../src/gdrive.dart';
 import '../src/i18n.dart';
 import '../src/sync.dart';
 import '../src/theme.dart';
+import '../src/widget_bridge.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key, required this.model});
@@ -90,11 +91,13 @@ class _BackupScreenState extends State<BackupScreen> {
   String tr(String key, [List<String>? args]) => widget.model.tr(key, args);
 
   void _toast(String msg, {bool error = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      duration: const Duration(milliseconds: 2500),
-      backgroundColor: error ? const Color(0xFF3A2020) : p.bgChat,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(milliseconds: 2500),
+        backgroundColor: error ? const Color(0xFF3A2020) : p.bgChat,
+      ),
+    );
   }
 
   Palette get p => widget.model.p;
@@ -108,8 +111,14 @@ class _BackupScreenState extends State<BackupScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: p.text),
-        title: Text(tr('backup_screen_title'),
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.text)),
+        title: Text(
+          tr('backup_screen_title'),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: p.text,
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
@@ -133,7 +142,10 @@ class _BackupScreenState extends State<BackupScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     icon: Icon(Icons.restore, size: 18, color: p.text),
-                    label: Text(tr('backup_import'), style: TextStyle(color: p.text)),
+                    label: Text(
+                      tr('backup_import'),
+                      style: TextStyle(color: p.text),
+                    ),
                     onPressed: _importLocal,
                   ),
                 ),
@@ -143,12 +155,26 @@ class _BackupScreenState extends State<BackupScreen> {
                     Container(
                       width: 28,
                       height: 28,
-                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.lock_outline_rounded, size: 16, color: p.accent),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        size: 16,
+                        color: p.accent,
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    Text(tr('bk_encrypt'),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    Text(
+                      tr('bk_encrypt'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: p.text,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -168,42 +194,87 @@ class _BackupScreenState extends State<BackupScreen> {
                     isDense: true,
                     hintText: tr('bk_pass_field'),
                     hintStyle: TextStyle(color: p.textFaint, fontSize: 12.5),
-                    prefixIcon: Icon(Icons.key_rounded, size: 18, color: p.textFaint),
+                    prefixIcon: Icon(
+                      Icons.key_rounded,
+                      size: 18,
+                      color: p.textFaint,
+                    ),
                     enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(TNRadii.md),
-                        borderSide: BorderSide(color: _encCtrl.text.isEmpty ? p.divider.withValues(alpha: 0.5) : p.accent)),
+                      borderRadius: BorderRadius.circular(TNRadii.md),
+                      borderSide: BorderSide(
+                        color: _encCtrl.text.isEmpty
+                            ? p.divider.withValues(alpha: 0.5)
+                            : p.accent,
+                      ),
+                    ),
                     focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(TNRadii.md),
-                        borderSide: BorderSide(color: p.accent, width: 1.4)),
+                      borderRadius: BorderRadius.circular(TNRadii.md),
+                      borderSide: BorderSide(color: p.accent, width: 1.4),
+                    ),
                     suffixIcon: IconButton(
                       visualDensity: VisualDensity.compact,
-                      icon: Icon(_showEnc ? Icons.visibility_off : Icons.visibility,
-                          size: 18, color: p.textFaint),
+                      icon: Icon(
+                        _showEnc ? Icons.visibility_off : Icons.visibility,
+                        size: 18,
+                        color: p.textFaint,
+                      ),
                       onPressed: () => setState(() => _showEnc = !_showEnc),
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(tr('bk_encrypt_hint'),
-                    style: TextStyle(fontSize: 11, color: p.textFaint, height: 1.4)),
+                Text(
+                  tr('bk_encrypt_hint'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: p.textFaint,
+                    height: 1.4,
+                  ),
+                ),
                 Divider(height: 24, color: p.divider.withValues(alpha: 0.5)),
                 Row(
                   children: [
                     Container(
                       width: 28,
                       height: 28,
-                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.schedule_outlined, size: 16, color: p.accent),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.schedule_outlined,
+                        size: 16,
+                        color: p.accent,
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    Text(tr('bk_freq'),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    Text(
+                      tr('bk_freq'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: p.text,
+                      ),
+                    ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(TNRadii.pill)),
-                      child: Text(_daysLabel(_daysIdx),
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.accent)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(TNRadii.pill),
+                      ),
+                      child: Text(
+                        _daysLabel(_daysIdx),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: p.accent,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -215,10 +286,18 @@ class _BackupScreenState extends State<BackupScreen> {
                     thumbColor: p.accent,
                     overlayColor: p.accent.withValues(alpha: 0.14),
                     valueIndicatorColor: p.accent,
-                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    valueIndicatorTextStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                     trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 9,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 20,
+                    ),
                     showValueIndicator: ShowValueIndicator.always,
                   ),
                   child: Slider(
@@ -228,7 +307,8 @@ class _BackupScreenState extends State<BackupScreen> {
                     divisions: 4,
                     label: _daysLabel(_daysIdx),
                     onChanged: (v) => setState(() => _daysIdx = v.round()),
-                    onChangeEnd: (v) async => await BackupService.setDays(_daysValues[v.round()]),
+                    onChangeEnd: (v) async =>
+                        await BackupService.setDays(_daysValues[v.round()]),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -237,18 +317,47 @@ class _BackupScreenState extends State<BackupScreen> {
                     Container(
                       width: 28,
                       height: 28,
-                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.filter_none_rounded, size: 16, color: p.accent),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.filter_none_rounded,
+                        size: 16,
+                        color: p.accent,
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    Text(tr('bk_max'),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    Text(
+                      tr('bk_max'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: p.text,
+                      ),
+                    ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(TNRadii.pill), border: Border.all(color: p.divider.withValues(alpha: 0.5))),
-                      child: Text('${_maxValues[_maxIdx]}',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSoft)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.bgList,
+                        borderRadius: BorderRadius.circular(TNRadii.pill),
+                        border: Border.all(
+                          color: p.divider.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        '${_maxValues[_maxIdx]}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: p.textSoft,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -260,10 +369,18 @@ class _BackupScreenState extends State<BackupScreen> {
                     thumbColor: p.accent,
                     overlayColor: p.accent.withValues(alpha: 0.14),
                     valueIndicatorColor: p.accent,
-                    valueIndicatorTextStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    valueIndicatorTextStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                     trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 9,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 20,
+                    ),
                     showValueIndicator: ShowValueIndicator.always,
                   ),
                   child: Slider(
@@ -273,30 +390,55 @@ class _BackupScreenState extends State<BackupScreen> {
                     divisions: 2,
                     label: '${_maxValues[_maxIdx]}',
                     onChanged: (v) => setState(() => _maxIdx = v.round()),
-                    onChangeEnd: (v) async => await BackupService.setMaxBackups(_maxValues[v.round()]),
+                    onChangeEnd: (v) async => await BackupService.setMaxBackups(
+                      _maxValues[v.round()],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(tr('bk_max_hint'),
-                    style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                Text(
+                  tr('bk_max_hint'),
+                  style: TextStyle(fontSize: 11.5, color: p.textFaint),
+                ),
                 Divider(height: 24, color: p.divider.withValues(alpha: 0.5)),
                 Row(
                   children: [
                     Container(
                       width: 28,
                       height: 28,
-                      decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                      child: Icon(Icons.folder_outlined, size: 16, color: p.accent),
+                      decoration: BoxDecoration(
+                        color: p.accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.folder_outlined,
+                        size: 16,
+                        color: p.accent,
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    Text(tr('bk_folder'),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: p.text)),
+                    Text(
+                      tr('bk_folder'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: p.text,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(color: p.bgList, borderRadius: BorderRadius.circular(TNRadii.md), border: Border.all(color: p.divider.withValues(alpha: 0.5))),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.bgList,
+                    borderRadius: BorderRadius.circular(TNRadii.md),
+                    border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                  ),
                   child: Row(
                     children: [
                       Icon(Icons.folder_outlined, size: 18, color: p.textSoft),
@@ -311,24 +453,45 @@ class _BackupScreenState extends State<BackupScreen> {
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: p.accent, padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), minimumSize: Size.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TNRadii.md))),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: p.accent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(TNRadii.md),
+                          ),
+                        ),
                         onPressed: _pickFolder,
-                        child: Text(tr('bk_choose'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                        child: Text(
+                          tr('bk_choose'),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(tr('backup_local_hint'),
-                    style: TextStyle(fontSize: 11.5, color: p.textFaint, height: 1.4)),
+                Text(
+                  tr('backup_local_hint'),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: p.textFaint,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
 
           _section(tr('backup_cloud')),
-          _card(
-            child: _nc == null ? _nextcloudForm() : _nextcloudConnected(),
-          ),
+          _card(child: _nc == null ? _nextcloudForm() : _nextcloudConnected()),
           const SizedBox(height: 8),
           _card(
             child: (_gd == null || !_gd!.isConnected)
@@ -346,20 +509,35 @@ class _BackupScreenState extends State<BackupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(Icons.add_to_drive, size: 22, color: p.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('Google Drive',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-          ),
-        ]),
+        Row(
+          children: [
+            Icon(Icons.add_to_drive, size: 22, color: p.accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Google Drive',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: p.text,
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             icon: _gdBusy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.login, size: 18),
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             label: Text(tr('gd_connect')),
@@ -374,29 +552,44 @@ class _BackupScreenState extends State<BackupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(Icons.add_to_drive, size: 22, color: p.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('Google Drive',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-          ),
-          IconButton(
-            tooltip: tr('backup_disconnect'),
-            icon: Icon(Icons.link_off, size: 20, color: p.textSoft),
-            onPressed: () async {
-              await GoogleDriveClient.forget();
-              if (!mounted) return;
-              setState(() => _gd = null);
-            },
-          ),
-        ]),
+        Row(
+          children: [
+            Icon(Icons.add_to_drive, size: 22, color: p.accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Google Drive',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: p.text,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: tr('backup_disconnect'),
+              icon: Icon(Icons.link_off, size: 20, color: p.textSoft),
+              onPressed: () async {
+                await GoogleDriveClient.forget();
+                if (!mounted) return;
+                setState(() => _gd = null);
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             icon: _gdBusy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.cloud_upload_outlined, size: 18),
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             label: Text(tr('backup_upload')),
@@ -492,8 +685,11 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _exportLocal() async {
     try {
-      final path = await BackupService.export(widget.model.state,
-          dir: _dir, password: _encCtrl.text.trim());
+      final path = await BackupService.export(
+        widget.model.state,
+        dir: _dir,
+        password: _encCtrl.text.trim(),
+      );
       if (!mounted) return;
       final name = path.split('/').last.split('\\').last;
       _toast(tr('backup_exported', [name]));
@@ -509,8 +705,14 @@ class _BackupScreenState extends State<BackupScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: p.modalBg,
-        title: Text(tr('bk_pass_prompt'),
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+        title: Text(
+          tr('bk_pass_prompt'),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: p.text,
+          ),
+        ),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -522,8 +724,9 @@ class _BackupScreenState extends State<BackupScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(tr('cancel'), style: TextStyle(color: p.textSoft)),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             onPressed: () => Navigator.pop(ctx, ctrl.text),
@@ -537,20 +740,30 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _importLocal() async {
     try {
-      const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
+      const groups = [
+        XTypeGroup(label: 'backup', extensions: ['zip', 'json']),
+      ];
       final f = await openFile(acceptedTypeGroups: groups);
       if (f == null) return;
       final bytes = await f.readAsBytes();
-      var password = _encCtrl.text.trim().isNotEmpty ? _encCtrl.text.trim() : null;
+      var password = _encCtrl.text.trim().isNotEmpty
+          ? _encCtrl.text.trim()
+          : null;
       if (BackupCrypto.isEncrypted(bytes) && password == null) {
         password = await _promptPassword();
         if (password == null || password.isEmpty) return;
       }
-      await BackupService.importFromBytes(bytes, f.name, widget.model.state,
-          password: password);
+      await BackupService.importFromBytes(
+        bytes,
+        f.name,
+        widget.model.state,
+        password: password,
+      );
       widget.model.tr = makeTranslator(widget.model.state.lang);
-      widget.model.refresh();
-      if (!mounted) return;
+       await widget.model.rescheduleAlarms();
+       WidgetBridge.refresh().catchError((_) {});
+       widget.model.refresh();
+       if (!mounted) return;
       _toast(tr('backup_imported'));
       setState(() {});
     } on BackupEncryptedException {
@@ -563,46 +776,79 @@ class _BackupScreenState extends State<BackupScreen> {
   // ---------------- nextcloud ----------------
 
   Widget _section(String title) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
-        child: Text(title,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: p.textFaint)),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+    child: Text(
+      title,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.6,
+        color: p.textFaint,
+      ),
+    ),
+  );
 
   Widget _card({required Widget child}) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: p.bgChat,
-          borderRadius: BorderRadius.circular(TNRadii.md),
-          border: Border.all(color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35)),
-          boxShadow: p.cardShadow,
-        ),
-        child: child,
-      );
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: p.bgChat,
+      borderRadius: BorderRadius.circular(TNRadii.md),
+      border: Border.all(
+        color: p.divider.withValues(alpha: p.isDark ? 0.45 : 0.35),
+      ),
+      boxShadow: p.cardShadow,
+    ),
+    child: child,
+  );
 
   Widget _nextcloudForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(Icons.cloud_outlined, size: 22, color: p.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('Nextcloud',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-          ),
-        ]),
+        Row(
+          children: [
+            Icon(Icons.cloud_outlined, size: 22, color: p.accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Nextcloud',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: p.text,
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
-        _field(_serverCtrl, tr('backup_nc_server'), 'https://cloud.example.com'),
+        _field(
+          _serverCtrl,
+          tr('backup_nc_server'),
+          'https://cloud.example.com',
+        ),
         const SizedBox(height: 8),
         _field(_userCtrl, tr('backup_nc_user'), 'user'),
         const SizedBox(height: 8),
-        _field(_passCtrl, tr('backup_nc_pass'), 'вЂўвЂўвЂўвЂўвЂўвЂўвЂўвЂў', obscure: true),
+        _field(
+          _passCtrl,
+          tr('backup_nc_pass'),
+          'вЂўвЂўвЂўвЂўвЂўвЂўвЂўвЂў',
+          obscure: true,
+        ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             icon: _ncBusy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.link, size: 18),
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             label: Text(tr('backup_connect')),
@@ -613,8 +859,12 @@ class _BackupScreenState extends State<BackupScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label, String hint,
-      {bool obscure = false}) {
+  Widget _field(
+    TextEditingController c,
+    String label,
+    String hint, {
+    bool obscure = false,
+  }) {
     return TextField(
       controller: c,
       obscureText: obscure,
@@ -628,11 +878,13 @@ class _BackupScreenState extends State<BackupScreen> {
         labelStyle: TextStyle(color: p.textSoft, fontSize: 12.5),
         hintStyle: TextStyle(color: p.textFaint, fontSize: 12.5),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: p.divider)),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: p.divider),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: p.accent)),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: p.accent),
+        ),
       ),
     );
   }
@@ -641,38 +893,55 @@ class _BackupScreenState extends State<BackupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(Icons.cloud_done_outlined, size: 22, color: p.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Nextcloud',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
-                Text('${_nc!.user} В· ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
+        Row(
+          children: [
+            Icon(Icons.cloud_done_outlined, size: 22, color: p.accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nextcloud',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: p.text,
+                    ),
+                  ),
+                  Text(
+                    '${_nc!.user} В· ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: p.textSoft)),
-              ],
+                    style: TextStyle(fontSize: 11.5, color: p.textSoft),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: tr('backup_disconnect'),
-            icon: Icon(Icons.link_off, size: 20, color: p.textSoft),
-            onPressed: () async {
-              await NextcloudClient.forget();
-              if (!mounted) return;
-              setState(() => _nc = null);
-            },
-          ),
-        ]),
+            IconButton(
+              tooltip: tr('backup_disconnect'),
+              icon: Icon(Icons.link_off, size: 20, color: p.textSoft),
+              onPressed: () async {
+                await NextcloudClient.forget();
+                if (!mounted) return;
+                setState(() => _nc = null);
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             icon: _ncBusy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.cloud_upload_outlined, size: 18),
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             label: Text(tr('backup_upload')),
@@ -685,7 +954,11 @@ class _BackupScreenState extends State<BackupScreen> {
           child: OutlinedButton.icon(
             icon: _ncBusy
                 ? const SizedBox(width: 16, height: 16)
-                : const Icon(Icons.cloud_download_outlined, size: 18, color: null),
+                : const Icon(
+                    Icons.cloud_download_outlined,
+                    size: 18,
+                    color: null,
+                  ),
             label: Text(tr('backup_restore_last')),
             onPressed: _ncBusy ? null : _restoreNc,
           ),
@@ -704,8 +977,7 @@ class _BackupScreenState extends State<BackupScreen> {
       return;
     }
     setState(() => _ncBusy = true);
-    final client =
-        NextcloudClient(server: server, user: user, pass: pass);
+    final client = NextcloudClient(server: server, user: user, pass: pass);
     final ok = await client.testConnection();
     if (!mounted) return;
     if (ok) {
@@ -730,7 +1002,10 @@ class _BackupScreenState extends State<BackupScreen> {
       final ok = await _nc!.upload(name, zip);
       if (!mounted) return;
       setState(() => _ncBusy = false);
-      _toast(ok ? tr('backup_uploaded') : tr('backup_cloud_failed'), error: !ok);
+      _toast(
+        ok ? tr('backup_uploaded') : tr('backup_cloud_failed'),
+        error: !ok,
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _ncBusy = false);
@@ -751,7 +1026,9 @@ class _BackupScreenState extends State<BackupScreen> {
       }
       final bytes = await _nc!.download(list.last);
       if (bytes == null) throw Exception('download failed');
-      var password = _encCtrl.text.trim().isNotEmpty ? _encCtrl.text.trim() : null;
+      var password = _encCtrl.text.trim().isNotEmpty
+          ? _encCtrl.text.trim()
+          : null;
       if (BackupCrypto.isEncrypted(bytes) && password == null) {
         password = await _promptPassword();
         if (password == null || password.isEmpty) {
@@ -760,11 +1037,17 @@ class _BackupScreenState extends State<BackupScreen> {
           return;
         }
       }
-      await BackupService.importFromBytes(bytes, list.last, widget.model.state,
-          password: password);
-      widget.model.tr = makeTranslator(widget.model.state.lang);
-      widget.model.refresh();
-      if (!mounted) return;
+      await BackupService.importFromBytes(
+        bytes,
+        list.last,
+        widget.model.state,
+        password: password,
+       );
+       widget.model.tr = makeTranslator(widget.model.state.lang);
+       await widget.model.rescheduleAlarms();
+       WidgetBridge.refresh().catchError((_) {});
+       widget.model.refresh();
+       if (!mounted) return;
       setState(() => _ncBusy = false);
       _toast(tr('backup_imported'));
     } on BackupEncryptedException {

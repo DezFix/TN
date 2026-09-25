@@ -15,43 +15,60 @@ void main() {
   test('json roundtrip keeps everything', () {
     final s = AppState();
     s.folders.add(Folder(id: 'f1', name: 'Работа'));
-    s.chats.add(Chat(
+    s.chats.add(
+      Chat(
         id: 'c1',
         name: 'Идеи',
         color: '#2AABEE',
         icon: '💡',
         pinned: true,
-        folderId: 'f1'));
-    s.entries.add(Entry(
-        id: 'e1', chatId: 'c1', type: 'text', ts: 1, text: 'хелло #тег', tags: ['тег']));
-    s.entries.add(Entry(
+        folderId: 'f1',
+      ),
+    );
+    s.entries.add(
+      Entry(
+        id: 'e1',
+        chatId: 'c1',
+        type: 'text',
+        ts: 1,
+        text: 'хелло #тег',
+        tags: ['тег'],
+      ),
+    );
+    s.entries.add(
+      Entry(
         id: 'e2',
         chatId: 'c1',
         type: 'todo',
         ts: 2,
-        items: [TodoItem(id: 't1', text: 'купить', done: true)]));
-    s.entries.add(Entry(
+        items: [TodoItem(id: 't1', text: 'купить', done: true)],
+      ),
+    );
+    s.entries.add(
+      Entry(
         id: 'e3',
         chatId: 'c1',
         type: 'audio',
         ts: 3,
         media: 'a.m4a',
         duration: 5,
-        waveform: [10, 50, 90]));
-    s.entries.add(Entry(
-        id: 'e4',
-        chatId: 'c1',
-        type: 'text',
-        ts: 4,
-        text: 'отложка'));
-    s.entries.add(Entry(
+        waveform: [10, 50, 90],
+      ),
+    );
+    s.entries.add(
+      Entry(id: 'e4', chatId: 'c1', type: 'text', ts: 4, text: 'отложка'),
+    );
+    s.entries.add(
+      Entry(
         id: 'e5',
         chatId: 'c1',
         type: 'text',
         ts: 5,
         text: 'зарядка',
         recurrence: 'weekly',
-        recurrenceDays: [1, 3, 5]));
+        recurrenceDays: [1, 3, 5],
+      ),
+    );
     s.theme = 'dark';
     s.lang = 'en';
 
@@ -89,19 +106,105 @@ void main() {
 
   test('search matches text, tags and todo items', () {
     final s = AppState();
-    s.entries.add(Entry(
-        id: 'e1', chatId: 'c1', type: 'text', ts: 1, text: 'Купить молоко', tags: []));
-    s.entries.add(Entry(
-        id: 'e2', chatId: 'c1', type: 'text', ts: 2, text: 'План на день', tags: ['важно']));
-    s.entries.add(Entry(
+    s.entries.add(
+      Entry(
+        id: 'e1',
+        chatId: 'c1',
+        type: 'text',
+        ts: 1,
+        text: 'Купить молоко',
+        tags: [],
+      ),
+    );
+    s.entries.add(
+      Entry(
+        id: 'e2',
+        chatId: 'c1',
+        type: 'text',
+        ts: 2,
+        text: 'План на день',
+        tags: ['важно'],
+      ),
+    );
+    s.entries.add(
+      Entry(
         id: 'e3',
         chatId: 'c1',
         type: 'todo',
         ts: 3,
-        items: [TodoItem(id: 't1', text: 'Позвонить маме')]));
+        items: [TodoItem(id: 't1', text: 'Позвонить маме')],
+      ),
+    );
     expect(s.searchEntries('молоко').map((e) => e.id), ['e1']);
     expect(s.searchEntries('важно').map((e) => e.id), ['e2']);
     expect(s.searchEntries('позвонить').map((e) => e.id), ['e3']);
     expect(s.searchEntries('нет_такого'), isEmpty);
+  });
+
+  test('auto-collect merges live entries without taking ownership', () {
+    final s = AppState();
+    s.chats.add(Chat(id: 'source', name: 'Source', color: '#2AABEE'));
+    s.chats.add(
+      Chat(
+        id: 'collector',
+        name: 'Today',
+        color: '#2AABEE',
+        autoCollect: AutoCollect(enabled: true, typeFilter: 'todo'),
+      ),
+    );
+    s.entries.add(
+      Entry(
+        id: 'task',
+        chatId: 'source',
+        type: 'todo',
+        ts: 1,
+        items: [TodoItem(id: 'i', text: 'Task')],
+      ),
+    );
+
+    final collected = s.entriesFor('collector');
+    expect(collected.map((e) => e.id), ['task']);
+    expect(s.ownEntriesFor('collector'), isEmpty);
+    expect(s.ownsEntry('collector', collected.single), isFalse);
+  });
+
+  test('today auto-collect excludes undated tasks', () {
+    final s = AppState();
+    s.chats.add(Chat(id: 'source', name: 'Source', color: '#2AABEE'));
+    s.chats.add(Chat(
+      id: 'collector',
+      name: 'Today',
+      color: '#2AABEE',
+      autoCollect: AutoCollect(
+        enabled: true,
+        typeFilter: 'todo',
+        dueFilter: 'today',
+      ),
+    ));
+    s.entries.add(Entry(
+      id: 'undated',
+      chatId: 'source',
+      type: 'todo',
+      ts: 1,
+      items: [TodoItem(id: 'i', text: 'No date')],
+    ));
+    expect(s.entriesFor('collector'), isEmpty);
+  });
+
+  test('auto-collect ignores trashed source chats', () {
+    final s = AppState();
+    s.chats.add(
+      Chat(id: 'source', name: 'Source', color: '#2AABEE', deletedAt: 1),
+    );
+    s.chats.add(
+      Chat(
+        id: 'collector',
+        name: 'Today',
+        color: '#2AABEE',
+        autoCollect: AutoCollect(enabled: true),
+      ),
+    );
+    s.entries.add(Entry(id: 'task', chatId: 'source', type: 'text', ts: 1));
+    expect(s.entriesFor('collector'), isEmpty);
   });
 }

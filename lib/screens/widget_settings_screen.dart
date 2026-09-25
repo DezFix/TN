@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
@@ -43,7 +43,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         if (s != null) font = double.tryParse(s) ?? 1.0;
       } catch (_) {}
     }
-    final period = prefs.getString('tn-daywidget-period') ?? 'all';
+    final period = prefs.getString('tn-daywidget-period') ?? 'upcoming';
     if (!mounted) return;
     setState(() {
       _alpha = alpha.clamp(0.2, 1.0);
@@ -72,8 +72,18 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         backgroundColor: p.bgList,
         foregroundColor: p.text,
         elevation: 0,
-        title: Text(tr('widget_settings_title'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.text)),
-        leading: IconButton(icon: Icon(Icons.arrow_back, color: p.textSoft), onPressed: () => Navigator.pop(context)),
+        title: Text(
+          tr('widget_settings_title'),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: p.text,
+          ),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: p.textSoft),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -88,15 +98,18 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
-                  child: Text(tr('dw_period_hint'),
-                      style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                  child: Text(
+                    tr('dw_period_hint'),
+                    style: TextStyle(fontSize: 11.5, color: p.textFaint),
+                  ),
                 ),
                 Row(
                   children: [
-                    for (final (val, key) in [('today', 'dw_period_today'), ('upcoming', 'dw_period_upcoming')]) ...[
-                      Expanded(
-                        child: _periodButton(p, val, tr(key)),
-                      ),
+                    for (final (val, key) in [
+                      ('today', 'dw_period_today'),
+                      ('upcoming', 'dw_period_upcoming'),
+                    ]) ...[
+                      Expanded(child: _periodButton(p, val, tr(key))),
                       if (key != 'dw_period_upcoming') const SizedBox(width: 8),
                     ],
                   ],
@@ -120,13 +133,26 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                   activeColor: p.accent,
                   inactiveColor: p.divider,
                   onChanged: (v) => setState(() => _alpha = v),
-                  onChangeEnd: (v) async { _alpha = v; await _save(); },
+                  onChangeEnd: (v) async {
+                    _alpha = v;
+                    await _save();
+                  },
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text('${(_alpha * 100).round()}%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.accent)),
+                  child: Text(
+                    '${(_alpha * 100).round()}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.accent,
+                    ),
+                  ),
                 ),
-                Text(tr('widget_transparency_hint'), style: TextStyle(fontSize: 11.5, color: p.textFaint)),
+                Text(
+                  tr('widget_transparency_hint'),
+                  style: TextStyle(fontSize: 11.5, color: p.textFaint),
+                ),
               ],
             ),
           ),
@@ -145,11 +171,21 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                   activeColor: p.accent,
                   inactiveColor: p.divider,
                   onChanged: (v) => setState(() => _font = v),
-                  onChangeEnd: (v) async { _font = v; await _save(); },
+                  onChangeEnd: (v) async {
+                    _font = v;
+                    await _save();
+                  },
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text('${(_font * 100).round()}%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.accent)),
+                  child: Text(
+                    '${(_font * 100).round()}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: p.accent,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -163,24 +199,33 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   Widget _periodButton(Palette p, String value, String title) {
     final selected = _period == value;
     return InkWell(
-      onTap: () async { setState(() => _period = value); await _save(); },
+      onTap: () async {
+        setState(() => _period = value);
+        await _save();
+      },
       borderRadius: BorderRadius.circular(10),
       child: Container(
         height: 40,
         decoration: BoxDecoration(
           color: selected ? p.accent.withValues(alpha: .18) : p.bgList,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? p.accent : p.divider, width: 1.5),
+          border: Border.all(
+            color: selected ? p.accent : p.divider,
+            width: 1.5,
+          ),
         ),
         alignment: Alignment.center,
-        child: Text(title,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? p.accent : p.textSoft)),
+        child: Text(
+          title,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? p.accent : p.textSoft,
+          ),
+        ),
       ),
     );
   }
@@ -189,8 +234,13 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     final model = widget.model;
     // Mirrors the native widget layout (tn_day_widget.xml): dark rounded
     // card, header pill with count badge + gear, task rows as inner cards.
-    Widget row(String time, String chat, String text,
-        {bool overdue = false, int priority = 0}) {
+    Widget row(
+      String time,
+      String chat,
+      String text, {
+      bool overdue = false,
+      int priority = 0,
+    }) {
       final color = overdue ? const Color(0xFFFF6B6B) : const Color(0xFFEAECEF);
       final priColor = switch (priority) {
         1 => const Color(0xFFF0B429),
@@ -214,7 +264,10 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               Container(
                 width: 6,
                 height: 6,
-                decoration: BoxDecoration(color: priColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: priColor,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 7),
             ],
@@ -231,17 +284,28 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12 * _font, height: 1.2, color: color)),
+                  Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12 * _font,
+                      height: 1.2,
+                      color: color,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('$time · $chat',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 10 * _font,
-                          color: overdue ? const Color(0xFFFF6B6B) : const Color(0xFF8A9BA8))),
+                  Text(
+                    '$time · $chat',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10 * _font,
+                      color: overdue
+                          ? const Color(0xFFFF6B6B)
+                          : const Color(0xFF8A9BA8),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -249,8 +313,10 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               Container(
                 width: 6,
                 height: 6,
-                decoration:
-                    const BoxDecoration(color: Color(0xFFFF6B6B), shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF6B6B),
+                  shape: BoxShape.circle,
+                ),
               ),
           ],
         ),
@@ -258,17 +324,20 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     }
 
     Widget badge(String label) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2AABEE).withValues(alpha: .2),
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 10 * _font,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFEAECEF))),
-        );
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2AABEE).withValues(alpha: .2),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10 * _font,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFFEAECEF),
+        ),
+      ),
+    );
 
     return Container(
       width: 250,
@@ -294,24 +363,47 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                 Icon(Icons.check_circle, size: 15 * _font, color: p.accent),
                 const SizedBox(width: 7),
                 Expanded(
-                  child: Text(model.tr(_period == 'today' ? 'widget_title_today' : 'widget_title_upcoming'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 13 * _font,
-                          fontWeight: FontWeight.w700,
-                          color: p.accent)),
+                  child: Text(
+                    model.tr(
+                      _period == 'today'
+                          ? 'widget_title_today'
+                          : 'widget_title_upcoming',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13 * _font,
+                      fontWeight: FontWeight.w700,
+                      color: p.accent,
+                    ),
+                  ),
                 ),
                 badge('2'),
                 const SizedBox(width: 8),
-                Icon(Icons.settings, size: 14 * _font, color: const Color(0xFF8A9BA8)),
+                Icon(
+                  Icons.settings,
+                  size: 14 * _font,
+                  color: const Color(0xFF8A9BA8),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 6),
-          Text(model.tr('today'),
-              style: TextStyle(fontSize: 10 * _font, fontWeight: FontWeight.w700, color: const Color(0xFF8A9BA8))),
-          row('09:30', model.tr('dw_period_today'), 'Купить кофе', overdue: true, priority: 2),
+          Text(
+            model.tr('today'),
+            style: TextStyle(
+              fontSize: 10 * _font,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF8A9BA8),
+            ),
+          ),
+          row(
+            '09:30',
+            model.tr('dw_period_today'),
+            'Купить кофе',
+            overdue: true,
+            priority: 2,
+          ),
           row('12:00', model.tr('today'), 'Позвонить маме', priority: 1),
           row('18:45', model.tr('tags_title'), '#идеи записать мысль'),
         ],
@@ -320,13 +412,23 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   }
 
   Widget _sectionLabel(String label, Palette p) => Padding(
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
-        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textFaint)),
-      );
+    padding: const EdgeInsets.only(top: 18, bottom: 8),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: p.textFaint,
+      ),
+    ),
+  );
 
   Widget _card(Palette p, {required Widget child}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(12)),
-        child: child,
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    decoration: BoxDecoration(
+      color: p.bgChat,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: child,
+  );
 }

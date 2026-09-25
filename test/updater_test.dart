@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:archive/archive.dart';
@@ -25,9 +24,15 @@ void main() {
 
     test('missing components count as zero; suffixes ignored', () {
       expect(Updater.isNewerTag('v1.16', '1.15.5'), isTrue);
-      expect(Updater.isNewerTag('v1.15', '1.15.1'), isFalse);
-      // "3-beta" parses as 3 — pre-release flag does not break compare.
+      expect(Updater.isNewerTag('1.15', '1.15.1'), isFalse);
       expect(Updater.isNewerTag('v1.15.2-beta', '1.15.1'), isTrue);
+    });
+
+    test('orders prerelease identifiers numerically', () {
+      expect(Updater.isNewerTag('v1.29.0-beta.4', '1.29.0-beta.3'), isTrue);
+      expect(Updater.isNewerTag('v1.29.0-beta.10', '1.29.0-beta.9'), isTrue);
+      expect(Updater.isNewerTag('v1.29.0-beta.3', '1.29.0-beta.4'), isFalse);
+      expect(Updater.isNewerTag('v1.29.0', '1.29.0-beta.3'), isTrue);
     });
   });
 
@@ -57,17 +62,32 @@ void main() {
 
     test('prefers universal apk, skips windows zip (old bug)', () {
       final r = pick([
-        {'name': 'TN-1.0-windows-x64.zip', 'browser_download_url': 'https://x/win.zip'},
-        {'name': 'TN-1.0-arm64.apk', 'browser_download_url': 'https://x/arm.apk'},
-        {'name': 'TN-1.0-universal.apk', 'browser_download_url': 'https://x/uni.apk'},
+        {
+          'name': 'TN-1.0-windows-x64.zip',
+          'browser_download_url': 'https://x/win.zip',
+        },
+        {
+          'name': 'TN-1.0-arm64.apk',
+          'browser_download_url': 'https://x/arm.apk',
+        },
+        {
+          'name': 'TN-1.0-universal.apk',
+          'browser_download_url': 'https://x/uni.apk',
+        },
       ]);
       expect(r.url, 'https://x/uni.apk');
     });
 
     test('falls back to an abi apk when universal missing', () {
       final r = pick([
-        {'name': 'TN-1.0-windows-x64.zip', 'browser_download_url': 'https://x/win.zip'},
-        {'name': 'TN-1.0-arm64.apk', 'browser_download_url': 'https://x/arm.apk'},
+        {
+          'name': 'TN-1.0-windows-x64.zip',
+          'browser_download_url': 'https://x/win.zip',
+        },
+        {
+          'name': 'TN-1.0-arm64.apk',
+          'browser_download_url': 'https://x/arm.apk',
+        },
       ]);
       expect(r.url, 'https://x/arm.apk');
     });
@@ -75,7 +95,11 @@ void main() {
     test('extracts sha256 from the GitHub digest field', () {
       final hex = 'a' * 64;
       final r = pick([
-        {'name': 'app-universal.apk', 'digest': 'sha256:$hex', 'browser_download_url': 'https://x/u.apk'},
+        {
+          'name': 'app-universal.apk',
+          'digest': 'sha256:$hex',
+          'browser_download_url': 'https://x/u.apk',
+        },
       ]);
       expect(r.sha, hex);
     });
@@ -91,17 +115,26 @@ void main() {
 
     test('rejects a truncated download even with PK header', () {
       final archive = Archive()
-        ..add(ArchiveFile.bytes('data.json', List.generate(5000, (i) => i % 251)));
+        ..add(
+          ArchiveFile.bytes('data.json', List.generate(5000, (i) => i % 251)),
+        );
       final zip = ZipEncoder().encode(archive);
       // Simulate a cut-off transfer: drop the EOCD record at the tail.
       final truncated = zip.sublist(0, zip.length - 30);
-      expect(validateZipContainer(truncated), isFalse,
-          reason: 'truncated APKs used to pass the old 2-byte magic check '
-              'and only failed inside the Android installer');
+      expect(
+        validateZipContainer(truncated),
+        isFalse,
+        reason:
+            'truncated APKs used to pass the old 2-byte magic check '
+            'and only failed inside the Android installer',
+      );
     });
 
     test('rejects html/error pages and empty payloads', () {
-      expect(validateZipContainer(utf8.encode('<html>402 Payment Required</html>')), isFalse);
+      expect(
+        validateZipContainer(utf8.encode('<html>402 Payment Required</html>')),
+        isFalse,
+      );
       expect(validateZipContainer(const <int>[]), isFalse);
     });
   });

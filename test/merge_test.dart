@@ -79,4 +79,50 @@ void main() {
     expect(local.theme, 'light');
     expect(local.lang, 'de');
   });
+
+  test('stale cloud metadata cannot rename a newer local chat', () {
+    final local = fromRaw({
+      'stateUpdatedAt': 200,
+      'chats': [
+        {'id': 'c1', 'name': 'local name', 'color': '#FFFFFF'},
+      ],
+    });
+    local.mergeFromJson(jsonEncode({
+      'stateUpdatedAt': 100,
+      'chats': [
+        {'id': 'c1', 'name': 'stale remote name', 'color': '#000000'},
+      ],
+    }));
+    expect(local.chats.single.name, 'local name');
+  });
+
+  test('newer cloud metadata is merged', () {
+    final local = fromRaw({
+      'stateUpdatedAt': 100,
+      'chats': [
+        {'id': 'c1', 'name': 'local name', 'color': '#FFFFFF'},
+      ],
+    });
+    local.mergeFromJson(jsonEncode({
+      'stateUpdatedAt': 200,
+      'chats': [
+        {'id': 'c1', 'name': 'new remote name', 'color': '#000000'},
+      ],
+    }));
+    expect(local.chats.single.name, 'new remote name');
+  });
+
+  test('remote reminder cannot resurrect a snoozed time', () {
+    final local = fromRaw({
+      'reminders': [
+        {'id': 'r1', 'chatId': 'c1', 'when': 300},
+      ],
+    });
+    local.mergeFromJson(jsonEncode({
+      'reminders': [
+        {'id': 'r1', 'chatId': 'c1', 'when': 100},
+      ],
+    }));
+    expect(local.reminders.single.when, 300);
+  });
 }

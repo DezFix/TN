@@ -13,11 +13,22 @@ import 'models.dart';
 class UndoService {
   /// Removes [entries] from state (with alarm cancel + media soft-remove).
   /// Returns true when anything was removed.
-  static Future<bool> deleteEntries(AppModel model, List<Entry> entries) async {
-    if (entries.isEmpty) return false;
-    final ids = entries.map((e) => e.id).toSet();
-    for (final e in entries) {
-      await MediaStore().softRemove(e.media);
+  static Future<bool> deleteEntries(
+    AppModel model,
+    List<Entry> entries, {
+    String? ownerChatId,
+  }) async {
+    final deletable = ownerChatId == null
+        ? entries
+        : entries.where((e) => e.chatId == ownerChatId).toList();
+    if (deletable.isEmpty) return false;
+    final ids = deletable.map((e) => e.id).toSet();
+    for (final e in deletable) {
+      final shared = model.state.entries.any((other) =>
+          !ids.contains(other.id) && other.media == e.media);
+      if (!shared) {
+        await MediaStore().softRemove(e.media);
+      }
       try {
         await RemindersService.instance.cancelById(stableHash(e.id));
       } catch (_) {}
@@ -28,7 +39,10 @@ class UndoService {
   }
 
   /// Puts previously deleted entries back and restores their media.
-  static Future<void> restoreEntries(AppModel model, List<Entry> entries) async {
+  static Future<void> restoreEntries(
+    AppModel model,
+    List<Entry> entries,
+  ) async {
     if (entries.isEmpty) return;
     for (final e in entries) {
       // Skip if an identical entry reappeared meanwhile (widget/sync).

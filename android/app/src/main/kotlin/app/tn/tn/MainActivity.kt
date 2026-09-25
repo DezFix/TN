@@ -13,6 +13,9 @@ import java.io.File
 /// Shared content waiting for the Dart side (share-into-TN feature).
 object PendingShare {
     @Volatile
+    var ready = false
+
+    @Volatile
     var data: MutableMap<String, String?>? = null
 
     @Synchronized
@@ -158,9 +161,13 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         handleShareIntent(intent)?.let { share ->
-            flutterEngine?.let { engine ->
-                MethodChannel(engine.dartExecutor.binaryMessenger, "tn/share")
-                    .invokeMethod("onShare", share)
+            if (PendingShare.ready) {
+                flutterEngine?.let { engine ->
+                    MethodChannel(engine.dartExecutor.binaryMessenger, "tn/share")
+                        .invokeMethod("onShare", share)
+                }
+            } else {
+                PendingShare.data = share.toMutableMap()
             }
         }
     }
@@ -187,6 +194,10 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tn/share")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "setReady" -> {
+                        PendingShare.ready = true
+                        result.success(null)
+                    }
                     "getPending" -> result.success(PendingShare.take())
                     else -> result.notImplemented()
                 }
@@ -283,19 +294,22 @@ class MainActivity : FlutterFragmentActivity() {
         if (intent.action != Intent.ACTION_SEND) return null
         val mime = intent.type ?: return null
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        @Suppress("DEPRECATION")
+        val stream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        if (stream != null) {
+            val name = queryName(stream)
+            val copied = copyToAppStorage(stream, name) ?: return null
+            return mapOf(
+                "text" to (text ?: intent.extras?.getString(Intent.EXTRA_SUBJECT)),
+                "path" to copied.absolutePath,
+                "name" to (name ?: copied.name),
+                "mime" to mime,
+            )
+        }
         if (!text.isNullOrBlank()) {
             return mapOf("text" to text, "path" to null as String?, "name" to null as String?, "mime" to mime)
         }
-        @Suppress("DEPRECATION")
-        val stream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return null
-        val name = queryName(stream)
-        val copied = copyToAppStorage(stream, name) ?: return null
-        return mapOf(
-            "text" to intent.getStringExtra(Intent.EXTRA_SUBJECT),
-            "path" to copied.absolutePath,
-            "name" to (name ?: copied.name),
-            "mime" to mime,
-        )
+        return null
     }
 
     private fun queryName(uri: Uri): String? {

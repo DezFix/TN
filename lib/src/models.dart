@@ -361,7 +361,7 @@ class Entry {
 
   final String id;
   final String chatId;
-  final String type;
+  String type;
   final int ts;
   String text;
   List<String> tags;

@@ -87,19 +87,26 @@ class TnDayWidgetProvider : AppWidgetProvider() {
             val now = System.currentTimeMillis()
             val data = JSONObject(raw)
             val names = HashMap<String, String>()
+            val chatIds = HashSet<String>()
+            val trashedChatIds = HashSet<String>()
             data.optJSONArray("chats")?.let { chats ->
                 for (i in 0 until chats.length()) {
                     val c = chats.getJSONObject(i)
-                    names[c.optString("id")] = c.optString("name", "")
+                    val id = c.optString("id")
+                    chatIds.add(id)
+                    names[id] = c.optString("name", "")
+                    if (c.has("deletedAt") && !c.isNull("deletedAt")) {
+                        trashedChatIds.add(id)
+                    }
                 }
             }
             val entries = data.optJSONArray("entries") ?: return emptyList()
             val rows = ArrayList<Row>()
             for (i in 0 until entries.length()) {
                 val e = entries.getJSONObject(i)
-                if (!e.isNull("scheduledAt")) continue
                 if (e.optString("type", "") != "todo") continue
                 val chatId = e.optString("chatId", "")
+                if (!chatIds.contains(chatId) || trashedChatIds.contains(chatId)) continue
                 val time0 = e.optLong("dueAt", e.optLong("ts", 0L))
                 val due = e.optLong("dueAt", 0L)
                 when (period) {
@@ -122,14 +129,14 @@ class TnDayWidgetProvider : AppWidgetProvider() {
                 }
                 if (undone.isEmpty()) continue
                 // Корни — задачи без parentId
-                val roots = undone.filter { it.optString("parentId", "").isEmpty() }
+                val roots = undone.filter { it.optString("pid", it.optString("parentId", "")).isEmpty() }
                 val targets = if (roots.isNotEmpty()) roots else listOf(undone[0])
                 for (root in targets) {
                     val rootId = root.optString("id")
                     val title = root.optString("text", "").trim().take(90)
                     // Подзадачи вместе в одной задаче — собираем превью внутри родителя.
                     val childTexts = undone
-                        .filter { it.optString("parentId", "") == rootId }
+                        .filter { it.optString("pid", it.optString("parentId", "")) == rootId }
                         .map { it.optString("text", "").trim() }
                         .filter { it.isNotEmpty() }
                     val totalSubs = childTexts.size

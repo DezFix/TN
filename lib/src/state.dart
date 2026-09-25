@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,6 +8,7 @@ import 'models.dart';
 class AppState {
   String theme = 'light';
   String lang = 'ru';
+  int stateUpdatedAt = 0;
   final List<Folder> folders = [];
   final List<Chat> chats = [];
   final List<Entry> entries = [];
@@ -17,19 +18,14 @@ class AppState {
   /// silently losing data (e.g. disk full).
   Object? lastSaveError;
 
-  /// Entries of a chat. If the chat has an enabled auto-collect rule,
-  /// matching entries from other chats are merged in (same objects, so
-  /// toggling a task works from both places). Pinned entries float to the
-  /// top regardless of time order.
   List<Entry> entriesFor(String chatId) {
-    final own =
-        entries.where((e) => e.chatId == chatId).toList(growable: false);
+    final own = ownEntriesFor(chatId);
     final rule = chatById(chatId)?.autoCollect;
     if (rule != null && rule.enabled) {
       final seen = own.map((e) => e.id).toSet();
       for (final c in chats) {
-        if (c.id == chatId) continue; // don't pull into itself
-        if (c.autoCollect?.enabled ?? false) continue; // no chaining rules
+        if (c.id == chatId || c.isTrashed) continue;
+        if (c.autoCollect?.enabled ?? false) continue;
         if (!rule.fromAllChats && c.folderId != rule.sourceFolderId) continue;
         for (final e in entries) {
           if (e.chatId != c.id || seen.contains(e.id)) continue;
@@ -44,6 +40,11 @@ class AppState {
     return own;
   }
 
+  List<Entry> ownEntriesFor(String chatId) =>
+      entries.where((e) => e.chatId == chatId).toList();
+
+  bool ownsEntry(String chatId, Entry entry) => entry.chatId == chatId;
+
   bool _matchesCollectRule(Entry e, AutoCollect r) {
     switch (r.typeFilter) {
       case 'todo':
@@ -53,17 +54,15 @@ class AppState {
     }
     if (r.dueFilter == 'today' && e.type == 'todo') {
       final due = e.dueAt;
-      // "today" surfaces overdue tasks as well — they still need doing.
-      if (due != null && due > endOfTodayMillis()) return false;
+      if (due == null || due > endOfTodayMillis()) return false;
     }
     return true;
   }
 
   static int endOfTodayMillis() {
     final now = DateTime.now();
-    final start =
-        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
-    return start + 24 * 60 * 60 * 1000 - 1;
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    return tomorrow.millisecondsSinceEpoch - 1;
   }
 
   Chat? chatByRoomId(String roomId) {
@@ -114,41 +113,51 @@ class AppState {
 
   void loadFromJson(String raw) {
     final data = jsonDecode(raw) as Map<String, dynamic>;
+    final loadedFolders = (data['folders'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Folder.fromJson)
+        .toList();
+    final loadedChats = (data['chats'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Chat.fromJson)
+        .toList();
+    final loadedEntries = (data['entries'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Entry.fromJson)
+        .toList();
+    final loadedReminders = (data['reminders'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Reminder.fromJson)
+        .toList();
+
     folders
       ..clear()
-      ..addAll((data['folders'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(Folder.fromJson));
+      ..addAll(loadedFolders);
     chats
       ..clear()
-      ..addAll((data['chats'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(Chat.fromJson));
+      ..addAll(loadedChats);
     entries
       ..clear()
-      ..addAll((data['entries'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(Entry.fromJson));
+      ..addAll(loadedEntries);
     reminders
       ..clear()
-      ..addAll((data['reminders'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(Reminder.fromJson));
-    // 'system' theme option was removed; legacy value maps to dark.
+      ..addAll(loadedReminders);
     theme = data['theme'] == 'light' ? 'light' : 'dark';
+    stateUpdatedAt = (data['stateUpdatedAt'] as num?)?.toInt() ?? 0;
     if (data['lang'] is String) lang = data['lang'] as String;
   }
 
   String toJson() => jsonEncode({
+        'stateUpdatedAt': stateUpdatedAt,
         'theme': theme,
         'lang': lang,
-        'folders': folders.map((f) => f.toJson()).toList(),
-        'chats': chats.map((c) => c.toJson()).toList(),
-        'entries': entries.map((e) => e.toJson()).toList(),
-        'reminders': reminders.map((r) => r.toJson()).toList(),
-      });
+    'folders': folders.map((f) => f.toJson()).toList(),
+    'chats': chats.map((c) => c.toJson()).toList(),
+    'entries': entries.map((e) => e.toJson()).toList(),
+    'reminders': reminders.map((r) => r.toJson()).toList(),
+  });
 
-    static Future<AppState> load() async {
+  static Future<AppState> load() async {
     final state = AppState();
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -163,11 +172,15 @@ class AppState {
   Future<void> save() async {
     try {
       lastSaveError = null;
+      stateUpdatedAt = DateTime.now().millisecondsSinceEpoch;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(storageKey, toJson());
       // Stamp lets the app detect changes made outside this process
       // (e.g. checking a task from the home-screen widget).
-      await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(
+        'tn-state-stamp',
+        DateTime.now().millisecondsSinceEpoch,
+      );
     } catch (e, st) {
       // Never swallow: a failed save used to silently lose user data.
       lastSaveError = e;
@@ -182,6 +195,10 @@ class AppState {
   /// an older backup can no longer wipe recent notes. Local theme/lang win.
   void mergeFromJson(String raw) {
     final data = jsonDecode(raw) as Map<String, dynamic>;
+    final remoteStateUpdatedAt =
+        (data['stateUpdatedAt'] as num?)?.toInt() ?? 0;
+    final remoteMetadataIsStale = remoteStateUpdatedAt > 0 &&
+        stateUpdatedAt > remoteStateUpdatedAt;
     final remoteFolders = (data['folders'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Folder.fromJson);
@@ -189,6 +206,8 @@ class AppState {
       final i = folders.indexWhere((x) => x.id == f.id);
       if (i < 0) {
         folders.add(f);
+      } else if (remoteMetadataIsStale) {
+        continue;
       } else if (f.name != folders[i].name || f.color != folders[i].color) {
         folders[i]
           ..name = f.name
@@ -205,10 +224,11 @@ class AppState {
         chats.add(c);
         continue;
       }
+      if (remoteMetadataIsStale) continue;
       final local = chats[i];
       // A trashed chat must stay trashed even if the remote copy isn't.
-      final deletedAt = local.isTrashed &&
-              ((c.deletedAt ?? 0) <= (local.deletedAt ?? 0))
+      final deletedAt =
+          local.isTrashed && ((c.deletedAt ?? 0) <= (local.deletedAt ?? 0))
           ? local.deletedAt
           : (local.deletedAt ?? c.deletedAt);
       chats[i] = c
@@ -232,9 +252,12 @@ class AppState {
         .whereType<Map<String, dynamic>>()
         .map(Reminder.fromJson);
     for (final r in remoteReminders) {
-      if (!reminders.any((x) => x.id == r.id && x.when == r.when)) {
+      if (!reminders.any((x) => x.id == r.id)) {
         reminders.add(r);
       }
+    }
+    if (remoteStateUpdatedAt > stateUpdatedAt) {
+      stateUpdatedAt = remoteStateUpdatedAt;
     }
   }
 }

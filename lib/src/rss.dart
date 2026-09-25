@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 
 import 'app_log.dart';
+import 'media.dart';
 import 'models.dart';
 import 'state.dart';
 import 'package:path_provider/path_provider.dart';
@@ -16,28 +17,44 @@ class RssService {
     final url = chat.rssUrl;
     if (url == null || url.isEmpty) return;
     try {
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return;
       final doc = XmlDocument.parse(res.body);
       final items = _parseItems(doc);
       if (items.isEmpty) return;
       final prefs = await SharedPreferences.getInstance();
       final rawCache = prefs.getString(_cacheKey);
-      final cache = rawCache == null ? <String, dynamic>{} : jsonDecode(rawCache) as Map<String, dynamic>;
-      final seen = (cache[chat.id] as List?)?.map((e) => e as String).toSet() ?? <String>{};
+      final cache = rawCache == null
+          ? <String, dynamic>{}
+          : jsonDecode(rawCache) as Map<String, dynamic>;
+      final seen =
+          (cache[chat.id] as List?)?.map((e) => e as String).toSet() ??
+          <String>{};
       var added = 0;
       for (final it in items.take(20)) {
-        final id = it.guid.isNotEmpty ? it.guid : it.link.isNotEmpty ? it.link : it.title;
+        final id = it.guid.isNotEmpty
+            ? it.guid
+            : it.link.isNotEmpty
+            ? it.link
+            : it.title;
         if (seen.contains(id)) continue;
         seen.add(id);
-        final text = it.title + (it.link.isNotEmpty ? '\n${it.link}' : '') + (it.desc.isNotEmpty ? '\n\n${it.desc}' : '');
+        final text =
+            it.title +
+            (it.link.isNotEmpty ? '\n${it.link}' : '') +
+            (it.desc.isNotEmpty ? '\n\n${it.desc}' : '');
         String? mediaName;
         String mediaType = 'text';
         if (it.imageUrl != null && it.imageUrl!.isNotEmpty) {
           try {
-            final imgRes = await http.get(Uri.parse(it.imageUrl!)).timeout(const Duration(seconds: 10));
+            final imgRes = await http
+                .get(Uri.parse(it.imageUrl!))
+                .timeout(const Duration(seconds: 10));
             if (imgRes.statusCode == 200 && imgRes.bodyBytes.isNotEmpty) {
-              final tmpPath = '${Directory.systemTemp.path}/${uid('rssimg')}.jpg';
+              final tmpPath =
+                  '${Directory.systemTemp.path}/${uid('rssimg')}.jpg';
               final tmpFile = File(tmpPath);
               await tmpFile.writeAsBytes(imgRes.bodyBytes);
               // save via MediaStore if available, else keep tmp
@@ -56,22 +73,27 @@ class RssService {
             }
           } catch (_) {}
         }
-        state.entries.add(Entry(
-          id: uid('e'),
-          chatId: chat.id,
-          type: mediaType,
-          ts: it.pubDate ?? DateTime.now().millisecondsSinceEpoch,
-          text: text,
-          tags: extractTags(text),
-          media: mediaName,
-          mediaName: mediaName,
-        ));
+        state.entries.add(
+          Entry(
+            id: uid('e'),
+            chatId: chat.id,
+            type: mediaType,
+            ts: it.pubDate ?? DateTime.now().millisecondsSinceEpoch,
+            text: text,
+            tags: extractTags(text),
+            media: mediaName,
+            mediaName: mediaName,
+          ),
+        );
         added++;
         if (added >= 10) break;
       }
-      cache[chat.id] = seen.length > 500 ? seen.toList().sublist(seen.length - 500) : seen.toList();
+      cache[chat.id] = seen.length > 500
+          ? seen.toList().sublist(seen.length - 500)
+          : seen.toList();
       await prefs.setString(_cacheKey, jsonEncode(cache));
       if (added > 0) await state.save();
+      await enforceCacheLimit(state);
     } catch (e, st) {
       AppLog.error('rss.fetch', e, st);
     }
@@ -85,10 +107,86 @@ class RssService {
     }
   }
 
-  static Future<void> clearCache() async {
+  static Future<void> enforceCacheLimit(AppState state) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_cacheKey);
+      final maxMb = prefs.getInt('tn-cache-max-gb') ?? 1024;
+      if (maxMb <= 0) return;
+      final maxBytes = maxMb * 1024 * 1024;
+      final rssChatIds = state.chats
+          .where((chat) => chat.kind == 'rss')
+          .map((chat) => chat.id)
+          .toSet();
+      final images = state.entries
+          .where((entry) =>
+              rssChatIds.contains(entry.chatId) && entry.media != null)
+          .toList()
+        ..sort((a, b) => a.ts.compareTo(b.ts));
+      final store = MediaStore();
+      var total = 0;
+      final sizes = <Entry, int>{};
+      for (final entry in images) {
+        try {
+          final size = await File(await store.pathOf(entry.media!)).length();
+          sizes[entry] = size;
+          total += size;
+        } catch (_) {}
+      }
+      var changed = false;
+      for (final entry in images) {
+        if (total <= maxBytes) break;
+        final size = sizes[entry] ?? 0;
+        await store.removeIfUnreferenced(
+          entry.media,
+          state.entries,
+          ignoredIds: {entry.id},
+        );
+        entry
+          ..type = 'text'
+          ..media = null
+          ..mediaName = null
+          ..mediaSize = null
+          ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+        total -= size;
+        changed = true;
+      }
+      if (changed) await state.save();
+    } catch (_) {}
+  }
+
+  static Future<void> clearCache([AppState? state]) async {
+    try {
+      if (state == null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_cacheKey);
+        return;
+      }
+      final rssChatIds = state.chats
+          .where((chat) => chat.kind == 'rss')
+          .map((chat) => chat.id)
+          .toSet();
+      final store = MediaStore();
+      var changed = false;
+      for (final entry in state.entries) {
+        if (!rssChatIds.contains(entry.chatId) || entry.media == null) {
+          continue;
+        }
+        final mediaName = entry.media!;
+        final shared = state.entries.any(
+          (other) => other.id != entry.id && other.media == mediaName,
+        );
+        if (!shared) {
+          await store.remove(mediaName);
+        }
+        entry
+          ..type = 'text'
+           ..media = null
+           ..mediaName = null
+           ..mediaSize = null
+           ..updatedAt = DateTime.now().millisecondsSinceEpoch;
+        changed = true;
+      }
+      if (changed) await state.save();
     } catch (_) {}
   }
 
@@ -98,45 +196,78 @@ class RssService {
     for (final item in doc.findAllElements('item')) {
       String? img;
       final enc = item.findElements('enclosure').firstOrNull;
-      if (enc != null && (enc.getAttribute('type')?.startsWith('image/') ?? false)) img = enc.getAttribute('url');
+      if (enc != null &&
+          (enc.getAttribute('type')?.startsWith('image/') ?? false))
+        img = enc.getAttribute('url');
       if (img == null) {
-        final media = item.findElements('media:content').firstOrNull ?? item.findElements('media:thumbnail').firstOrNull;
+        final media =
+            item.findElements('media:content').firstOrNull ??
+            item.findElements('media:thumbnail').firstOrNull;
         if (media != null) img = media.getAttribute('url');
       }
-      out.add(_RssItem(
-        title: item.findElements('title').firstOrNull?.innerText.trim() ?? '',
-        link: item.findElements('link').firstOrNull?.innerText.trim() ?? '',
-        desc: item.findElements('description').firstOrNull?.innerText.trim() ?? item.findElements('content:encoded').firstOrNull?.innerText.trim() ?? '',
-        guid: item.findElements('guid').firstOrNull?.innerText.trim() ?? '',
-        pubDate: _parseDate(item.findElements('pubDate').firstOrNull?.innerText),
-        imageUrl: img,
-      ));
+      out.add(
+        _RssItem(
+          title: item.findElements('title').firstOrNull?.innerText.trim() ?? '',
+          link: item.findElements('link').firstOrNull?.innerText.trim() ?? '',
+          desc:
+              item.findElements('description').firstOrNull?.innerText.trim() ??
+              item
+                  .findElements('content:encoded')
+                  .firstOrNull
+                  ?.innerText
+                  .trim() ??
+              '',
+          guid: item.findElements('guid').firstOrNull?.innerText.trim() ?? '',
+          pubDate: _parseDate(
+            item.findElements('pubDate').firstOrNull?.innerText,
+          ),
+          imageUrl: img,
+        ),
+      );
     }
     for (final entry in doc.findAllElements('entry')) {
-      final title = entry.findElements('title').firstOrNull?.innerText.trim() ?? '';
+      final title =
+          entry.findElements('title').firstOrNull?.innerText.trim() ?? '';
       String link = '';
       for (final l in entry.findElements('link')) {
         final href = l.getAttribute('href');
-        if (href != null && href.isNotEmpty) { link = href; break; }
+        if (href != null && href.isNotEmpty) {
+          link = href;
+          break;
+        }
         if (l.innerText.trim().isNotEmpty) link = l.innerText.trim();
       }
-      final guid = entry.findElements('id').firstOrNull?.innerText.trim() ?? link;
+      final guid =
+          entry.findElements('id').firstOrNull?.innerText.trim() ?? link;
       String? img2;
-      final media2 = entry.findElements('media:thumbnail').firstOrNull ?? entry.findElements('media:content').firstOrNull;
+      final media2 =
+          entry.findElements('media:thumbnail').firstOrNull ??
+          entry.findElements('media:content').firstOrNull;
       if (media2 != null) img2 = media2.getAttribute('url');
       if (img2 == null) {
         // try link with image enclosure in atom content
-        final enc2 = entry.findElements('link').where((e) => e.getAttribute('rel') == 'enclosure').firstOrNull;
+        final enc2 = entry
+            .findElements('link')
+            .where((e) => e.getAttribute('rel') == 'enclosure')
+            .firstOrNull;
         if (enc2 != null) img2 = enc2.getAttribute('href');
       }
-      out.add(_RssItem(
-        title: title,
-        link: link,
-        desc: entry.findElements('summary').firstOrNull?.innerText.trim() ?? entry.findElements('content').firstOrNull?.innerText.trim() ?? '',
-        guid: guid,
-        pubDate: _parseDate(entry.findElements('updated').firstOrNull?.innerText ?? entry.findElements('published').firstOrNull?.innerText),
-        imageUrl: img2,
-      ));
+      out.add(
+        _RssItem(
+          title: title,
+          link: link,
+          desc:
+              entry.findElements('summary').firstOrNull?.innerText.trim() ??
+              entry.findElements('content').firstOrNull?.innerText.trim() ??
+              '',
+          guid: guid,
+          pubDate: _parseDate(
+            entry.findElements('updated').firstOrNull?.innerText ??
+                entry.findElements('published').firstOrNull?.innerText,
+          ),
+          imageUrl: img2,
+        ),
+      );
     }
     // sort newest first
     out.sort((a, b) => (b.pubDate ?? 0).compareTo(a.pubDate ?? 0));
@@ -167,7 +298,14 @@ Future<Directory> getMediaDir() async {
 }
 
 class _RssItem {
-  _RssItem({required this.title, required this.link, required this.desc, required this.guid, this.pubDate, this.imageUrl});
+  _RssItem({
+    required this.title,
+    required this.link,
+    required this.desc,
+    required this.guid,
+    this.pubDate,
+    this.imageUrl,
+  });
   final String title;
   final String link;
   final String desc;

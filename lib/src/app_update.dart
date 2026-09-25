@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -18,7 +18,8 @@ import 'updater.dart';
 const appBuildVersion = '1.29.0-beta.3';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
-const _repoLatest = 'https://api.github.com/repos/DezFix/TN/releases/latest';
+const _repoReleases =
+    'https://api.github.com/repos/DezFix/TN/releases?per_page=30';
 const repoPageUrl = 'https://github.com/DezFix/TN/releases/latest';
 
 class ReleaseInfo {
@@ -43,47 +44,70 @@ class ReleaseInfo {
 
 /// Shared markdown style for release/changelog rendering.
 MarkdownStyleSheet releaseSheetStyle(Palette p) => MarkdownStyleSheet(
-      p: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
-      h1: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text),
-      h2: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text),
-      h3: TextStyle(
-          fontSize: 13.5, fontWeight: FontWeight.w700, color: p.accent),
-      listBullet: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
-      code: TextStyle(
-          fontSize: 12, color: p.textSoft, fontFamily: 'monospace'),
-    );
+  p: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
+  h1: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text),
+  h2: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text),
+  h3: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: p.accent),
+  listBullet: TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5),
+  code: TextStyle(fontSize: 12, color: p.textSoft, fontFamily: 'monospace'),
+);
 
 /// Scrollable markdown view of a release body (changelog sheet reuse).
-Widget releaseMarkdown(String body, Palette p, {ScrollController? controller}) =>
-    SingleChildScrollView(
-      controller: controller,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: MarkdownBody(
-          data: body, selectable: false, styleSheet: releaseSheetStyle(p)),
-    );
+Widget releaseMarkdown(
+  String body,
+  Palette p, {
+  ScrollController? controller,
+}) => SingleChildScrollView(
+  controller: controller,
+  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+  child: MarkdownBody(
+    data: body,
+    selectable: false,
+    styleSheet: releaseSheetStyle(p),
+  ),
+);
 
 /// Fetches the latest GitHub release. Returns null offline / rate-limited.
 Future<ReleaseInfo?> fetchLatestRelease() async {
   try {
     final r = await http
-        .get(Uri.parse(_repoLatest), headers: {
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'TN-app',
-    }).timeout(const Duration(seconds: 8));
+        .get(
+          Uri.parse(_repoReleases),
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'TN-app',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
     if (r.statusCode != 200) return null;
-    final rel = jsonDecode(r.body) as Map<String, dynamic>;
-    final tag = (rel['tag_name'] as String?) ?? '';
-    final body =
-        ((rel['body'] as String?) ?? '').replaceFirst(RegExp(r'^\uFEFF'), '');
-    if (tag.isEmpty || body.trim().isEmpty) return null;
-
-    final picked =
-        Platform.isAndroid ? await _pickApk(rel['assets'] as List<dynamic>?) : null;
+    final decoded = jsonDecode(r.body);
+    final releases = decoded is List
+        ? decoded.whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+    Map<String, dynamic>? selected;
+    for (final release in releases) {
+      if (release['draft'] == true) continue;
+      final tag = release['tag_name'] as String? ?? '';
+      if (tag.isEmpty) continue;
+      if (selected == null ||
+          Updater.isNewerTag(tag, selected['tag_name'] as String)) {
+        selected = release;
+      }
+    }
+    if (selected == null) return null;
+    final tag = selected['tag_name'] as String;
+    final body = ((selected['body'] as String?) ?? '').replaceFirst(
+      RegExp(r'^\uFEFF'),
+      '',
+    );
+    final picked = Platform.isAndroid
+        ? await _pickApk(selected['assets'] as List<dynamic>?)
+        : null;
     return ReleaseInfo(
       tag: tag,
-      name: (rel['name'] as String?) ?? '',
+      name: (selected['name'] as String?) ?? '',
       body: body,
-      pageUrl: (rel['html_url'] as String?) ?? repoPageUrl,
+      pageUrl: (selected['html_url'] as String?) ?? repoPageUrl,
       apkUrl: picked?.url,
       apkSha256: picked?.sha,
     );
@@ -155,12 +179,15 @@ Future<void> maybeShowWhatsNew(BuildContext context, AppModel model) async {
     if (rel == null || !context.mounted) return;
 
     if (prefs.getString('tn-seen-release') != rel.tag && context.mounted) {
-      await showReleaseDialog(context, model,
-          title: rel.name.isNotEmpty ? rel.name : 'TN ${rel.tag}',
-          markdown: rel.body,
-          updateUrl: rel.isNewerThan(appBuildVersion) ? rel.pageUrl : null,
-          apkUrl: rel.apkUrl,
-          apkSha256: rel.apkSha256);
+      await showReleaseDialog(
+        context,
+        model,
+        title: rel.name.isNotEmpty ? rel.name : 'TN ${rel.tag}',
+        markdown: rel.body,
+        updateUrl: rel.isNewerThan(appBuildVersion) ? rel.pageUrl : null,
+        apkUrl: rel.apkUrl,
+        apkSha256: rel.apkSha256,
+      );
       await prefs.setString('tn-seen-release', rel.tag);
       return;
     }
@@ -170,8 +197,14 @@ Future<void> maybeShowWhatsNew(BuildContext context, AppModel model) async {
     if (rel.isNewerThan(appBuildVersion) &&
         prefs.getString('tn-update-prompted') != rel.tag &&
         context.mounted) {
-      await showUpdateDialog(context, model, rel.tag,
-          url: rel.pageUrl, apkUrl: rel.apkUrl, apkSha256: rel.apkSha256);
+      await showUpdateDialog(
+        context,
+        model,
+        rel.tag,
+        url: rel.pageUrl,
+        apkUrl: rel.apkUrl,
+        apkSha256: rel.apkSha256,
+      );
       await prefs.setString('tn-update-prompted', rel.tag);
     }
   } catch (_) {}
@@ -183,10 +216,12 @@ Future<void> manualCheckForUpdate(BuildContext context, AppModel model) async {
   final rel = await fetchLatestRelease();
   if (!context.mounted && messenger == null) return;
 
-  void toast(String key, [List<String>? args]) =>
-      messenger?.showSnackBar(SnackBar(
-          content: Text(model.tr(key, args)),
-          backgroundColor: model.p.bgChat));
+  void toast(String key, [List<String>? args]) => messenger?.showSnackBar(
+    SnackBar(
+      content: Text(model.tr(key, args)),
+      backgroundColor: model.p.bgChat,
+    ),
+  );
 
   if (rel == null) {
     toast('update_check_failed');
@@ -196,8 +231,14 @@ Future<void> manualCheckForUpdate(BuildContext context, AppModel model) async {
     toast('update_latest', [rel.tag.replaceFirst('v', '')]);
     return;
   }
-  await showUpdateDialog(context, model, rel.tag,
-      url: rel.pageUrl, apkUrl: rel.apkUrl, apkSha256: rel.apkSha256);
+  await showUpdateDialog(
+    context,
+    model,
+    rel.tag,
+    url: rel.pageUrl,
+    apkUrl: rel.apkUrl,
+    apkSha256: rel.apkSha256,
+  );
 }
 
 // ---------------------------------------------------------------- dialogs
@@ -219,32 +260,52 @@ Future<void> showUpdateDialog(
       return StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: p.modalBg,
-          title: Text(model.tr('update_available'),
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+          title: Text(
+            model.tr('update_available'),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: p.text,
+            ),
+          ),
           content: downloading
-              ? Column(mainAxisSize: MainAxisSize.min, children: [
-                  LinearProgressIndicator(
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LinearProgressIndicator(
                       value: progress > 0 ? progress : null,
                       color: p.accent,
-                      backgroundColor: p.divider),
-                  const SizedBox(height: 12),
-                  Text(model.tr('downloading'),
-                      style: TextStyle(fontSize: 13.5, color: p.textSoft)),
-                ])
-              : Text(model.tr('update_hint', [tag]),
-                  style:
-                      TextStyle(fontSize: 13.5, color: p.textSoft, height: 1.5)),
+                      backgroundColor: p.divider,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      model.tr('downloading'),
+                      style: TextStyle(fontSize: 13.5, color: p.textSoft),
+                    ),
+                  ],
+                )
+              : Text(
+                  model.tr('update_hint', [tag]),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: p.textSoft,
+                    height: 1.5,
+                  ),
+                ),
           actions: [
             TextButton(
               onPressed: downloading ? null : () => Navigator.pop(ctx),
-              child:
-                  Text(model.tr('later'), style: TextStyle(color: p.textSoft)),
+              child: Text(
+                model.tr('later'),
+                style: TextStyle(color: p.textSoft),
+              ),
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: p.accent),
-              icon: Icon(downloading ? Icons.hourglass_empty : Icons.download,
-                  size: 18),
+              icon: Icon(
+                downloading ? Icons.hourglass_empty : Icons.download,
+                size: 18,
+              ),
               onPressed: downloading
                   ? null
                   : () async {
@@ -253,19 +314,26 @@ Future<void> showUpdateDialog(
                           downloading = true;
                           progress = 0;
                         });
-                        final result =
-                            await Updater.downloadAndInstall(apkUrl, (pr) {
-                          setDialogState(() => progress = pr);
-                        }, expectedSha256: apkSha256);
+                        final result = await Updater.downloadAndInstall(
+                          apkUrl,
+                          (pr) {
+                            setDialogState(() => progress = pr);
+                          },
+                          expectedSha256: apkSha256,
+                        );
                         if (result == null && ctx.mounted) {
                           setDialogState(() => downloading = false);
                           final reinstall =
                               Updater.lastError == 'INSTALL_FAILED';
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(reinstall
-                                ? model.tr('update_reinstall')
-                                : model.tr('download_failed')),
-                          ));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                reinstall
+                                    ? model.tr('update_reinstall')
+                                    : model.tr('download_failed'),
+                              ),
+                            ),
+                          );
                         }
                       } else {
                         Navigator.pop(ctx);
@@ -299,22 +367,32 @@ Future<void> showReleaseDialog(
       return StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: p.modalBg,
-          title: Text(title,
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: p.text)),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: p.text,
+            ),
+          ),
           content: SizedBox(
             width: 340,
             child: downloading
-                ? Column(mainAxisSize: MainAxisSize.min, children: [
-                    LinearProgressIndicator(
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LinearProgressIndicator(
                         value: progress > 0 ? progress : null,
                         color: p.accent,
-                        backgroundColor: p.divider),
-                    const SizedBox(height: 12),
-                    Text(model.tr('downloading'),
-                        style:
-                            TextStyle(fontSize: 13.5, color: p.textSoft)),
-                  ])
+                        backgroundColor: p.divider,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        model.tr('downloading'),
+                        style: TextStyle(fontSize: 13.5, color: p.textSoft),
+                      ),
+                    ],
+                  )
                 : SingleChildScrollView(child: releaseMarkdown(markdown, p)),
           ),
           actions: [
@@ -323,20 +401,27 @@ Future<void> showReleaseDialog(
                   ? null
                   : () async {
                       await Clipboard.setData(
-                          const ClipboardData(text: _kofiUrl));
+                        const ClipboardData(text: _kofiUrl),
+                      );
                       var opened = false;
                       try {
-                        opened = await launchUrl(Uri.parse(_kofiUrl),
-                            mode: LaunchMode.externalApplication);
+                        opened = await launchUrl(
+                          Uri.parse(_kofiUrl),
+                          mode: LaunchMode.externalApplication,
+                        );
                       } catch (_) {}
                       final messenger = ScaffoldMessenger.maybeOf(context);
                       final mountedNow = context.mounted;
                       if (mountedNow && messenger != null) {
-                        messenger.showSnackBar(SnackBar(
-                          content: Text(opened
-                              ? model.tr('support')
-                              : 'ko-fi.com/k_k • ${model.tr('support')}'),
-                        ));
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              opened
+                                  ? model.tr('support')
+                                  : 'ko-fi.com/k_k • ${model.tr('support')}',
+                            ),
+                          ),
+                        );
                       }
                     },
               child: Text('❤ ko-fi', style: TextStyle(color: p.accent)),
@@ -345,8 +430,9 @@ Future<void> showReleaseDialog(
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: p.accent),
                 icon: Icon(
-                    downloading ? Icons.hourglass_empty : Icons.download,
-                    size: 18),
+                  downloading ? Icons.hourglass_empty : Icons.download,
+                  size: 18,
+                ),
                 onPressed: downloading
                     ? null
                     : () async {
@@ -355,20 +441,26 @@ Future<void> showReleaseDialog(
                             downloading = true;
                             progress = 0;
                           });
-                          final result =
-                              await Updater.downloadAndInstall(apkUrl, (pr) {
-                            setDialogState(() => progress = pr);
-                          }, expectedSha256: apkSha256);
+                          final result = await Updater.downloadAndInstall(
+                            apkUrl,
+                            (pr) {
+                              setDialogState(() => progress = pr);
+                            },
+                            expectedSha256: apkSha256,
+                          );
                           if (result == null && ctx.mounted) {
                             setDialogState(() => downloading = false);
                             final reinstall =
                                 Updater.lastError == 'INSTALL_FAILED';
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(SnackBar(
-                              content: Text(reinstall
-                                  ? model.tr('update_reinstall')
-                                  : model.tr('download_failed')),
-                            ));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  reinstall
+                                      ? model.tr('update_reinstall')
+                                      : model.tr('download_failed'),
+                                ),
+                              ),
+                            );
                           }
                         } else {
                           Navigator.pop(ctx);

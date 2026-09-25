@@ -11,6 +11,7 @@ import '../src/crash_reports.dart';
 import '../src/i18n.dart';
 import '../src/reminders.dart';
 import '../src/theme.dart';
+import '../src/widget_bridge.dart';
 import 'list_screen.dart';
 
 final _welRecorder = AudioRecorder();
@@ -109,12 +110,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('tn-welcome-done', true);
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ListScreen(model: widget.model)));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => ListScreen(model: widget.model)),
+    );
   }
 
   Future<void> _restoreBackup() async {
     try {
-      const groups = [XTypeGroup(label: 'backup', extensions: ['zip', 'json'])];
+      const groups = [
+        XTypeGroup(label: 'backup', extensions: ['zip', 'json']),
+      ];
       final f = await openFile(acceptedTypeGroups: groups);
       if (f == null) return;
       final bytes = await f.readAsBytes();
@@ -123,10 +128,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         password = await _promptPassword();
         if (password == null || password.isEmpty) return;
       }
-      await BackupService.importFromBytes(bytes, f.name, widget.model.state,
-          password: password);
+      await BackupService.importFromBytes(
+        bytes,
+        f.name,
+        widget.model.state,
+        password: password,
+      );
       widget.model.tr = makeTranslator(widget.model.state.lang);
-      if (!mounted) return;
+       await widget.model.rescheduleAlarms();
+       WidgetBridge.refresh().catchError((_) {});
+       if (!mounted) return;
       setState(() {
         _lang = widget.model.state.lang;
         _theme = widget.model.state.theme;
@@ -134,17 +145,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       await _finish();
     } on BackupEncryptedException {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(makeTranslator(_lang)('bk_wrong_pass')),
-          backgroundColor: const Color(0xFF3A2020),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(makeTranslator(_lang)('bk_wrong_pass')),
+            backgroundColor: const Color(0xFF3A2020),
+          ),
+        );
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(makeTranslator(_lang)('backup_error')),
-          backgroundColor: const Color(0xFF3A2020),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(makeTranslator(_lang)('backup_error')),
+            backgroundColor: const Color(0xFF3A2020),
+          ),
+        );
       }
     }
   }
@@ -157,8 +172,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: p.modalBg,
-        title: Text(tr('bk_pass_prompt'),
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.text)),
+        title: Text(
+          tr('bk_pass_prompt'),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: p.text,
+          ),
+        ),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -170,8 +191,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr('cancel'), style: TextStyle(color: p.textSoft))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(tr('cancel'), style: TextStyle(color: p.textSoft)),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: p.accent),
             onPressed: () => Navigator.pop(ctx, ctrl.text),
@@ -189,8 +211,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final effective = _theme == 'dark'
         ? 'dark'
         : _theme == 'light'
-            ? 'light'
-            : (MediaQuery.platformBrightnessOf(context) == Brightness.dark ? 'dark' : 'light');
+        ? 'light'
+        : (MediaQuery.platformBrightnessOf(context) == Brightness.dark
+              ? 'dark'
+              : 'light');
     final p = paletteFor(effective);
 
     return Scaffold(
@@ -207,22 +231,55 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   Container(
                     width: 44,
                     height: 44,
-                    decoration: BoxDecoration(color: p.accent, borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(
+                      color: p.accent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     alignment: Alignment.center,
-                    child: const Text('TN', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1)),
+                    child: const Text(
+                      'TN',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  Text('TN', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: p.text, letterSpacing: 0.5)),
+                  Text(
+                    'TN',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: p.text,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
-              Text(tr('welcome_headline'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: p.text, height: 1.2)),
+              Text(
+                tr('welcome_headline'),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: p.text,
+                  height: 1.2,
+                ),
+              ),
               const SizedBox(height: 10),
-              Text(tr('welcome_desc'), style: TextStyle(fontSize: 15, color: p.textSoft, height: 1.45)),
+              Text(
+                tr('welcome_desc'),
+                style: TextStyle(fontSize: 15, color: p.textSoft, height: 1.45),
+              ),
               const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: p.bgChat, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: p.bgChat,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -237,7 +294,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 ),
               ),
               const SizedBox(height: 22),
-              Text(tr('welcome_lang'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.6)),
+              Text(
+                tr('welcome_lang'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: p.textFaint,
+                  letterSpacing: 0.6,
+                ),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -250,14 +315,31 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       onSelected: (_) => setState(() => _lang = code),
                       selectedColor: p.accent,
                       backgroundColor: p.bgChat,
-                      labelStyle: TextStyle(color: _lang == code ? Colors.white : p.textSoft, fontWeight: FontWeight.w600, fontSize: 13),
+                      labelStyle: TextStyle(
+                        color: _lang == code ? Colors.white : p.textSoft,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                       checkmarkColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: _lang == code ? p.accent : p.divider)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: _lang == code ? p.accent : p.divider,
+                        ),
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 18),
-              Text(tr('welcome_theme'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.6)),
+              Text(
+                tr('welcome_theme'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: p.textFaint,
+                  letterSpacing: 0.6,
+                ),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -270,16 +352,33 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       onSelected: (_) => setState(() => _theme = t),
                       selectedColor: p.accent,
                       backgroundColor: p.bgChat,
-                      labelStyle: TextStyle(color: _theme == t ? Colors.white : p.textSoft, fontWeight: FontWeight.w600, fontSize: 13),
+                      labelStyle: TextStyle(
+                        color: _theme == t ? Colors.white : p.textSoft,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                       checkmarkColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: _theme == t ? p.accent : p.divider)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: _theme == t ? p.accent : p.divider,
+                        ),
+                      ),
                     ),
                 ],
               ),
 
               // ---- Permissions ----
               const SizedBox(height: 24),
-              Text(tr('perm_title'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textFaint, letterSpacing: 0.6)),
+              Text(
+                tr('perm_title'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: p.textFaint,
+                  letterSpacing: 0.6,
+                ),
+              ),
               const SizedBox(height: 8),
               _permCard(
                 p,
@@ -312,7 +411,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
               if (!_notifOk || !_alarmsOk) ...[
                 const SizedBox(height: 8),
-                Text(tr('perm_hint'), style: TextStyle(fontSize: 12, color: p.textFaint, height: 1.4)),
+                Text(
+                  tr('perm_hint'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: p.textFaint,
+                    height: 1.4,
+                  ),
+                ),
               ],
               const SizedBox(height: 8),
               Container(
@@ -320,24 +426,48 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 decoration: BoxDecoration(
                   color: p.bgChat,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _crash ? p.accent.withValues(alpha: .55) : p.divider),
+                  border: Border.all(
+                    color: _crash ? p.accent.withValues(alpha: .55) : p.divider,
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.bug_report_outlined, size: 22, color: _crash ? p.accent : p.textSoft),
+                    Icon(
+                      Icons.bug_report_outlined,
+                      size: 22,
+                      color: _crash ? p.accent : p.textSoft,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tr('crash_title'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+                          Text(
+                            tr('crash_title'),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: p.text,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text(tr('crash_hint'), style: TextStyle(fontSize: 11.5, color: p.textSoft, height: 1.35)),
+                          Text(
+                            tr('crash_hint'),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: p.textSoft,
+                              height: 1.35,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Switch(value: _crash, activeColor: p.accent, onChanged: _setCrash),
+                    Switch(
+                      value: _crash,
+                      activeColor: p.accent,
+                      onChanged: _setCrash,
+                    ),
                   ],
                 ),
               ),
@@ -347,14 +477,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: _notifOk && _alarmsOk ? p.accent : p.textFaint.withValues(alpha: .35),
+                    backgroundColor: p.accent,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  onPressed: (_notifOk && _alarmsOk) ? _finish : null,
+                  onPressed: _finish,
                   child: Text(
-                    (_notifOk && _alarmsOk) ? tr('welcome_start') : tr('perm_finish_locked'),
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    tr('welcome_start'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -362,12 +498,19 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               Center(
                 child: TextButton(
                   onPressed: _restoreBackup,
-                  child: Text(tr('welcome_restore'),
-                      style: TextStyle(fontSize: 13, color: p.textSoft)),
+                  child: Text(
+                    tr('welcome_restore'),
+                    style: TextStyle(fontSize: 13, color: p.textSoft),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
-              Center(child: Text('TN · ${tr('chat_subtitle')}', style: TextStyle(fontSize: 11, color: p.textFaint))),
+              Center(
+                child: Text(
+                  'TN · ${tr('chat_subtitle')}',
+                  style: TextStyle(fontSize: 11, color: p.textFaint),
+                ),
+              ),
             ],
           ),
         ),
@@ -376,11 +519,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Widget _feat(String text, Palette p) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: Text(text, style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35))),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
+        child: Text(
+          text,
+          style: TextStyle(fontSize: 13.5, color: p.text, height: 1.35),
+        ),
+      ),
+    ],
+  );
 
   Widget _permCard(
     Palette p, {
@@ -396,7 +544,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       decoration: BoxDecoration(
         color: p.bgChat,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: granted ? p.accent.withValues(alpha: .55) : p.divider),
+        border: Border.all(
+          color: granted ? p.accent.withValues(alpha: .55) : p.divider,
+        ),
       ),
       child: Row(
         children: [
@@ -406,9 +556,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.text)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: p.text,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(desc, style: TextStyle(fontSize: 11.5, color: p.textSoft, height: 1.35)),
+                Text(
+                  desc,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: p.textSoft,
+                    height: 1.35,
+                  ),
+                ),
               ],
             ),
           ),
@@ -419,12 +583,24 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: p.accent,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 minimumSize: Size.zero,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: onGrant,
-              child: Text(grantLabel, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white)),
+              child: Text(
+                grantLabel,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
             ),
         ],
       ),

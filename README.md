@@ -2,7 +2,7 @@
 
 [![Sponsor](https://img.shields.io/badge/Sponsor%20me-ko--fi-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/k_k)
 
-TN is a conversation with yourself: topic chats instead of folders, messages instead of files. Ideas, to-do lists, photos, voice notes — sorted by topic, with reminders and `#tags`. All data stays on your device. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
+TN is a conversation with yourself: topic chats instead of folders, messages instead of files. Ideas, to-do lists, photos, voice notes — sorted by topic, with reminders and `#tags`. Notes are stored locally; optional network features such as RSS, backups and update checks are used only when enabled. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
 
 > Screenshots below are in English (the interface language is switchable in Settings). The beta kanban board is intentionally not pictured — it is still under testing.
 
@@ -80,7 +80,7 @@ A new chat type for running work in columns. Three by default — Idea / In prog
 
 Two widgets can be placed on the home screen:
 
-- **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, “priority first” or time sorting). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
+- **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, priority-first with overdue items highlighted). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
 - **Kanban** — undone todos from kanban chats, grouped by column. Same behaviour: tick on the widget, tap to jump to the card.
 
 Background transparency and font size are shared settings inside the app (Settings → Widget settings).
@@ -107,7 +107,7 @@ Long-pressing the TN launcher icon shows two shortcuts with distinct icons:
 - backups & cloud, trash;
 - folders, smart folders, tags, ordering;
 - widget, app lock (biometrics / pattern / PIN, re-lock timeout);
-- cache & trash with automatic cleanup every 48 hours.
+- cache & trash with automatic cleanup on launch.
 
 At the bottom — the About section: version, changelog, manual update check.
 
@@ -122,7 +122,7 @@ One zip with the whole database, media and settings: locally into a folder of yo
 ```sh
 flutter pub get
 flutter run          # run
-flutter test         # tests (128)
+flutter test         # tests
 flutter build apk --release   # APK: build/app/outputs/flutter-apk/app-release.apk
 ```
 

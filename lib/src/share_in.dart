@@ -33,8 +33,9 @@ class ShareIn {
       }
       return null;
     });
-    // Cold start: the intent arrived before Dart was ready.
-    _channel.invokeMethod('getPending').then((v) async {
+    _channel.invokeMethod('setReady').then((_) {
+      return _channel.invokeMethod('getPending');
+    }).then((v) async {
       if (v is Map) await handle(model, Map<String, Object?>.from(v));
     }).catchError((_) => null);
   }

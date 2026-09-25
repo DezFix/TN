@@ -90,6 +90,19 @@ class MediaStore {
     }
   }
 
+  Future<void> removeIfUnreferenced(
+    String? mediaName,
+    Iterable<Entry> entries, {
+    Set<String> ignoredIds = const {},
+  }) async {
+    if (mediaName == null || mediaName.isEmpty) return;
+    if (entries.any((entry) =>
+        !ignoredIds.contains(entry.id) && entry.media == mediaName)) {
+      return;
+    }
+    await remove(mediaName);
+  }
+
   Directory? _trashDir;
 
   /// `tn_media/_trash` — deleted files rest here so an Undo can bring them

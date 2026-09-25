@@ -21,25 +21,37 @@ class Updater {
   /// refuses to install and asks the user to retry.
   static String lastError = '';
 
-  /// Numeric compare of "vX.Y.Z" tags against the installed version.
-  /// Pre-release suffixes ("1.2.3-beta") are handled: same numeric version
-  /// but tag is stable and current is pre-release → stable is newer.
   static bool isNewerTag(String tag, String current) {
-    bool isPre(String s) => s.contains('-');
-    List<int> parse(String s) => s
-        .replaceFirst(RegExp('^v'), '')
-        .split('.')
-        .map((e) => int.tryParse(e.replaceAll(RegExp('[^0-9].*'), '')) ?? 0)
-        .toList();
-    final a = parse(tag), b = parse(current);
+    final a = _Version.parse(tag);
+    final b = _Version.parse(current);
+    if (a == null || b == null) return false;
+
     for (var i = 0; i < 3; i++) {
-      final x = i < a.length ? a[i] : 0;
-      final y = i < b.length ? b[i] : 0;
+      final x = a.numbers[i];
+      final y = b.numbers[i];
       if (x != y) return x > y;
     }
-    // Numeric equal → stable > pre-release.
-    if (isPre(current) && !isPre(tag)) return true;
-    return false;
+    if (a.pre.isEmpty && b.pre.isNotEmpty) return true;
+    if (a.pre.isNotEmpty && b.pre.isEmpty) return false;
+
+    final length = a.pre.length < b.pre.length ? a.pre.length : b.pre.length;
+    for (var i = 0; i < length; i++) {
+      final left = a.pre[i];
+      final right = b.pre[i];
+      final leftNumber = int.tryParse(left);
+      final rightNumber = int.tryParse(right);
+      if (leftNumber != null && rightNumber != null) {
+        if (leftNumber != rightNumber) return leftNumber > rightNumber;
+      } else if (leftNumber != null) {
+        return false;
+      } else if (rightNumber != null) {
+        return true;
+      } else {
+        final cmp = left.compareTo(right);
+        if (cmp != 0) return cmp > 0;
+      }
+    }
+    return a.pre.length > b.pre.length;
   }
 
   /// Downloads an APK from [url] to the cache directory, then triggers the
@@ -88,34 +100,34 @@ class Updater {
           final req = http.Request('GET', Uri.parse(currentUrl));
           final resp = await client.send(req);
 
-        if (resp.statusCode >= 300 && resp.statusCode < 400) {
-          final location = resp.headers['location'];
-          if (location == null || location.isEmpty) {
-            lastError = 'network';
+          if (resp.statusCode >= 300 && resp.statusCode < 400) {
+            final location = resp.headers['location'];
+            if (location == null || location.isEmpty) {
+              lastError = 'network';
+              return null;
+            }
+            currentUrl = location;
+            continue;
+          }
+
+          if (resp.statusCode != 200) {
+            lastError = 'http_${resp.statusCode}';
             return null;
           }
-          currentUrl = location;
-          continue;
-        }
 
-        if (resp.statusCode != 200) {
-          lastError = 'http_${resp.statusCode}';
-          return null;
-        }
-
-        // Stream the body with progress reporting.
-        final total = resp.contentLength ?? 0;
-        int received = 0;
-        final builder = BytesBuilder(copy: false);
-        await for (final chunk in resp.stream) {
-          builder.add(chunk);
-          received += chunk.length;
-          if (total > 0 && onProgress != null) {
-            onProgress(received / total);
+          // Stream the body with progress reporting.
+          final total = resp.contentLength ?? 0;
+          int received = 0;
+          final builder = BytesBuilder(copy: false);
+          await for (final chunk in resp.stream) {
+            builder.add(chunk);
+            received += chunk.length;
+            if (total > 0 && onProgress != null) {
+              onProgress(received / total);
+            }
           }
-        }
-        bytes = builder.takeBytes();
-        break;
+          bytes = builder.takeBytes();
+          break;
         }
       } finally {
         client.close();
@@ -132,8 +144,9 @@ class Updater {
       // then Android reports "package corrupted" — exactly the recurring
       // user report this is meant to diagnose.
       if (!validateZipContainer(bytes)) {
-        lastError =
-            bytes[0] == 0x50 && bytes[1] == 0x4B ? 'truncated' : 'not_apk';
+        lastError = bytes[0] == 0x50 && bytes[1] == 0x4B
+            ? 'truncated'
+            : 'not_apk';
         return null;
       }
 
@@ -153,8 +166,9 @@ class Updater {
         // Native side rejected the install attempt (signature mismatch,
         // parse failure, installer refused). Surfaced so the UI can explain
         // instead of silently resetting the dialog.
-        lastError =
-            e.code == 'INSTALL_FAILED' ? 'INSTALL_FAILED' : 'native_${e.code}';
+        lastError = e.code == 'INSTALL_FAILED'
+            ? 'INSTALL_FAILED'
+            : 'native_${e.code}';
         return null;
       }
       return file.path;
@@ -165,12 +179,53 @@ class Updater {
   }
 }
 
+class _Version {
+  const _Version(this.numbers, this.pre);
+
+  final List<int> numbers;
+  final List<String> pre;
+
+  static _Version? parse(String raw) {
+    var value = raw.trim();
+    if (value.isEmpty) return null;
+    if (value.startsWith('v') || value.startsWith('V')) {
+      value = value.substring(1);
+    }
+    final plus = value.indexOf('+');
+    if (plus >= 0) value = value.substring(0, plus);
+    final dash = value.indexOf('-');
+    final core = dash < 0 ? value : value.substring(0, dash);
+    final pre = dash < 0
+        ? const <String>[]
+        : value
+              .substring(dash + 1)
+              .split('.')
+              .where((part) => part.isNotEmpty)
+              .toList();
+    final parts = core.split('.');
+    if (parts.isEmpty || parts.length > 3) return null;
+    final numbers = <int>[];
+    for (final part in parts) {
+      final value = int.tryParse(part);
+      if (value == null || value < 0) return null;
+      numbers.add(value);
+    }
+    while (numbers.length < 3) {
+      numbers.add(0);
+    }
+    return _Version(numbers, pre);
+  }
+}
+
 /// Pure container validation, split out for tests: ZIP starts with the local
 /// file header `PK\x03\x04` and ends (within the last 64 KB + comment room)
 /// with an End-of-Central-Directory record `PK\x05\x06`.
 bool validateZipContainer(List<int> bytes) {
   if (bytes.length < 8) return false;
-  if (bytes[0] != 0x50 || bytes[1] != 0x4B || bytes[2] != 0x03 || bytes[3] != 0x04) {
+  if (bytes[0] != 0x50 ||
+      bytes[1] != 0x4B ||
+      bytes[2] != 0x03 ||
+      bytes[3] != 0x04) {
     return false;
   }
   final windowStart = bytes.length - 65536 < 0 ? 0 : bytes.length - 65536;
