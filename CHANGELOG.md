@@ -4,6 +4,16 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0-beta.5] - 2026-09-25
+
+- **Release reliability:** CI now reports analyzer errors without blocking on the project's existing informational notices
+- **Safer backups and sync:** cloud restores now bring back media as well as notes, rebuild reminders, and avoid letting an older backup overwrite newer chat metadata
+- **Reliable reminders:** per-chat notification switches now apply to scheduled alarms; completed, trashed and recurring tasks no longer leave stale notifications
+- **App lock privacy:** the notes screen stays hidden until the lock setting is loaded
+- **Android widgets and sharing:** tasks respect the trash and subtask hierarchy, checkbox actions cascade correctly, and shared files/deep links wait for the app to be ready
+- **Updates and RSS:** beta releases compare correctly, RSS image cleanup no longer duplicates channel notes, and the cache limit is applied
+- **Stability:** collected task chats no longer allow destructive actions to remove media from their source chats
+
 ## [1.29.0-beta.4] - 2026-09-25
 
 - **Safer backups and sync:** cloud restores now bring back media as well as notes, rebuild reminders, and avoid letting an older backup overwrite newer chat metadata

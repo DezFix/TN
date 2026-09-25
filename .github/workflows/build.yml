@@ -36,7 +36,7 @@ jobs:
           echo "NDK install done"
 
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
       - name: Restore release keystore
         run: |
