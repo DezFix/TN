@@ -16,6 +16,7 @@ const backupPrefKeys = [
   'tn-widget-alpha',
   'tn-widget-font',
   'tn-daywidget-period',
+  'tn-kanbanwidget-chatId',
   'tn-widget-lang',
 ];
 

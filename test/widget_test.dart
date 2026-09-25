@@ -5,12 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tn/main.dart';
 import 'package:tn/screens/chat_screen.dart';
 import 'package:tn/screens/list_screen.dart';
+import 'package:tn/screens/widget_settings_screen.dart';
 import 'package:tn/src/app_model.dart';
 import 'package:tn/src/models.dart';
 import 'package:tn/src/state.dart';
 import 'package:tn/src/widgets.dart';
 
-void mockPlatformChannels() {
+void mockPlatformChannels({void Function(MethodCall)? onWidgetCall}) {
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(
     const MethodChannel('flutter_timezone'),
@@ -19,6 +20,13 @@ void mockPlatformChannels() {
   messenger.setMockMethodCallHandler(
     const MethodChannel('dexterous.com/flutter/local_notifications'),
     (call) async => null,
+  );
+  messenger.setMockMethodCallHandler(
+    const MethodChannel('tn/widget'),
+    (call) async {
+      onWidgetCall?.call(call);
+      return null;
+    },
   );
 }
 
@@ -167,5 +175,88 @@ void main() {
     expect(rect.top, lessThan(600));
     // Let the 3s highlight timer finish so the test can tear down cleanly.
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('widget settings binds kanban widget to a chat',
+      (tester) async {
+    var updates = 0;
+    SharedPreferences.setMockInitialValues({
+      'tn-kanbanwidget-chatId': 'k1',
+    });
+    mockPlatformChannels(
+      onWidgetCall: (call) {
+        if (call.method == 'update') updates++;
+      },
+    );
+    final state = AppState();
+    state.chats.addAll([
+      Chat(id: 'k1', name: 'Доска 1', color: '#2AABEE', kind: 'kanban'),
+      Chat(id: 'k2', name: 'Доска 2', color: '#E17055', kind: 'kanban'),
+      Chat(id: 'n1', name: 'Обычный чат', color: '#00C853'),
+      Chat(
+        id: 'k3',
+        name: 'Удалённая доска',
+        color: '#6C5CE7',
+        kind: 'kanban',
+        deletedAt: 1,
+      ),
+    ]);
+    final model = AppModel(state: state);
+    await tester.pumpWidget(
+      MaterialApp(home: WidgetSettingsScreen(model: model)),
+    );
+    await tester.pumpAndSettle();
+
+    final selector = find.byKey(const ValueKey('kanban-widget-chat-selector'));
+    await tester.scrollUntilVisible(selector, 250);
+    expect(find.text('Доска 1'), findsOneWidget);
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('kanban-widget-chat-k1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanban-widget-chat-k2')), findsOneWidget);
+    expect(find.text('Обычный чат'), findsNothing);
+    expect(find.text('Удалённая доска'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('kanban-widget-chat-k2')));
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('tn-kanbanwidget-chatId'), 'k2');
+    expect(updates, 1);
+    expect(find.text('Доска 2'), findsOneWidget);
+
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('kanban-widget-chat-all')));
+    await tester.pumpAndSettle();
+    expect(prefs.getString('tn-kanbanwidget-chatId'), isEmpty);
+    expect(updates, 2);
+  });
+
+  testWidgets('widget settings explains when no kanban chat exists',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'tn-kanbanwidget-chatId': 'missing',
+    });
+    mockPlatformChannels();
+    final state = AppState();
+    state.chats.add(Chat(id: 'n1', name: 'Заметки', color: '#2AABEE'));
+    final model = AppModel(state: state);
+    await tester.pumpWidget(
+      MaterialApp(home: WidgetSettingsScreen(model: model)),
+    );
+    await tester.pumpAndSettle();
+
+    final selector = find.byKey(const ValueKey('kanban-widget-chat-selector'));
+    await tester.scrollUntilVisible(selector, 250);
+    expect(tester.widget<InkWell>(selector).onTap, isNull);
+    expect(find.text('Создайте Kanban-чат, чтобы выбрать доску'), findsOneWidget);
+    expect(
+      (await SharedPreferences.getInstance()).getString('tn-kanbanwidget-chatId'),
+      isNull,
+    );
+    await tester.tap(selector);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('kanban-widget-chat-picker')), findsNothing);
   });
 }

@@ -81,9 +81,9 @@ A new chat type for running work in columns. Three by default — Idea / In prog
 Two widgets can be placed on the home screen:
 
 - **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, priority-first with overdue items highlighted). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
-- **Kanban** — undone todos from kanban chats, grouped by column. Same behaviour: tick on the widget, tap to jump to the card.
+- **Kanban** — undone todos from a selected kanban chat (or all boards), grouped by column. Same behaviour: tick on the widget, tap to jump to the card.
 
-Background transparency and font size are shared settings inside the app (Settings → Widget settings).
+Background transparency, font size and the Kanban board are configured inside the app (Settings → Widget settings).
 
 ## Quick actions from the icon
 

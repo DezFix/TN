@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0-beta.6] - 2026-09-25
+
+- **Kanban widget board selection:** choose a specific Kanban board or all boards in Settings → Widget settings; the widget gear opens the settings directly
+- **Reliable selection:** the chosen board immediately filters cards and the task count, resets safely if the chat is removed, and is preserved in app backups
+
 ## [1.29.0-beta.5] - 2026-09-25
 
 - **Release reliability:** CI now reports analyzer errors without blocking on the project's existing informational notices

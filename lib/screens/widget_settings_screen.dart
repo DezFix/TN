@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
+import '../src/models.dart';
 import '../src/theme.dart';
 import '../src/widget_bridge.dart';
+import '../src/widgets.dart';
+
+const _kanbanChatPref = 'tn-kanbanwidget-chatId';
 
 class WidgetSettingsScreen extends StatefulWidget {
   const WidgetSettingsScreen({super.key, required this.model});
@@ -16,6 +20,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   double _alpha = 1.0;
   double _font = 1.0;
   String _period = 'upcoming'; // 'today' | 'upcoming'
+  String _kanbanChatId = '';
 
   @override
   void initState() {
@@ -44,11 +49,24 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
       } catch (_) {}
     }
     final period = prefs.getString('tn-daywidget-period') ?? 'upcoming';
+    final storedKanbanChatId = prefs.getString(_kanbanChatPref) ?? '';
+    final selectedChat = widget.model.state.chatById(storedKanbanChatId);
+    final kanbanChatId =
+        storedKanbanChatId.isNotEmpty &&
+            selectedChat != null &&
+            selectedChat.isKanban &&
+            !selectedChat.isTrashed
+        ? storedKanbanChatId
+        : '';
+    if (kanbanChatId.isEmpty && storedKanbanChatId.isNotEmpty) {
+      await prefs.remove(_kanbanChatPref);
+    }
     if (!mounted) return;
     setState(() {
       _alpha = alpha.clamp(0.2, 1.0);
       _font = font.clamp(0.8, 1.6);
       _period = ['today', 'upcoming'].contains(period) ? period : 'upcoming';
+      _kanbanChatId = kanbanChatId;
     });
   }
 
@@ -57,6 +75,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     await prefs.setDouble('tn-widget-alpha', _alpha);
     await prefs.setDouble('tn-widget-font', _font);
     await prefs.setString('tn-daywidget-period', _period);
+    await prefs.setString(_kanbanChatPref, _kanbanChatId);
     await WidgetBridge.refresh();
   }
 
@@ -118,6 +137,8 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
               ],
             ),
           ),
+          _sectionLabel(tr('kind_kanban'), p),
+          _kanbanCard(p),
           _sectionLabel(tr('widget_transparency'), p),
           _card(
             p,
@@ -194,6 +215,179 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _kanbanCard(Palette p) {
+    final model = widget.model;
+    final tr = model.tr;
+    final chats = model.state.chats
+        .where((chat) => chat.isKanban && !chat.isTrashed)
+        .toList();
+    Chat? selected;
+    for (final chat in chats) {
+      if (chat.id == _kanbanChatId) {
+        selected = chat;
+        break;
+      }
+    }
+    final title = selected?.name ?? tr('kb_widget_all_boards');
+    return _card(
+      p,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr('kb_widget_board'),
+              style: TextStyle(fontSize: 11.5, color: p.textFaint),
+            ),
+            const SizedBox(height: 7),
+            Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                key: const ValueKey('kanban-widget-chat-selector'),
+                onTap: chats.isEmpty ? null : () => _pickKanbanChat(chats, p),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      if (selected == null)
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: p.bgList,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.view_kanban_outlined,
+                            color: p.accent,
+                            size: 20,
+                          ),
+                        )
+                      else
+                        ChatAvatar(chat: selected, size: 36, iconSize: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: chats.isEmpty ? p.textFaint : p.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right, color: p.textFaint),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (chats.isEmpty) ...[
+              const SizedBox(height: 7),
+              Text(
+                tr('kb_widget_empty'),
+                style: TextStyle(fontSize: 11.5, color: p.textFaint),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickKanbanChat(List<Chat> chats, Palette p) async {
+    final tr = widget.model.tr;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: p.modalBg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final height = (76.0 + (chats.length + 1) * 60.0)
+            .clamp(136.0, MediaQuery.sizeOf(ctx).height * 0.75)
+            .toDouble();
+        return SafeArea(
+          child: SizedBox(
+            height: height,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                  child: Text(
+                    tr('kb_widget_board'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: p.text,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    key: const ValueKey('kanban-widget-chat-picker'),
+                    children: [
+                      ListTile(
+                        key: const ValueKey('kanban-widget-chat-all'),
+                        leading: Icon(
+                          _kanbanChatId.isEmpty
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: _kanbanChatId.isEmpty ? p.accent : p.textFaint,
+                        ),
+                        title: Text(
+                          tr('kb_widget_all_boards'),
+                          style: TextStyle(color: p.text),
+                        ),
+                        onTap: () => Navigator.pop(ctx, ''),
+                      ),
+                      for (final chat in chats)
+                        ListTile(
+                          key: ValueKey('kanban-widget-chat-${chat.id}'),
+                          leading: ChatAvatar(
+                            chat: chat,
+                            size: 36,
+                            iconSize: 18,
+                          ),
+                          title: Text(
+                            chat.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: p.text),
+                          ),
+                          trailing: Icon(
+                            _kanbanChatId == chat.id
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: _kanbanChatId == chat.id
+                                ? p.accent
+                                : p.textFaint,
+                          ),
+                          onTap: () => Navigator.pop(ctx, chat.id),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    setState(() => _kanbanChatId = result);
+    await _save();
   }
 
   Widget _periodButton(Palette p, String value, String title) {

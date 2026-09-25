@@ -74,4 +74,19 @@ void main() {
     await BackupService.importFromBytes(rawZip, 'b.zip', legacy);
     expect(legacy.chats.single.id, 'c1');
   });
+
+  test('backup roundtrip preserves kanban widget chat', () async {
+    SharedPreferences.setMockInitialValues({
+      'tn-kanbanwidget-chatId': 'k1',
+    });
+    final sourcePrefs = await SharedPreferences.getInstance();
+    await sourcePrefs.setString('tn-kanbanwidget-chatId', 'k1');
+    final zip = await BackupService.buildZip(AppState());
+
+    SharedPreferences.setMockInitialValues({});
+    await BackupService.importFromBytes(zip, 'widget.zip', AppState());
+
+    final restoredPrefs = await SharedPreferences.getInstance();
+    expect(restoredPrefs.getString('tn-kanbanwidget-chatId'), 'k1');
+  });
 }

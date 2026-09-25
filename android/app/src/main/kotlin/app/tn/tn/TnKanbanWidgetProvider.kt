@@ -34,6 +34,8 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        private const val KANBAN_CHAT_PREF = "tn-kanbanwidget-chatId"
+
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, TnKanbanWidgetProvider::class.java))
@@ -96,6 +98,9 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val raw = prefs.getString("flutter.tn-notes-data-v1", null) ?: return emptyList()
             val lang = appLang(context)
+            val selectedChatId = (
+                prefs.all["flutter.$KANBAN_CHAT_PREF"] ?: prefs.all["KANBAN_CHAT_PREF"]
+            ) as? String ?: ""
             val data = JSONObject(raw)
             val chats = HashMap<String, KbChat>()
             data.optJSONArray("chats")?.let { arr ->
@@ -121,6 +126,13 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                 }
             }
             if (chats.isEmpty()) return emptyList()
+            if (selectedChatId.isNotEmpty()) {
+                val selected = chats[selectedChatId]
+                if (selected != null && !selected.deleted) {
+                    val otherIds = chats.keys.filter { it != selectedChatId }
+                    for (id in otherIds) chats.remove(id)
+                }
+            }
             val rows = ArrayList<KbRow>()
             val entries = data.optJSONArray("entries") ?: return emptyList()
             for (i in 0 until entries.length()) {
@@ -210,11 +222,10 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                 )
             )
 
-            // Gear opens the app (no dedicated kanban settings screen).
             rv.setOnClickPendingIntent(
                 R.id.dw_settings,
                 PendingIntent.getActivity(
-                    context, 13, Intent(context, MainActivity::class.java),
+                    context, 13, Intent(context, MainActivity::class.java).putExtra("open_settings", true),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
