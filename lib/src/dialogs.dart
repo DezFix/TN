@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_model.dart';
 import 'models.dart';
 import 'theme.dart';
+import 'undo_toast.dart';
 import 'widgets.dart';
 
 enum EntryAction {
@@ -623,16 +624,17 @@ class _BoardManageSheetState extends State<_BoardManageSheet> {
       ).showSnackBar(SnackBar(content: Text(tr('board_need_one'))));
       return;
     }
+    final previousBoard = List<BoardColumn>.of(widget.chat.board!);
+    final previousCardColumns = <String, String?>{
+      for (final entry in model.state.ownEntriesFor(widget.chat.id))
+        entry.id: entry.boardId,
+    };
     final fallback = widget.chat.board!.firstWhere((b) => b.id != col.id);
-    for (final e in model.state.entries.where(
-      (e) => e.chatId == widget.chat.id,
-    )) {
+    for (final e in model.state.ownEntriesFor(widget.chat.id)) {
       if ((e.boardId ?? widget.chat.board!.first.id) == col.id) {
         e.boardId = fallback.id;
         e.updatedAt = DateTime.now().millisecondsSinceEpoch;
       }
-      // Legacy entries with null boardId implicitly live in first column:
-      // if we delete the first column, point them at the fallback explicitly.
       if (e.boardId == null && col.id == widget.chat.board!.first.id) {
         e.boardId = fallback.id;
         e.updatedAt = DateTime.now().millisecondsSinceEpoch;
@@ -641,6 +643,25 @@ class _BoardManageSheetState extends State<_BoardManageSheet> {
     widget.chat.board!.removeWhere((b) => b.id == col.id);
     await model.save();
     if (mounted) setState(() {});
+    if (!mounted) return;
+    UndoToast.show(
+      context,
+      message: tr('deleted'),
+      actionLabel: tr('undo'),
+      p: model.p,
+      onUndo: () async {
+        widget.chat.board!
+          ..clear()
+          ..addAll(previousBoard);
+        for (final entry in model.state.ownEntriesFor(widget.chat.id)) {
+          if (!previousCardColumns.containsKey(entry.id)) continue;
+          entry.boardId = previousCardColumns[entry.id];
+          entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        }
+        await model.save();
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   @override

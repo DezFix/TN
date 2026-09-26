@@ -425,14 +425,12 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
             val chats = parseChats(context, data, lang)
             if (chats.isEmpty()) return KbSnapshot(emptyList(), emptyList())
             val selectedId = selectedChatId(prefs)
-            val active = if (selectedId.isNotEmpty() && chats[selectedId] != null) {
-                listOf(chats[selectedId]!!)
-            } else {
-                chats.values.toList()
-            }
+            val board = chats[selectedId] ?: chats.values.firstOrNull()
+            val active = listOfNotNull(board)
             if (active.isEmpty()) return KbSnapshot(emptyList(), emptyList())
 
-            val columnCount = active.first().columns.size.coerceAtLeast(1)
+            val columnCount = active.first().columns.size
+                .coerceIn(1, MAX_WIDE_COLUMNS)
             val defaults = defaultColumns(context, lang)
             val columns = ArrayList<KbColumnDef>(columnCount)
             for (index in 0 until columnCount) {
@@ -547,11 +545,18 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                 val board = chat.optJSONArray("board")
                 if (board != null) {
                     for (columnIndex in 0 until board.length()) {
+                        if (columns.size >= MAX_WIDE_COLUMNS) break
                         val column = board.optJSONObject(columnIndex) ?: continue
                         val columnId = stringValue(column, "id").trim()
                         val columnName = stringValue(column, "name").trim()
                         if (columnId.isEmpty() || columnName.isEmpty()) continue
-                        if (columns.any { it.id == columnId }) continue
+                        if (columns.any {
+                                it.id == columnId ||
+                                    it.name.equals(columnName, ignoreCase = true)
+                            }
+                        ) {
+                            continue
+                        }
                         columns.add(KbColumnDef(columnId, columnName))
                     }
                 }

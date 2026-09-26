@@ -22,6 +22,10 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   String _period = 'upcoming'; // 'today' | 'upcoming'
   String _kanbanChatId = '';
 
+  List<Chat> get _availableKanbanChats => widget.model.state.chats
+      .where((chat) => chat.isKanban && !chat.isTrashed)
+      .toList();
+
   @override
   void initState() {
     super.initState();
@@ -51,14 +55,18 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
     final period = prefs.getString('tn-daywidget-period') ?? 'upcoming';
     final storedKanbanChatId = prefs.getString(_kanbanChatPref) ?? '';
     final selectedChat = widget.model.state.chatById(storedKanbanChatId);
-    final kanbanChatId =
+    final boards = _availableKanbanChats;
+    final storedIsValid =
         storedKanbanChatId.isNotEmpty &&
-            selectedChat != null &&
-            selectedChat.isKanban &&
-            !selectedChat.isTrashed
+        selectedChat != null &&
+        selectedChat.isKanban &&
+        !selectedChat.isTrashed;
+    final kanbanChatId = storedIsValid
         ? storedKanbanChatId
-        : '';
-    if (kanbanChatId.isEmpty && storedKanbanChatId.isNotEmpty) {
+        : boards.isEmpty
+        ? ''
+        : boards.first.id;
+    if (!storedIsValid && storedKanbanChatId.isNotEmpty) {
       await prefs.remove(_kanbanChatPref);
     }
     if (!mounted) return;
@@ -220,9 +228,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
   Widget _kanbanCard(Palette p) {
     final model = widget.model;
     final tr = model.tr;
-    final chats = model.state.chats
-        .where((chat) => chat.isKanban && !chat.isTrashed)
-        .toList();
+    final chats = _availableKanbanChats;
     Chat? selected;
     for (final chat in chats) {
       if (chat.id == _kanbanChatId) {
@@ -230,7 +236,8 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         break;
       }
     }
-    final title = selected?.name ?? tr('kb_widget_all_boards');
+    selected ??= chats.isEmpty ? null : chats.first;
+    final title = selected?.name ?? tr('kb_widget_empty');
     return _card(
       p,
       child: Padding(
@@ -315,7 +322,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        final height = (76.0 + (chats.length + 1) * 60.0)
+        final height = (76.0 + chats.length * 60.0)
             .clamp(136.0, MediaQuery.sizeOf(ctx).height * 0.75)
             .toDouble();
         return SafeArea(
@@ -338,20 +345,6 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
                   child: ListView(
                     key: const ValueKey('kanban-widget-chat-picker'),
                     children: [
-                      ListTile(
-                        key: const ValueKey('kanban-widget-chat-all'),
-                        leading: Icon(
-                          _kanbanChatId.isEmpty
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          color: _kanbanChatId.isEmpty ? p.accent : p.textFaint,
-                        ),
-                        title: Text(
-                          tr('kb_widget_all_boards'),
-                          style: TextStyle(color: p.text),
-                        ),
-                        onTap: () => Navigator.pop(ctx, ''),
-                      ),
                       for (final chat in chats)
                         ListTile(
                           key: ValueKey('kanban-widget-chat-${chat.id}'),

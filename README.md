@@ -71,8 +71,8 @@ A new chat type for running work in columns. Three by default — Idea / In prog
 
 - Tabs with counters above the messages switch columns;
 - swiping a card right pushes it to the next column (the last one is a stop);
-- press and hold the drag handle, then drop the card on another column tab;
-- tapping the column badge on a card or “…” moves it to any column, including backwards;
+- the large “…” button on a card opens a move sheet with every column, including backwards moves;
+- deleting a card or column uses the same auto-dismissing “Deleted · Undo” banner as the rest of the app;
 - tap send = a quick text card in the current column; long-press send opens a checklist editor with optional deadline, repeat and priority;
 - moving a todo card into the last column checks every item (alarms stop); moving it back out unchecks them; Undo restores the exact checkmarks and deadline;
 - kanban tasks show up in the agenda; forwarding into kanban lands the card in the first column.
@@ -82,7 +82,7 @@ A new chat type for running work in columns. Three by default — Idea / In prog
 Two widgets can be placed on the home screen:
 
 - **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, priority-first with overdue items highlighted). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
-- **Kanban** — all card types from the selected board (or all available boards), grouped into up to three columns. It shows deadlines (or “No deadline”) and is read-only: there are no checkboxes or completion triggers. A wide widget shows three columns; a narrow one shows one column and switches columns on tap. Tapping a card opens it in the app.
+- **Kanban** — all card types from one selected board, grouped into at most three deduplicated columns. It shows deadlines (or “No deadline”) and is read-only: there are no checkboxes or completion triggers. A wide widget shows the columns side by side; a narrow one shows one column and switches columns on tap. Tapping a card opens it in the app.
 
 Background transparency, font size and the Kanban board are configured inside the app (Settings → Widget settings).
 

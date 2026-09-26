@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.1] - 2026-09-26
+
+- **Single-board widget:** the Kanban widget now shows exactly one selected board, with duplicate columns removed and at most three visible columns
+- **Simpler card moves:** drag-and-drop is removed; the larger “…” button opens the move sheet with every column
+- **Undo for deletion:** deleting a Kanban column now shows the same auto-dismissing “Deleted · Undo” banner used elsewhere
+
 ## [1.29.0] - 2026-09-25
 
 - **Kanban moves:** cards can move forward with a swipe or directly to any column with the drag handle; deadlines, recurring tasks, alarms and Undo stay in sync

@@ -95,7 +95,6 @@ class _ChatScreenState extends State<ChatScreen> {
   // Kanban: currently selected column tab (boardId). Null = first column.
   String? _boardTab;
   bool _deepLinkBoardPrepared = false;
-  bool _dragHandlePointer = false;
   bool _recording = false;
   bool _recLocked = false;
   bool _finishing = false;
@@ -2585,31 +2584,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   padding: EdgeInsets.only(
                     right: i + 1 == boards.length ? 0 : TNSpacing.sm,
                   ),
-                  child: DragTarget<Entry>(
-                    key: ValueKey('kanban-tab-${boards[i].id}'),
-                    onWillAcceptWithDetails: (details) {
-                      final entry = details.data;
-                      return !_selecting &&
-                          entry.chatId == chat.id &&
-                          resolvedBoardId(entry, chat, widget.model.tr) !=
-                              boards[i].id;
-                    },
-                    onAcceptWithDetails: (details) async {
-                      await _moveKanbanEntry(details.data, boards[i].id);
-                    },
-                    builder: (_, candidateData, _) {
+                  child: Builder(
+                    builder: (context) {
                       final selected = cur == boards[i].id;
-                      final hovering = candidateData.isNotEmpty;
                       return Material(
-                        color: selected
-                            ? p.accent
-                            : hovering
-                            ? p.accent.withValues(alpha: 0.14)
-                            : p.bgChat,
+                        key: ValueKey('kanban-tab-${boards[i].id}'),
+                        color: selected ? p.accent : p.bgChat,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(TNRadii.md),
                           side: BorderSide(
-                            color: selected || hovering
+                            color: selected
                                 ? p.accent
                                 : p.divider.withValues(alpha: 0.6),
                           ),
@@ -2645,9 +2629,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w700,
-                                      color: selected
-                                          ? Colors.white
-                                          : p.text,
+                                      color: selected ? Colors.white : p.text,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
@@ -2767,7 +2749,6 @@ class _ChatScreenState extends State<ChatScreen> {
       Widget row = GestureDetector(
         onTap: _selecting ? () => _toggleSelect(e.id) : null,
         onLongPressStart: (d) {
-          if (_dragHandlePointer) return;
           HapticFeedback.mediumImpact();
           _toggleSelect(e.id);
         },
@@ -2923,77 +2904,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
       );
 
-  Widget _kanbanDragHandle(AppModel model, Entry entry) {
-    final text = entry.type == 'todo'
-        ? (entry.items ?? const <TodoItem>[]).map((item) => item.text).join('\n')
-        : entry.text;
-    final preview = text.trim().isEmpty ? model.tr('no_messages') : text.trim();
-    final handle = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: ValueKey('kanban-drag-handle-${entry.id}'),
-        borderRadius: BorderRadius.circular(TNRadii.sm),
-        onTap: () {
-          _dragHandlePointer = false;
-          unawaited(_pickAndMoveBoard(entry));
-        },
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(
-            Icons.drag_indicator_rounded,
-            size: 20,
-            color: p.textFaint,
-          ),
-        ),
-      ),
-    );
-    return Listener(
-      onPointerDown: (_) => _dragHandlePointer = true,
-      onPointerUp: (_) => _dragHandlePointer = false,
-      onPointerCancel: (_) => _dragHandlePointer = false,
-      child: LongPressDraggable<Entry>(
-        key: ValueKey('kanban-draggable-${entry.id}'),
-        data: entry,
-        maxSimultaneousDrags: _selecting ? 0 : 1,
-        onDragStarted: () {
-          _dragHandlePointer = true;
-          HapticFeedback.mediumImpact();
-        },
-        onDragEnd: (_) => _dragHandlePointer = false,
-        onDraggableCanceled: (_, _) => _dragHandlePointer = false,
-        feedback: Material(
-          color: Colors.transparent,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: p.bubbleOwn,
-                borderRadius: BorderRadius.circular(TNRadii.md),
-                border: Border.all(color: p.accent),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  preview,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: p.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        childWhenDragging: Opacity(opacity: 0.35, child: handle),
-        child: handle,
-      ),
-    );
-  }
-
   Widget _kanbanCardHeader(AppModel model, Entry entry) {
     final chat = _chatOrNull;
     if (chat == null) return const SizedBox.shrink();
@@ -3052,16 +2962,15 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const SizedBox(width: TNSpacing.xs),
-          _kanbanDragHandle(model, entry),
-          const SizedBox(width: TNSpacing.xs),
           Material(
             color: Colors.transparent,
             child: InkWell(
+              key: ValueKey('kanban-move-menu-${entry.id}'),
               borderRadius: BorderRadius.circular(TNRadii.sm),
               onTap: () => _pickAndMoveBoard(entry),
               child: SizedBox(
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 child: Icon(
                   Icons.more_horiz_rounded,
                   size: 20,

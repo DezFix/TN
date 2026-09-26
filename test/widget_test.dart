@@ -215,6 +215,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('kanban-widget-chat-k1')), findsOneWidget);
     expect(find.byKey(const ValueKey('kanban-widget-chat-k2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kanban-widget-chat-all')), findsNothing);
     expect(find.text('Обычный чат'), findsNothing);
     expect(find.text('Удалённая доска'), findsNothing);
 
@@ -224,13 +225,26 @@ void main() {
     expect(prefs.getString('tn-kanbanwidget-chatId'), 'k2');
     expect(updates, 1);
     expect(find.text('Доска 2'), findsOneWidget);
+  });
 
-    await tester.tap(selector);
+  testWidgets('widget settings defaults to one kanban board', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    mockPlatformChannels();
+    final state = AppState();
+    state.chats.addAll([
+      Chat(id: 'k1', name: 'Доска 1', color: '#2AABEE', kind: 'kanban'),
+      Chat(id: 'k2', name: 'Доска 2', color: '#E17055', kind: 'kanban'),
+    ]);
+    final model = AppModel(state: state);
+    await tester.pumpWidget(
+      MaterialApp(home: WidgetSettingsScreen(model: model)),
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('kanban-widget-chat-all')));
-    await tester.pumpAndSettle();
-    expect(prefs.getString('tn-kanbanwidget-chatId'), isEmpty);
-    expect(updates, 2);
+
+    final selector = find.byKey(const ValueKey('kanban-widget-chat-selector'));
+    await tester.scrollUntilVisible(selector, 250);
+    expect(find.text('Доска 1'), findsOneWidget);
+    expect(find.text('Доска 2'), findsNothing);
   });
 
   testWidgets('widget settings explains when no kanban chat exists',
@@ -303,15 +317,15 @@ void main() {
     expect(find.text('idea card'), findsNothing);
     expect(find.byKey(const ValueKey('kanban-tab-done')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('kanban-drag-handle-done-entry')),
+      find.byKey(const ValueKey('kanban-move-menu-done-entry')),
       findsOneWidget,
     );
-    expect(find.byType(LongPressDraggable<Entry>), findsOneWidget);
-    expect(find.byType(DragTarget<Entry>), findsNWidgets(3));
+    expect(find.byType(LongPressDraggable<Entry>), findsNothing);
+    expect(find.byType(DragTarget<Entry>), findsNothing);
     await tester.pump(const Duration(seconds: 4));
   });
 
-  testWidgets('kanban drag handle moves a card to another column',
+  testWidgets('kanban three dots move a card to another column',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final state = AppState();
@@ -326,7 +340,7 @@ void main() {
       chatId: 'k1',
       type: 'text',
       ts: 1,
-      text: 'draggable card',
+      text: 'movable card',
     ));
     final model = AppModel(state: state);
     await tester.pumpWidget(MaterialApp(
@@ -334,18 +348,43 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final handle = find.byKey(const ValueKey('kanban-drag-handle-entry'));
-    final target = find.byKey(const ValueKey('kanban-tab-work'));
-    expect(handle, findsOneWidget);
-    expect(target, findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('kanban-move-menu-entry')));
+    await tester.pumpAndSettle();
+    expect(find.text(model.tr('board_move_to')), findsOneWidget);
 
-    final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump(const Duration(milliseconds: 600));
-    await gesture.moveTo(tester.getCenter(target));
-    await tester.pump(const Duration(milliseconds: 200));
-    await gesture.up();
+    await tester.tap(find.text(model.tr('board_work')).last);
     await tester.pumpAndSettle();
 
     expect(state.entries.single.boardId, 'work');
+  });
+
+  testWidgets('kanban column delete shows an auto-dismissing undo banner',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    state.chats.add(Chat(
+      id: 'k1',
+      name: 'Доска',
+      color: '#2AABEE',
+      kind: 'kanban',
+    ));
+    final model = AppModel(state: state);
+    await tester.pumpWidget(MaterialApp(
+      home: ChatScreen(model: model, chatId: 'k1'),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('kanban-tab-work')));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.delete_outline), findsNWidgets(3));
+
+    await tester.tap(find.byIcon(Icons.delete_outline).last);
+    await tester.pumpAndSettle();
+    expect(find.text(model.tr('deleted')), findsOneWidget);
+    expect(find.text(model.tr('undo')), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(find.text(model.tr('deleted')), findsNothing);
   });
 }
