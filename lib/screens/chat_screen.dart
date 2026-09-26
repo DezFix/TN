@@ -1,8 +1,8 @@
-// ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -11,6 +11,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
@@ -28,8 +29,6 @@ import '../src/undo.dart';
 import '../src/undo_toast.dart';
 import '../src/widgets.dart';
 import 'chat_edit_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:file_selector/file_selector.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -47,6 +46,33 @@ class ChatScreen extends StatefulWidget {
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _KanbanMoveSnapshot {
+  _KanbanMoveSnapshot(Entry entry)
+      : entry = entry,
+        boardId = entry.boardId,
+        done = (entry.items ?? const <TodoItem>[])
+            .map((item) => item.done)
+            .toList(),
+        dueAt = entry.dueAt;
+
+  final Entry entry;
+  final String? boardId;
+  final List<bool> done;
+  final int? dueAt;
+
+  void restore() {
+    entry.boardId = boardId;
+    final items = entry.items;
+    if (items != null && items.length == done.length) {
+      for (var i = 0; i < items.length; i++) {
+        items[i].done = done[i];
+      }
+    }
+    entry.dueAt = dueAt;
+    entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  }
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -68,6 +94,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _pendingImagePath;
   // Kanban: currently selected column tab (boardId). Null = first column.
   String? _boardTab;
+  bool _deepLinkBoardPrepared = false;
+  bool _dragHandlePointer = false;
   bool _recording = false;
   bool _recLocked = false;
   bool _finishing = false;
@@ -104,8 +132,9 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentBoardId() {
     final boards = _boards();
     if (boards.isEmpty) return null;
-    if (_boardTab != null && boards.any((b) => b.id == _boardTab))
+    if (_boardTab != null && boards.any((b) => b.id == _boardTab)) {
       return _boardTab;
+    }
     return boards.first.id;
   }
 
@@ -118,6 +147,21 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_boardTab == null || !boards.any((b) => b.id == _boardTab)) {
       _boardTab = boards.first.id;
     }
+  }
+
+  void _prepareBoardForTarget() {
+    if (_deepLinkBoardPrepared || !_isKanban) return;
+    final targetId = widget.scrollToEntryId;
+    if (targetId == null) {
+      _deepLinkBoardPrepared = true;
+      return;
+    }
+    for (final entry in widget.model.state.entries) {
+      if (entry.id != targetId || entry.chatId != widget.chatId) continue;
+      _boardTab = resolvedBoardId(entry, _chat, widget.model.tr);
+      break;
+    }
+    _deepLinkBoardPrepared = true;
   }
 
   /// Board id for newly created cards: current tab in kanban, null otherwise.
@@ -163,6 +207,7 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     widget.model.addListener(_onModel);
     _highlightId = widget.highlightEntryId;
+    _prepareBoardForTarget();
     _loadDraft();
     _text.addListener(_saveDraft);
     _text.addListener(_updateTagQuery);
@@ -189,6 +234,20 @@ class _ChatScreenState extends State<ChatScreen> {
       RssService.fetchForChat(chat, widget.model.state).then((_) {
         if (mounted) setState(() {});
       });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.chatId == widget.chatId &&
+        oldWidget.scrollToEntryId == widget.scrollToEntryId) {
+      return;
+    }
+    _deepLinkBoardPrepared = false;
+    _prepareBoardForTarget();
+    if (widget.scrollToEntryId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTarget());
     }
   }
 
@@ -343,14 +402,6 @@ class _ChatScreenState extends State<ChatScreen> {
       monthDay: res?.monthDay,
       priority: res?.priority ?? 0,
     );
-  }
-
-  Future<void> _cancelEntryReminder(Entry entry) async {
-    try {
-      await RemindersService.instance.cancel(
-        Reminder(id: entry.id, chatId: entry.chatId, when: entry.dueAt ?? 0),
-      );
-    } catch (_) {}
   }
 
   Future<void> _scheduleEntryReminder(Entry entry) async {
@@ -727,15 +778,16 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path == null || path.isEmpty || secs < 1) {
       await _deleteTemp(path);
       _finishing = false;
-      if (secs < 1 && wasLocked == false)
+      if (secs < 1 && wasLocked == false) {
         _toast(widget.model.tr('rec_too_short'));
+      }
       return;
     }
     try {
       final name = await MediaStore().saveFile(path, 'audio');
       String? sizeLabel;
       try {
-        sizeLabel = _fmtDocSize(await File(path!).length());
+        sizeLabel = _fmtDocSize(await File(path).length());
       } catch (_) {}
       widget.model.state.entries.add(
         Entry(
@@ -1322,64 +1374,86 @@ class _ChatScreenState extends State<ChatScreen> {
     await _moveKanbanEntry(entry, targetId);
   }
 
-  /// Core kanban move with Done auto-check + alarm healing + Undo snackbar.
-  Future<void> _moveKanbanEntry(Entry entry, String targetId) async {
+  BoardColumn? _findBoard(String id) {
+    for (final board in _boards()) {
+      if (board.id == id) return board;
+    }
+    return null;
+  }
+
+  _KanbanMoveSnapshot? _stageKanbanMove(Entry entry, String targetId) {
     final chat = _chatOrNull;
-    if (chat == null || !chat.isKanban) return;
-    final tr = widget.model.tr;
-    final boards = chat.effectiveBoard(tr);
-    final target = boards.firstWhere(
-      (b) => b.id == targetId,
-      orElse: () => boards.first,
-    );
-    final prevBoard = resolvedBoardId(entry, chat, tr);
-    if (prevBoard == target.id) return;
-    final prevDone = (entry.items ?? const <TodoItem>[])
-        .map((i) => i.done)
-        .toList();
-    moveEntryToBoard(entry, chat, target.id, tr);
+    if (chat == null || !chat.isKanban || entry.chatId != widget.chatId) {
+      return null;
+    }
+    final target = _findBoard(targetId);
+    if (target == null) return null;
+    final prevBoard = resolvedBoardId(entry, chat, widget.model.tr);
+    if (prevBoard == target.id) return null;
+    final snapshot = _KanbanMoveSnapshot(entry);
+    moveEntryToBoard(entry, chat, target.id, widget.model.tr);
+    return snapshot;
+  }
+
+  Future<void> _runTaskPipeline(
+    List<Entry> entries, {
+    bool rollRecurring = true,
+  }) async {
+    if (entries.isEmpty) return;
+    if (rollRecurring) {
+      final now = DateTime.now();
+      for (final entry in entries) {
+        if (entry.recurrence != null) {
+          snapCompletedRecurring(entry, now);
+        }
+      }
+      widget.model.rolloverRecurring();
+    }
     await widget.model.save();
-    // Done tasks must not ring; revived ones re-arm when still future-dated.
-    if (entry.isDone) {
-      await _cancelEntryReminder(entry);
-    } else {
-      await _scheduleEntryReminder(entry);
+    await widget.model.rescheduleAlarms();
+  }
+
+  Future<void> _restoreKanbanMoves(
+    List<_KanbanMoveSnapshot> snapshots,
+  ) async {
+    if (snapshots.isEmpty) return;
+    for (final snapshot in snapshots) {
+      snapshot.restore();
     }
-    if (mounted) {
-      setState(() {
-        // Stay on the source tab so a swipe doesn't yank the list away;
-        // the card simply disappears (it now lives in the target tab).
-        // If the user moved via picker from search/all view, jump to target.
-        if (_searching) _boardTab = target.id;
-      });
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(tr('board_moved', [target.name])),
-          action: SnackBarAction(
-            label: tr('undo'),
-            onPressed: () async {
-              entry.boardId = prevBoard == boards.first.id ? null : prevBoard;
-              // Restore checkmarks exactly (undo of auto-check).
-              final items = entry.items;
-              if (items != null && items.length == prevDone.length) {
-                for (var i = 0; i < items.length; i++) {
-                  items[i].done = prevDone[i];
-                }
-              }
-              entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
-              await widget.model.save();
-              if (entry.isDone) {
-                await _cancelEntryReminder(entry);
-              } else {
-                await _scheduleEntryReminder(entry);
-              }
-              if (mounted) setState(() {});
-            },
-          ),
+    await _runTaskPipeline(
+      snapshots.map((s) => s.entry).toList(),
+      rollRecurring: false,
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _showKanbanUndo(
+    List<_KanbanMoveSnapshot> snapshots,
+    String targetId,
+  ) {
+    if (!mounted || snapshots.isEmpty) return;
+    final tr = widget.model.tr;
+    final targetName = _findBoard(targetId)?.name ?? targetId;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(tr('board_moved', [targetName])),
+        action: SnackBarAction(
+          label: tr('undo'),
+          onPressed: () => unawaited(_restoreKanbanMoves(snapshots)),
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  Future<void> _moveKanbanEntry(Entry entry, String targetId) async {
+    final snapshot = _stageKanbanMove(entry, targetId);
+    if (snapshot == null) return;
+    await _runTaskPipeline([entry]);
+    if (!mounted) return;
+    setState(() {
+      if (_searching) _boardTab = targetId;
+    });
+    _showKanbanUndo([snapshot], targetId);
   }
 
   /// Swipe right: forward-only (idea → work → done). Last column = stop.
@@ -1401,7 +1475,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (chat == null || !chat.isKanban) return;
     final entries = _ownedSelectedEntries;
     if (entries.isEmpty) return;
-    // Use first entry as anchor for the picker (current column highlight).
     final targetId = await showBoardMoveSheet(
       context,
       widget.model,
@@ -1409,27 +1482,24 @@ class _ChatScreenState extends State<ChatScreen> {
       entries.first,
     );
     if (targetId == null) return;
-    final tr = widget.model.tr;
-    final boards = chat.effectiveBoard(tr);
-    final target = boards.firstWhere(
-      (b) => b.id == targetId,
-      orElse: () => boards.first,
-    );
-    for (final e in entries) {
-      final prev = resolvedBoardId(e, chat, tr);
-      if (prev == target.id) continue;
-      moveEntryToBoard(e, chat, target.id, tr);
-      if (e.isDone) {
-        await _cancelEntryReminder(e);
-      } else {
-        await _scheduleEntryReminder(e);
-      }
+    final target = _findBoard(targetId);
+    if (target == null) return;
+    final snapshots = <_KanbanMoveSnapshot>[];
+    final moved = <Entry>[];
+    for (final entry in entries) {
+      final snapshot = _stageKanbanMove(entry, target.id);
+      if (snapshot == null) continue;
+      snapshots.add(snapshot);
+      moved.add(entry);
     }
-    await widget.model.save();
-    if (mounted) {
-      setState(() => _selectedIds.clear());
-      _toast(tr('board_moved', [target.name]));
+    await _runTaskPipeline(moved);
+    if (!mounted) return;
+    setState(() => _selectedIds.clear());
+    if (snapshots.isEmpty) {
+      _toast(widget.model.tr('board_moved', [target.name]));
+      return;
     }
+    _showKanbanUndo(snapshots, target.id);
   }
 
   /// Forward with full field parity AND copy-on-forward media: the old
@@ -2495,93 +2565,127 @@ class _ChatScreenState extends State<ChatScreen> {
     _ensureBoardTab();
     final boards = chat.effectiveBoard(widget.model.tr);
     final cur = _currentBoardId();
-    // Counts per column for the tab badges.
-    final counts = <String, int>{for (final b in boards) b.id: 0};
-    for (final e in widget.model.state.entries.where(
-      (e) => e.chatId == chat.id,
+    final counts = <String, int>{for (final board in boards) board.id: 0};
+    for (final entry in widget.model.state.entries.where(
+      (entry) => entry.chatId == chat.id,
     )) {
-      final id = resolvedBoardId(e, chat, widget.model.tr);
+      final id = resolvedBoardId(entry, chat, widget.model.tr);
       counts[id] = (counts[id] ?? 0) + 1;
     }
-    return Container(
+    return ColoredBox(
       color: p.bgList,
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < boards.length; i++)
-              Padding(
-                padding: EdgeInsets.only(right: i + 1 == boards.length ? 0 : 6),
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _boardTab = boards[i].id);
-                  },
-                  onLongPress: () async {
-                    final changed = await showBoardManageSheet(
-                      context,
-                      widget.model,
-                      chat,
-                    );
-                    if (changed && mounted) setState(() {});
-                    _ensureBoardTab();
-                    if (mounted) setState(() {});
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cur == boards[i].id ? p.accent : p.bgChat,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: cur == boards[i].id
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < boards.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(
+                    right: i + 1 == boards.length ? 0 : TNSpacing.sm,
+                  ),
+                  child: DragTarget<Entry>(
+                    key: ValueKey('kanban-tab-${boards[i].id}'),
+                    onWillAcceptWithDetails: (details) {
+                      final entry = details.data;
+                      return !_selecting &&
+                          entry.chatId == chat.id &&
+                          resolvedBoardId(entry, chat, widget.model.tr) !=
+                              boards[i].id;
+                    },
+                    onAcceptWithDetails: (details) async {
+                      await _moveKanbanEntry(details.data, boards[i].id);
+                    },
+                    builder: (_, candidateData, _) {
+                      final selected = cur == boards[i].id;
+                      final hovering = candidateData.isNotEmpty;
+                      return Material(
+                        color: selected
                             ? p.accent
-                            : p.divider.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          boards[i].name,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: cur == boards[i].id ? Colors.white : p.text,
+                            : hovering
+                            ? p.accent.withValues(alpha: 0.14)
+                            : p.bgChat,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(TNRadii.md),
+                          side: BorderSide(
+                            color: selected || hovering
+                                ? p.accent
+                                : p.divider.withValues(alpha: 0.6),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cur == boards[i].id
-                                ? Colors.white.withValues(alpha: 0.22)
-                                : p.accent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${counts[boards[i].id] ?? 0}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: cur == boards[i].id
-                                  ? Colors.white
-                                  : p.accent,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(TNRadii.md),
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _boardTab = boards[i].id);
+                          },
+                          onLongPress: () async {
+                            final changed = await showBoardManageSheet(
+                              context,
+                              widget.model,
+                              chat,
+                            );
+                            if (changed && mounted) setState(() {});
+                            _ensureBoardTab();
+                            if (mounted) setState(() {});
+                          },
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    boards[i].name,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: selected
+                                          ? Colors.white
+                                          : p.text,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? Colors.white.withValues(alpha: 0.22)
+                                          : p.accent.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(
+                                        TNRadii.pill,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${counts[boards[i].id] ?? 0}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: selected
+                                            ? Colors.white
+                                            : p.accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2598,7 +2702,10 @@ class _ChatScreenState extends State<ChatScreen> {
       }).toList();
     }
     final isKanbanView = _chat.isKanban;
-    if (isKanbanView) _ensureBoardTab();
+    if (isKanbanView) {
+      _prepareBoardForTarget();
+      _ensureBoardTab();
+    }
     final searchingActive = _searching && _searchQuery.isNotEmpty;
     if (isKanbanView && !searchingActive) {
       final cur = _currentBoardId();
@@ -2660,6 +2767,7 @@ class _ChatScreenState extends State<ChatScreen> {
       Widget row = GestureDetector(
         onTap: _selecting ? () => _toggleSelect(e.id) : null,
         onLongPressStart: (d) {
+          if (_dragHandlePointer) return;
           HapticFeedback.mediumImpact();
           _toggleSelect(e.id);
         },
@@ -2764,14 +2872,14 @@ class _ChatScreenState extends State<ChatScreen> {
     for (final e in entries) {
       final day = fmtDay(e.ts, tr);
       if (currentDay != null && day != currentDay) {
-        children.add(pill(currentDay!, currentDayStart!));
+        children.add(pill(currentDay, currentDayStart!));
       }
       currentDay = day;
       currentDayStart = dayStartOf(e.ts);
       children.add(makeRow(e));
       _childIndices[e.id] = children.length - 1;
     }
-    if (currentDay != null) children.add(pill(currentDay!, currentDayStart!));
+    if (currentDay != null) children.add(pill(currentDay, currentDayStart!));
 
     // builder + reverse: index 0 renders at the BOTTOM, and children[0] is
     // the NEWEST row (entries iterate newest-first) — plain children[i] puts
@@ -2815,62 +2923,150 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
       );
 
+  Widget _kanbanDragHandle(AppModel model, Entry entry) {
+    final text = entry.type == 'todo'
+        ? (entry.items ?? const <TodoItem>[]).map((item) => item.text).join('\n')
+        : entry.text;
+    final preview = text.trim().isEmpty ? model.tr('no_messages') : text.trim();
+    final handle = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('kanban-drag-handle-${entry.id}'),
+        borderRadius: BorderRadius.circular(TNRadii.sm),
+        onTap: () {
+          _dragHandlePointer = false;
+          unawaited(_pickAndMoveBoard(entry));
+        },
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(
+            Icons.drag_indicator_rounded,
+            size: 20,
+            color: p.textFaint,
+          ),
+        ),
+      ),
+    );
+    return Listener(
+      onPointerDown: (_) => _dragHandlePointer = true,
+      onPointerUp: (_) => _dragHandlePointer = false,
+      onPointerCancel: (_) => _dragHandlePointer = false,
+      child: LongPressDraggable<Entry>(
+        key: ValueKey('kanban-draggable-${entry.id}'),
+        data: entry,
+        maxSimultaneousDrags: _selecting ? 0 : 1,
+        onDragStarted: () {
+          _dragHandlePointer = true;
+          HapticFeedback.mediumImpact();
+        },
+        onDragEnd: (_) => _dragHandlePointer = false,
+        onDraggableCanceled: (_, _) => _dragHandlePointer = false,
+        feedback: Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: p.bubbleOwn,
+                borderRadius: BorderRadius.circular(TNRadii.md),
+                border: Border.all(color: p.accent),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  preview,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: p.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.35, child: handle),
+        child: handle,
+      ),
+    );
+  }
+
   Widget _kanbanCardHeader(AppModel model, Entry entry) {
     final chat = _chatOrNull;
     if (chat == null) return const SizedBox.shrink();
     final colName = boardNameFor(entry, chat, model.tr);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: TNSpacing.xs),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () async {
-              // From global search (all columns visible): tap badge → jump to column.
-              if (_searching) {
-                final target = resolvedBoardId(entry, chat, model.tr);
-                setState(() {
-                  _boardTab = target;
-                  _searching = false;
-                  _searchCtrl.clear();
-                  _searchQuery = '';
-                  _highlightId = entry.id;
-                });
-                WidgetsBinding.instance.addPostFrameCallback(
-                  (_) => _jumpToEntry(entry.id),
-                );
-              } else {
-                await _pickAndMoveBoard(entry);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: p.accent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: p.accent.withValues(alpha: 0.22)),
+          Expanded(
+            child: Material(
+              color: p.accent.withValues(alpha: 0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(TNRadii.sm),
+                side: BorderSide(
+                  color: p.accent.withValues(alpha: 0.22),
+                ),
               ),
-              child: Text(
-                colName,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: p.accent,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(TNRadii.sm),
+                onTap: () async {
+                  if (_searching) {
+                    final target = resolvedBoardId(entry, chat, model.tr);
+                    setState(() {
+                      _boardTab = target;
+                      _searching = false;
+                      _searchCtrl.clear();
+                      _searchQuery = '';
+                      _highlightId = entry.id;
+                    });
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _jumpToEntry(entry.id),
+                    );
+                  } else {
+                    await _pickAndMoveBoard(entry);
+                  }
+                },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 40),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        colName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: p.accent,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-          const Spacer(),
-          InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => _pickAndMoveBoard(entry),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.more_horiz_rounded,
-                size: 18,
-                color: p.textFaint,
+          const SizedBox(width: TNSpacing.xs),
+          _kanbanDragHandle(model, entry),
+          const SizedBox(width: TNSpacing.xs),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(TNRadii.sm),
+              onTap: () => _pickAndMoveBoard(entry),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(
+                  Icons.more_horiz_rounded,
+                  size: 20,
+                  color: p.textFaint,
+                ),
               ),
             ),
           ),
@@ -3844,7 +4040,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           InkWell(
             customBorder: const CircleBorder(),
-            onTap: () => _toggleTodoItem(model, entry, item),
+            onTap: () => _toggleTodoItem(entry, item),
             child: Padding(
               padding: const EdgeInsets.all(4),
               child: AnimatedContainer(
@@ -3904,31 +4100,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _toggleTodoItem(
-    AppModel model,
-    Entry entry,
-    TodoItem item,
-  ) async {
+  Future<void> _toggleTodoItem(Entry entry, TodoItem item) async {
     toggleTodoCascade(entry.items ??= <TodoItem>[], item.id);
     entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    await model.save();
+    await _runTaskPipeline([entry]);
     if (item.done) unawaited(Sounds.taskDone());
-    // Completing an OVERDUE recurring task snaps its deadline forward so
-    // the checkmark sticks until the new period ends (otherwise rollover
-    // would instantly uncheck it).
-    final snapped =
-        entry.recurrence != null &&
-        snapCompletedRecurring(entry, DateTime.now());
-    final rolled = model.rolloverRecurring();
-    if (snapped || rolled > 0) {
-      await model.save();
-    }
-    // Done tasks must not ring: drop the armed alarm; undone ones re-arm.
-    if (entry.isDone) {
-      await _cancelEntryReminder(entry);
-    } else {
-      await _scheduleEntryReminder(entry);
-    }
     if (mounted) setState(() {});
   }
 

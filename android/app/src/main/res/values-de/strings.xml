@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="kb_title">Kanban</string>
+    <string name="kb_settings_desc">Kanban-Einstellungen</string>
+    <string name="kb_empty">Keine Karten</string>
+    <string name="kb_column_empty">Keine Karten</string>
+    <string name="kb_more_cards">+%1$d weitere</string>
+    <string name="kb_no_deadline">Kein Termin</string>
+    <string name="kb_column">Spalte</string>
+    <string name="kb_column_idea">Idee</string>
+    <string name="kb_column_work">In Arbeit</string>
+    <string name="kb_column_done">Fertig</string>
+    <string name="kb_type_text">Text</string>
+    <string name="kb_type_todo">Aufgaben</string>
+    <string name="kb_type_image">Bild</string>
+    <string name="kb_type_audio">Audio</string>
+    <string name="kb_type_video">Video</string>
+    <string name="kb_type_file">Datei</string>
+    <string name="kb_type_unknown">Unbekannt</string>
+</resources>

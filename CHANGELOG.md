@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.0] - 2026-09-25
+
+- **Kanban moves:** cards can move forward with a swipe or directly to any column with the drag handle; deadlines, recurring tasks, alarms and Undo stay in sync
+- **Kanban widget redesign:** a wide board shows three columns, a narrow widget switches one column at a time, and all card types show their deadline without completion checkboxes
+- **Board selection:** Settings → Widget settings now connects the Kanban widget to a specific board or all available boards
+- **Project documentation:** backup encryption, network behavior, developer setup, widget behavior and current limitations are described accurately
+
 ## [1.29.0-beta.6] - 2026-09-25
 
 - **Kanban widget board selection:** choose a specific Kanban board or all boards in Settings → Widget settings; the widget gear opens the settings directly

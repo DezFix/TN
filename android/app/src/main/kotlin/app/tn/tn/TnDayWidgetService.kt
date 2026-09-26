@@ -145,8 +145,8 @@ class TnDayWidgetViewsFactory(
     override fun getLoadingView(): RemoteViews? {
         val v = RemoteViews(context.packageName, R.layout.tn_day_row)
         v.setTextViewText(R.id.dr_title, "...")
-        v.setInt(R.id.dr_meta, "setViewVisibility", android.view.View.GONE)
-        v.setInt(R.id.dr_check, "setViewVisibility", android.view.View.GONE)
+        v.setViewVisibility(R.id.dr_meta, android.view.View.GONE)
+        v.setViewVisibility(R.id.dr_check, android.view.View.GONE)
         return v
     }
 

@@ -259,4 +259,93 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('kanban-widget-chat-picker')), findsNothing);
   });
+
+  testWidgets('kanban deep link selects the target column before filtering',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    state.chats.add(Chat(
+      id: 'k1',
+      name: 'Доска',
+      color: '#2AABEE',
+      kind: 'kanban',
+    ));
+    state.entries.addAll([
+      Entry(
+        id: 'idea-entry',
+        chatId: 'k1',
+        type: 'text',
+        ts: 2,
+        text: 'idea card',
+      ),
+      Entry(
+        id: 'done-entry',
+        chatId: 'k1',
+        type: 'text',
+        ts: 1,
+        text: 'done card',
+        boardId: 'done',
+      ),
+    ]);
+    final model = AppModel(state: state);
+    await tester.pumpWidget(MaterialApp(
+      home: ChatScreen(
+        model: model,
+        chatId: 'k1',
+        scrollToEntryId: 'done-entry',
+        highlightEntryId: 'done-entry',
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('done card'), findsOneWidget);
+    expect(find.text('idea card'), findsNothing);
+    expect(find.byKey(const ValueKey('kanban-tab-done')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('kanban-drag-handle-done-entry')),
+      findsOneWidget,
+    );
+    expect(find.byType(LongPressDraggable<Entry>), findsOneWidget);
+    expect(find.byType(DragTarget<Entry>), findsNWidgets(3));
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('kanban drag handle moves a card to another column',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    state.chats.add(Chat(
+      id: 'k1',
+      name: 'Доска',
+      color: '#2AABEE',
+      kind: 'kanban',
+    ));
+    state.entries.add(Entry(
+      id: 'entry',
+      chatId: 'k1',
+      type: 'text',
+      ts: 1,
+      text: 'draggable card',
+    ));
+    final model = AppModel(state: state);
+    await tester.pumpWidget(MaterialApp(
+      home: ChatScreen(model: model, chatId: 'k1'),
+    ));
+    await tester.pumpAndSettle();
+
+    final handle = find.byKey(const ValueKey('kanban-drag-handle-entry'));
+    final target = find.byKey(const ValueKey('kanban-tab-work'));
+    expect(handle, findsOneWidget);
+    expect(target, findsOneWidget);
+
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(tester.getCenter(target));
+    await tester.pump(const Duration(milliseconds: 200));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(state.entries.single.boardId, 'work');
+  });
 }

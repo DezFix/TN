@@ -66,9 +66,27 @@ void main() {
     expect(s2.entries.single.boardId, 'b-x');
   });
 
-  test('text cards keep boardId, non-kanban forward clears it', () {
+  test('text cards keep boardId when copied', () {
     final e = Entry(id: 'e1', chatId: 'c1', type: 'text', ts: 1, boardId: 'work');
     final copy = e.copyForForward('c2');
     expect(copy.boardId, 'work');
+  });
+
+  test('ordinary board moves preserve the task deadline', () {
+    final c = Chat(id: 'c1', name: 'Доска', color: '#2AABEE', kind: 'kanban');
+    final dueAt = DateTime(2030, 1, 2, 9).millisecondsSinceEpoch;
+    final e = Entry(
+      id: 'e1',
+      chatId: 'c1',
+      type: 'todo',
+      ts: 1,
+      dueAt: dueAt,
+      items: [TodoItem(id: 't1', text: 'a')],
+    );
+
+    moveEntryToBoard(e, c, 'work', tr);
+    expect(e.dueAt, dueAt);
+    moveEntryToBoard(e, c, 'done', tr);
+    expect(e.dueAt, dueAt);
   });
 }

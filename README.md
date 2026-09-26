@@ -2,9 +2,9 @@
 
 [![Sponsor](https://img.shields.io/badge/Sponsor%20me-ko--fi-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/k_k)
 
-TN is a conversation with yourself: topic chats instead of folders, messages instead of files. Ideas, to-do lists, photos, voice notes — sorted by topic, with reminders and `#tags`. Notes are stored locally; optional network features such as RSS, backups and update checks are used only when enabled. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
+TN is a conversation with yourself: topic chats instead of folders, messages instead of files. Ideas, to-do lists, photos, voice notes — sorted by topic, with reminders and `#tags`. Notes and media are stored locally. The app checks GitHub for updates, can fetch RSS and link previews, and sends anonymous crash reports to Bugsink unless crash reporting is disabled. [Support the project — ko-fi.com/k_k](https://ko-fi.com/k_k)
 
-> Screenshots below are in English (the interface language is switchable in Settings). The beta kanban board is intentionally not pictured — it is still under testing.
+> Screenshots below are in English (the interface language is switchable in Settings). Some older screenshots do not yet show every beta feature, including Kanban.
 
 ## Chats
 
@@ -71,17 +71,18 @@ A new chat type for running work in columns. Three by default — Idea / In prog
 
 - Tabs with counters above the messages switch columns;
 - swiping a card right pushes it to the next column (the last one is a stop);
+- press and hold the drag handle, then drop the card on another column tab;
 - tapping the column badge on a card or “…” moves it to any column, including backwards;
-- tap send = a quick text card in the current column, long-press send = a checklist card with a date;
-- moving a todo card into the last column checks every item (alarms stop); moving it back out unchecks them; Undo restores the exact checkmarks;
-- kanban tasks show up in the agenda and on the widget; forwarding into kanban lands the card in the first column.
+- tap send = a quick text card in the current column; long-press send opens a checklist editor with optional deadline, repeat and priority;
+- moving a todo card into the last column checks every item (alarms stop); moving it back out unchecks them; Undo restores the exact checkmarks and deadline;
+- kanban tasks show up in the agenda; forwarding into kanban lands the card in the first column.
 
 ## Widgets
 
 Two widgets can be placed on the home screen:
 
 - **Tasks** — undone todos from all chats (“Today” / “Upcoming” modes, priority-first with overdue items highlighted). Checkboxes tick right on the widget and sync with the app; tapping the text opens the chat at that message;
-- **Kanban** — undone todos from a selected kanban chat (or all boards), grouped by column. Same behaviour: tick on the widget, tap to jump to the card.
+- **Kanban** — all card types from the selected board (or all available boards), grouped into up to three columns. It shows deadlines (or “No deadline”) and is read-only: there are no checkboxes or completion triggers. A wide widget shows three columns; a narrow one shows one column and switches columns on tap. Tapping a card opens it in the app.
 
 Background transparency, font size and the Kanban board are configured inside the app (Settings → Widget settings).
 
@@ -89,12 +90,12 @@ Background transparency, font size and the Kanban board are configured inside th
 
 Long-pressing the TN launcher icon shows two shortcuts with distinct icons:
 
-- ➕ **Quick note** — jump straight into writing a new entry;
-- ☑️ **Open agenda** — the upcoming-tasks screen.
+- 📝 **Quick note** — jump straight into writing a new entry;
+- 📅 **Open agenda** — the upcoming-tasks screen. Exact icons can vary by launcher.
 
 ## Folders, agenda, archive
 
-- **Folders** — custom chat sets with names and colors (+ smart “Tasks”/“Notes” folders that collect chats by type automatically);
+- **Folders** — custom chat sets with names and colors (+ smart “Tasks”/“Notes” folders; the Tasks folder includes both Tasks chats and Kanban boards);
 - **Agenda (Upcoming)** — every task with a deadline, grouped by day: overdue, today, tomorrow, later; filters All / Overdue / Today / Week / High;
 - **Archive** — inactive chats leave the main screen;
 - **Trash** — deleted chats wait out the retention period (configurable), one-tap restore.
@@ -115,18 +116,22 @@ At the bottom — the About section: version, changelog, manual update check.
 
 ## Backups
 
-One zip with the whole database, media and settings: locally into a folder of your choice (scheduled or manual), to Google Drive or Nextcloud. Backups are password-encrypted (AES-256-GCM) — they cannot be restored without it. Restoring takes a couple of taps, including from the welcome screen.
+One zip contains the app database, media and supported widget settings: locally into a folder of your choice (scheduled or manual), to Google Drive or Nextcloud. When a password is set, local and cloud copies use AES-256-GCM encryption; without a password they remain ordinary ZIP files. Restoring takes a couple of taps, including from the welcome screen.
 
 ## For developers
+
+Use Flutter 3.41.4, Java 17 and Android NDK 29 for the Android toolchain.
 
 ```sh
 flutter pub get
 flutter run          # run
 flutter test         # tests
+flutter analyze --no-fatal-infos --no-fatal-warnings
 flutter build apk --release   # APK: build/app/outputs/flutter-apk/app-release.apk
+flutter clean               # remove generated build/cache files
 ```
 
-Beta builds ship via `vX.Y.Z-beta.N` tags through GitHub Actions (`.github/workflows/build.yml`): Android APKs (universal/arm64/x86_64) + Windows zip, the release is marked as prerelease. The English changelog in `CHANGELOG.md` feeds the in-app “What’s new” dialog and the release body.
+Release signing is read from `android/key.properties` or the `TN_*` CI environment variables. Beta builds ship via `vX.Y.Z-beta.N` tags through GitHub Actions (`.github/workflows/build.yml`): Android APKs (universal/arm64/x86_64) + Windows zip, the release is marked as prerelease. The English changelog in `CHANGELOG.md` feeds the in-app “What’s new” dialog and the release body.
 
 ## Support
 

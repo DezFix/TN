@@ -2,9 +2,26 @@
 <resources>
     <string name="dw_title_tasks">Задачи</string>
     <string name="tn_widget_desc">Задачи из всех чатов</string>
-    <string name="kb_widget_desc">Задачи канбан-досок по колонкам</string>
+    <string name="kb_widget_desc">Карточки канбан-досок по колонкам</string>
     <string name="dw_title_notes">Заметки</string>
     <string name="dw_empty">Пока ничего нет</string>
     <string name="dw_overdue">%1$s — просрочено</string>
     <string name="dw_meta_chat">%1$s · %2$s</string>
+    <string name="kb_title">Канбан</string>
+    <string name="kb_settings_desc">Настройки канбана</string>
+    <string name="kb_empty">Нет карточек</string>
+    <string name="kb_column_empty">Нет карточек</string>
+    <string name="kb_more_cards">ещё %1$d</string>
+    <string name="kb_no_deadline">Без срока</string>
+    <string name="kb_column">Колонка</string>
+    <string name="kb_column_idea">Идея</string>
+    <string name="kb_column_work">В работе</string>
+    <string name="kb_column_done">Готово</string>
+    <string name="kb_type_text">Текст</string>
+    <string name="kb_type_todo">Список дел</string>
+    <string name="kb_type_image">Фото</string>
+    <string name="kb_type_audio">Аудио</string>
+    <string name="kb_type_video">Видео</string>
+    <string name="kb_type_file">Файл</string>
+    <string name="kb_type_unknown">Неизвестно</string>
 </resources>

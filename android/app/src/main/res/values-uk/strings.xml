@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="kb_title">Канбан</string>
+    <string name="kb_settings_desc">Налаштування дошки</string>
+    <string name="kb_empty">Немає карток</string>
+    <string name="kb_column_empty">Немає карток</string>
+    <string name="kb_more_cards">ще %1$d</string>
+    <string name="kb_no_deadline">Без терміна</string>
+    <string name="kb_column">Колонка</string>
+    <string name="kb_column_idea">Ідея</string>
+    <string name="kb_column_work">У роботі</string>
+    <string name="kb_column_done">Готово</string>
+    <string name="kb_type_text">Текст</string>
+    <string name="kb_type_todo">Список завдань</string>
+    <string name="kb_type_image">Фото</string>
+    <string name="kb_type_audio">Аудіо</string>
+    <string name="kb_type_video">Відео</string>
+    <string name="kb_type_file">Файл</string>
+    <string name="kb_type_unknown">Невідомо</string>
+</resources>

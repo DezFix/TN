@@ -2,7 +2,7 @@
 <resources>
     <string name="dw_title_tasks">Tasks</string>
     <string name="tn_widget_desc">Tasks from all chats</string>
-    <string name="kb_widget_desc">Kanban board tasks, grouped by column</string>
+    <string name="kb_widget_desc">Kanban cards, grouped by column</string>
     <string name="dw_title_notes">Notes</string>
     <string name="dw_empty">Nothing here yet</string>
     <string name="dw_overdue">%1$s — overdue</string>
@@ -11,4 +11,21 @@
     <string name="shortcut_quick_note_long">Быстрая задача в TN</string>
     <string name="shortcut_agenda">Ближайшие задачи</string>
     <string name="shortcut_agenda_long">Открыть повестку</string>
+    <string name="kb_title">Kanban</string>
+    <string name="kb_settings_desc">Kanban settings</string>
+    <string name="kb_empty">No cards</string>
+    <string name="kb_column_empty">No cards</string>
+    <string name="kb_more_cards">+%1$d more</string>
+    <string name="kb_no_deadline">No deadline</string>
+    <string name="kb_column">Column</string>
+    <string name="kb_column_idea">Idea</string>
+    <string name="kb_column_work">In progress</string>
+    <string name="kb_column_done">Done</string>
+    <string name="kb_type_text">Text</string>
+    <string name="kb_type_todo">To-do</string>
+    <string name="kb_type_image">Image</string>
+    <string name="kb_type_audio">Audio</string>
+    <string name="kb_type_video">Video</string>
+    <string name="kb_type_file">File</string>
+    <string name="kb_type_unknown">Unknown</string>
 </resources>
