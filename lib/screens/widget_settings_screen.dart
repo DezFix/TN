@@ -237,7 +237,7 @@ class _WidgetSettingsScreenState extends State<WidgetSettingsScreen> {
       }
     }
     selected ??= chats.isEmpty ? null : chats.first;
-    final title = selected?.name ?? tr('kb_widget_empty');
+    final title = selected?.name ?? tr('kb_widget_board');
     return _card(
       p,
       child: Padding(
