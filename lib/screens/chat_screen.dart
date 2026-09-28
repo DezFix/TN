@@ -1433,14 +1433,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || snapshots.isEmpty) return;
     final tr = widget.model.tr;
     final targetName = _findBoard(targetId)?.name ?? targetId;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(tr('board_moved', [targetName])),
-        action: SnackBarAction(
-          label: tr('undo'),
-          onPressed: () => unawaited(_restoreKanbanMoves(snapshots)),
-        ),
-      ),
+    UndoToast.show(
+      context,
+      message: tr('board_moved', [targetName]),
+      actionLabel: tr('undo'),
+      p: p,
+      icon: Icons.drive_file_move_outline,
+      iconColor: p.accent,
+      onUndo: () => unawaited(_restoreKanbanMoves(snapshots)),
     );
   }
 

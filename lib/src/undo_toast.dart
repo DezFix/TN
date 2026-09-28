@@ -20,6 +20,8 @@ class UndoToast {
     required VoidCallback onUndo,
     required Palette p,
     Duration duration = const Duration(seconds: 5),
+    IconData icon = Icons.delete_outline,
+    Color? iconColor,
   }) {
     dismiss();
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
@@ -33,6 +35,8 @@ class UndoToast {
         actionLabel: actionLabel,
         palette: p,
         duration: duration,
+        icon: icon,
+        iconColor: iconColor ?? p.danger,
         onUndo: () {
           if (undone) return;
           undone = true;
@@ -64,6 +68,8 @@ class _UndoToastView extends StatefulWidget {
     required this.actionLabel,
     required this.palette,
     required this.duration,
+    required this.icon,
+    required this.iconColor,
     required this.onUndo,
     required this.onExpired,
   });
@@ -72,6 +78,8 @@ class _UndoToastView extends StatefulWidget {
   final String actionLabel;
   final Palette palette;
   final Duration duration;
+  final IconData icon;
+  final Color iconColor;
   final VoidCallback onUndo;
   final VoidCallback onExpired;
 
@@ -146,7 +154,7 @@ class _UndoToastViewState extends State<_UndoToastView>
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.delete_outline, size: 18, color: p.danger),
+                    Icon(widget.icon, size: 18, color: widget.iconColor),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(widget.message,

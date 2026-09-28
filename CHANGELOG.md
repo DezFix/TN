@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.4] - 2026-09-26
+
+- **Move banner closes itself:** the “Moved to …” confirmation now disappears on its own after 5 seconds with a countdown ring, instead of stacking over the message field and covering it
+
 ## [1.29.3] - 2026-09-26
 
 - **Kanban widget no longer duplicates columns:** columns used to be appended on every refresh, so the board grew from 3 to 6, 9, 12 and more; each update now replaces the visible columns

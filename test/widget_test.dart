@@ -358,6 +358,44 @@ void main() {
     expect(state.entries.single.boardId, 'work');
   });
 
+  testWidgets('kanban move shows an auto-dismissing undo banner',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = AppState();
+    state.chats.add(Chat(
+      id: 'k1',
+      name: 'Доска',
+      color: '#2AABEE',
+      kind: 'kanban',
+    ));
+    state.entries.add(Entry(
+      id: 'entry',
+      chatId: 'k1',
+      type: 'text',
+      ts: 1,
+      text: 'movable card',
+    ));
+    final model = AppModel(state: state);
+    await tester.pumpWidget(MaterialApp(
+      home: ChatScreen(model: model, chatId: 'k1'),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('kanban-move-menu-entry')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(model.tr('board_work')).last);
+    await tester.pumpAndSettle();
+
+    final moved = model.tr('board_moved', [model.tr('board_work')]);
+    expect(find.text(moved), findsOneWidget);
+    expect(find.text(model.tr('undo')), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(find.text(moved), findsNothing);
+    expect(find.text(model.tr('undo')), findsNothing);
+  });
+
   testWidgets('kanban column delete shows an auto-dismissing undo banner',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
