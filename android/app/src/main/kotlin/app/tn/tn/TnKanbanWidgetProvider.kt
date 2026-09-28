@@ -207,6 +207,13 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                 listOf(page)
             }
             var cardIndex = 0
+            // addView appends and never clears, and the host re-applies these
+            // actions onto the live hierarchy on every update, so without this
+            // each rebuild stacked another copy of the columns on the widget.
+            try {
+                views.removeAllViews(R.id.kb_columns)
+            } catch (_: Exception) {
+            }
             for (index in columnIndexes) {
                 val column = snapshot.columns[index]
                 val columnRows = snapshot.rows.filter { it.colIndex == index }
@@ -320,6 +327,10 @@ class TnKanbanWidgetProvider : AppWidgetProvider() {
                     moreCardsText(context, lang, hiddenCount),
                 )
                 columnViews.setFloat(R.id.kb_column_more, "setTextSize", 10f * fontScale)
+            }
+            try {
+                columnViews.removeAllViews(R.id.kb_cards)
+            } catch (_: Exception) {
             }
             for ((index, row) in visibleRows.withIndex()) {
                 val card = buildCard(
