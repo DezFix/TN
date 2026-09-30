@@ -4,6 +4,11 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.6] - 2026-09-26
+
+- **Google Drive sign-in fixed:** the OAuth client secret is now actually sent when the code is exchanged for tokens — CI passed it to every build but the app discarded it, so keys of type “Web application” failed with “invalid_request”
+- **Clearer Drive errors:** a failed sign-in now shows Google’s own description of the problem, not just the error code
+
 ## [1.29.5] - 2026-09-26
 
 - **Google Drive sign-in:** a successful sign-in is no longer discarded when the browser sends a stray request (favicon) to the redirect address, the redirect is bound to the same loopback address it advertises, and a failure now names its real reason instead of a bare “Google Drive did not respond”

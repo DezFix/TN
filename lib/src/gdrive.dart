@@ -20,6 +20,17 @@ import 'app_log.dart';
 ///   --dart-define=TN_GDRIVE_CLIENT_ID=...
 class GoogleDriveClient {
   static const _clientId = String.fromEnvironment('TN_GDRIVE_CLIENT_ID');
+
+  /// CI passes this to every build, but the token exchange used to ignore it.
+  /// A "Web application" key refuses the code-for-token exchange without it and
+  /// answers `invalid_request`; a "Desktop app" key ignores it, so sending it
+  /// when present is correct for both. Never send an empty value — Google
+  /// treats an empty parameter as a malformed request.
+  static const _clientSecret = String.fromEnvironment('TN_GDRIVE_CLIENT_SECRET');
+
+  /// Adds the client secret to a token request when the build provides one.
+  static Map<String, String> _tokenBody(Map<String, String> body) =>
+      _clientSecret.isEmpty ? body : {...body, 'client_secret': _clientSecret};
   static const _scope = 'https://www.googleapis.com/auth/drive.file';
   static const _prefsKey = 'tn-cloud-gdrive';
 
@@ -188,21 +199,30 @@ class GoogleDriveClient {
       final resp = await http
           .post(
             Uri.parse('https://oauth2.googleapis.com/token'),
-            body: {
+            body: _tokenBody({
               'client_id': _clientId,
               'code': code,
               'grant_type': 'authorization_code',
               'redirect_uri': redirect,
               // PKCE: proves the app that started the flow is redeeming it.
               'code_verifier': _codeVerifier,
-            },
+            }),
           )
           .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) {
-        // Google answers 400 with {"error": "redirect_uri_mismatch"} etc —
-        // surface it so the UI can hint at the fix.
+        // Google answers 400 with {"error": "invalid_request",
+        // "error_description": "..."} — surface both, the code alone is
+        // ambiguous (a missing secret and a malformed redirect share it).
         try {
-          lastError = 'google:${(jsonDecode(resp.body) as Map<String, dynamic>)['error']}';
+          final body = jsonDecode(resp.body) as Map<String, dynamic>;
+          final err = body['error'];
+          final desc = body['error_description'];
+          lastError = 'google:$err';
+          if (desc is String && desc.trim().isNotEmpty) {
+            final short = desc.trim().replaceAll('\n', ' ');
+            lastError =
+                'google:$err: ${short.length > 90 ? short.substring(0, 90) : short}';
+          }
         } catch (_) {
           lastError = 'http_${resp.statusCode}';
         }
@@ -240,11 +260,11 @@ class GoogleDriveClient {
       final resp = await http
           .post(
             Uri.parse('https://oauth2.googleapis.com/token'),
-            body: {
+            body: _tokenBody({
               'client_id': _clientId,
               'grant_type': 'refresh_token',
-              'refresh_token': _refresh,
-            },
+              'refresh_token': _refresh!,
+            }),
           )
           .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) return null;

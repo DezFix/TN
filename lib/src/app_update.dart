@@ -15,7 +15,7 @@ import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.29.5';
+const appBuildVersion = '1.29.6';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoReleases =
