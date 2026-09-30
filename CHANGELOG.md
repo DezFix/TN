@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.5] - 2026-09-26
+
+- **Google Drive sign-in:** a successful sign-in is no longer discarded when the browser sends a stray request (favicon) to the redirect address, the redirect is bound to the same loopback address it advertises, and a failure now names its real reason instead of a bare “Google Drive did not respond”
+
 ## [1.29.4] - 2026-09-26
 
 - **Move banner closes itself:** the “Moved to …” confirmation now disappears on its own after 5 seconds with a countdown ring, instead of stacking over the message field and covering it

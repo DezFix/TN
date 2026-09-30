@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_log.dart';
+
 /// Google Drive backup sync via the Drive REST v3 API.
 ///
 /// Uses an "installed app" OAuth client: the system browser opens the consent
@@ -85,16 +87,23 @@ class GoogleDriveClient {
   /// Opens the browser for consent and exchanges the returned code for
   /// tokens. Returns false on timeout / user cancel / HTTP error.
   Future<bool> connect() async {
+    lastError = '';
     HttpServer? server;
     try {
-      server =
-          await HttpServer.bind('127.0.0.1', 0).timeout(const Duration(seconds: 5));
-    } catch (_) {
+      // The bind address and the redirect address must agree. `localhost`
+      // resolves to ::1 first on dual-stack Android while the socket only
+      // listens on IPv4, so the callback could land on a dead port.
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0)
+          .timeout(const Duration(seconds: 5));
+    } catch (e, st) {
+      lastError = 'bind_failed';
+      AppLog.error('gdrive.bind', e, st);
       return false;
     }
     final port = server.port;
-    final redirect = 'http://localhost:$port';
+    final redirect = 'http://127.0.0.1:$port';
     _codeVerifier = generateCodeVerifier();
+    final state = generateCodeVerifier();
     final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
       'client_id': _clientId,
       'redirect_uri': redirect,
@@ -102,12 +111,15 @@ class GoogleDriveClient {
       'scope': _scope,
       'access_type': 'offline',
       'prompt': 'consent',
+      'state': state,
       'code_challenge': codeChallengeS256(_codeVerifier),
       'code_challenge_method': 'S256',
     });
     try {
       await launchUrl(authUrl, mode: LaunchMode.externalApplication);
-    } catch (_) {
+    } catch (e, st) {
+      lastError = 'launch_failed';
+      AppLog.error('gdrive.launch', e, st);
       await server.close(force: true);
       return false;
     }
@@ -115,14 +127,37 @@ class GoogleDriveClient {
     final codeCompleter = Completer<String?>();
     late final StreamSubscription<HttpRequest> sub;
     sub = server.listen((req) async {
+      final code = req.uri.queryParameters['code'];
+      final err = req.uri.queryParameters['error'];
+      if (code == null && err == null) {
+        // Chrome asks the page for /favicon.ico, and the system probes stray
+        // ports on 127.0.0.1. Such a request carries neither code nor error,
+        // and it used to complete the sign-in with a null code — killing a
+        // flow that was actually working. Answer it and keep waiting.
+        try {
+          req.response.statusCode = HttpStatus.notFound;
+          await req.response.close();
+        } catch (_) {}
+        return;
+      }
+      // `state` guards against a forged/injected redirect (RFC 6749 §10.12).
+      final trusted = req.uri.queryParameters['state'] == state;
+      if (!trusted) {
+        lastError = 'state_mismatch';
+      } else if (code == null) {
+        lastError = 'google:${err ?? 'unknown'}';
+      }
       try {
-        final err = req.uri.queryParameters['error'];
         req.response.headers.contentType = ContentType.html;
         if (err != null) {
-          lastError = 'google:$err';
           req.response.write(
               '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
               '<h2>TN</h2><p>Authorization failed: $err</p></body></html>');
+        } else if (!trusted) {
+          req.response.write(
+              '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
+              '<h2>TN</h2><p>Unexpected response — return to the app.</p>'
+              '</body></html>');
         } else {
           req.response.write(
               '<html><body style="font-family:sans-serif;text-align:center;padding-top:40px">'
@@ -132,16 +167,22 @@ class GoogleDriveClient {
         await req.response.close();
       } catch (_) {}
       if (!codeCompleter.isCompleted) {
-        codeCompleter.complete(req.uri.queryParameters['code']);
+        codeCompleter.complete(trusted ? code : null);
       }
     });
     String? code;
     try {
       code = await codeCompleter.future.timeout(const Duration(minutes: 5));
-    } catch (_) {}
+    } catch (_) {
+      if (!codeCompleter.isCompleted) lastError = 'timeout';
+    }
     await sub.cancel();
     await server.close(force: true);
-    if (code == null || code.isEmpty) return false;
+    if (code == null || code.isEmpty) {
+      if (lastError.isEmpty) lastError = 'no_code';
+      AppLog.error('gdrive.callback', lastError);
+      return false;
+    }
 
     try {
       final resp = await http
@@ -165,12 +206,16 @@ class GoogleDriveClient {
         } catch (_) {
           lastError = 'http_${resp.statusCode}';
         }
+        AppLog.error('gdrive.token', 'http ${resp.statusCode}: ${resp.body}');
         return false;
       }
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
       final refresh = json['refresh_token'] as String?;
       final access = json['access_token'] as String?;
-      if (access == null) return false;
+      if (access == null) {
+        lastError = 'google:no_access_token';
+        return false;
+      }
       _access = access;
       // prompt=consent guarantees a refresh token; keep an old one anyway.
       if (refresh != null) _refresh = refresh;
@@ -179,7 +224,9 @@ class GoogleDriveClient {
           60000;
       await save();
       return isConnected;
-    } catch (_) {
+    } catch (e, st) {
+      lastError = 'network';
+      AppLog.error('gdrive.token', e, st);
       return false;
     }
   }

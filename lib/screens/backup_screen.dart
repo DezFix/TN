@@ -624,14 +624,17 @@ class _BackupScreenState extends State<BackupScreen> {
     } else {
       setState(() => _gdBusy = false);
       final err = client.lastError.toLowerCase();
-      _toast(
-        (err.contains('invalid_client') ||
-                err.contains('redirect') ||
-                err.contains('access_denied'))
-            ? '${tr('gd_failed')} ${tr('gd_hint_desktop')}'
-            : tr('gd_failed'),
-        error: true,
-      );
+      final configIssue = err.contains('invalid_client') ||
+          err.contains('unauthorized_client') ||
+          err.contains('invalid_grant') ||
+          err.contains('redirect') ||
+          err.contains('access_denied');
+      // Show the real reason instead of a bare "did not respond": these codes
+      // are what turn an unactionable report into a fixable one.
+      final head = configIssue
+          ? '${tr('gd_failed')} ${tr('gd_hint_desktop')}'
+          : tr('gd_failed');
+      _toast(err.isEmpty ? head : '$head ($err)', error: true);
     }
   }
 
