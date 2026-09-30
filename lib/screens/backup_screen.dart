@@ -620,7 +620,7 @@ class _BackupScreenState extends State<BackupScreen> {
         _gd = client;
         _gdBusy = false;
       });
-      _toast(tr('backup_connected'));
+      _toast(tr('gd_connected'));
     } else {
       setState(() => _gdBusy = false);
       final err = client.lastError.toLowerCase();

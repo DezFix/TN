@@ -4,6 +4,10 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.29.7] - 2026-09-30
+
+- **Correct cloud label:** connecting Google Drive said “Nextcloud connected”; each provider now announces itself
+
 ## [1.29.6] - 2026-09-26
 
 - **Google Drive sign-in fixed:** the OAuth client secret is now actually sent when the code is exchanged for tokens — CI passed it to every build but the app discarded it, so keys of type “Web application” failed with “invalid_request”
