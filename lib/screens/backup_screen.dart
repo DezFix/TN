@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../src/app_model.dart';
@@ -445,35 +446,42 @@ class _BackupScreenState extends State<BackupScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          _dir ?? tr('bk_folder_default'),
+                          // On Android the destination is always Downloads
+                          // (MediaStore) — a stale picked path would mislead.
+                          (defaultTargetPlatform == TargetPlatform.android
+                                  ? null
+                                  : _dir) ??
+                              tr('bk_folder_default'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 12.5, color: p.textSoft),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: p.accent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
+                      if (defaultTargetPlatform != TargetPlatform.android) ...[
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: p.accent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(TNRadii.md),
+                            ),
                           ),
-                          minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(TNRadii.md),
+                          onPressed: _pickFolder,
+                          child: Text(
+                            tr('bk_choose'),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                        onPressed: _pickFolder,
-                        child: Text(
-                          tr('bk_choose'),
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -659,16 +667,41 @@ class _BackupScreenState extends State<BackupScreen> {
     try {
       final ok = await SyncService.instance.pull();
       if (!ok) throw Exception('pull failed');
-      widget.model.tr = makeTranslator(widget.model.state.lang);
-      widget.model.refresh();
+      _finishGdRestore();
+    } on BackupEncryptedException {
+      // Encrypted cloud copy on a fresh device: no password is stored yet,
+      // ask for it and retry (same flow as the Nextcloud button).
       if (!mounted) return;
       setState(() => _gdBusy = false);
-      _toast(tr('backup_imported'));
+      final pwd = await _promptPassword();
+      if (pwd == null || pwd.isEmpty || !mounted) return;
+      setState(() => _gdBusy = true);
+      try {
+        final ok = await SyncService.instance.pull(password: pwd);
+        if (!ok) throw Exception('pull failed');
+        _finishGdRestore();
+      } on BackupEncryptedException {
+        if (!mounted) return;
+        setState(() => _gdBusy = false);
+        _toast(tr('bk_wrong_pass'), error: true);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _gdBusy = false);
+        _toast(tr('gd_failed'), error: true);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _gdBusy = false);
       _toast(tr('gd_failed'), error: true);
     }
+  }
+
+  void _finishGdRestore() {
+    widget.model.tr = makeTranslator(widget.model.state.lang);
+    widget.model.refresh();
+    if (!mounted) return;
+    setState(() => _gdBusy = false);
+    _toast(tr('backup_imported'));
   }
 
   // ---------------- local ----------------
@@ -682,7 +715,8 @@ class _BackupScreenState extends State<BackupScreen> {
         setState(() => _dir = d);
       }
     } catch (_) {
-      if (mounted) _toast(tr('bk_folder_android'));
+      // Desktop-only button (hidden on Android, where the system folder is
+      // fixed) — a failed picker just leaves the current folder.
     }
   }
 

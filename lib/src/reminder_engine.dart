@@ -54,9 +54,11 @@ List<DueItem> collectDue({
   final out = <DueItem>[];
   final seen = <String>{};
   void add(DueItem d) {
-    // One delivery per (chat, deadline): the same due moment often exists
-    // both as a custom reminder and as the todo entry's dueAt.
-    if (!seen.add('${d.chatId}|${d.when}')) return;
+    // One delivery per entity: the same due moment often exists both as a
+    // custom reminder and as the todo entry's dueAt (same id). Different
+    // tasks due at the same minute must NOT collapse — keying on
+    // (chat, when) silently dropped one of them.
+    if (!seen.add(d.key)) return;
     out.add(d);
   }
 
@@ -225,6 +227,11 @@ class ReminderEngine {
             it.done = true;
           }
         }
+        // Late completion of a recurring task opens the fresh occurrence
+        // right away (same calendar-day semantics as the midnight pass) —
+        // otherwise the next reminder waited for a rollover with the app
+        // open and the chain silently stalled.
+        rolloverRecurringTasks([e], DateTime.now());
         e.updatedAt = DateTime.now().millisecondsSinceEpoch;
         hit = true;
         break;

@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +42,9 @@ class AppLock {
   static const _keySecretPattern =
       'tn-lock-secret-pattern'; // 'saltHex:sha256Hex'
   static const _keyGrace = 'tn-lock-grace-minutes'; // 0 | 5 | 10
+  static const _keyFailed = 'tn-lock-failed-attempts';
+  static const _keyLockoutUntil = 'tn-lock-lockout-until'; // epoch ms
+  static const _secureChannel = MethodChannel('tn/secure');
 
   static final LocalAuthentication _auth = LocalAuthentication();
 
@@ -76,6 +80,8 @@ class AppLock {
         // Clear legacy method keys so UI doesn't show "pattern" ghost after disable
         await prefs.remove(_keyMethods);
         await prefs.remove(_keyMode);
+        await prefs.remove(_keyFailed);
+        await prefs.remove(_keyLockoutUntil);
         _lastUnlock = null;
       }
     } catch (_) {}
@@ -181,14 +187,41 @@ class AppLock {
 
   // ---- secret hashing ----
 
-  /// `salt:hash` where hash = sha256(salt + code). Split out for tests.
-  static String hashSecret(String code, String saltHex) =>
+  static const _kdfPrefix = 'kdf1';
+  static const _maxKdfIterations = 1000000;
+
+  /// Iterations for new hashes. Mutable as a test seam.
+  static int kdfIterations = 20000;
+
+  /// Salted iterated SHA-256. Format `kdf1:iterations:saltHex:hashHex`.
+  /// A single-round sha256(salt+code) — the legacy format — lets anyone who
+  /// reads SharedPreferences brute-force a 4-digit PIN in milliseconds.
+  static String hashSecret(String code, String saltHex, {int? iterations}) {
+    final iter = iterations ?? kdfIterations;
+    final saltBytes = utf8.encode(saltHex);
+    var digest = crypto.sha256.convert(utf8.encode('$saltHex$code'));
+    for (var i = 1; i < iter; i++) {
+      digest = crypto.sha256.convert([...digest.bytes, ...saltBytes]);
+    }
+    return '$_kdfPrefix:$iter:$saltHex:${digest.toString()}';
+  }
+
+  /// Legacy single-round format `saltHex:sha256Hex` — verify-only, kept so
+  /// secrets saved before the KDF existed still unlock.
+  static String hashSecretLegacy(String code, String saltHex) =>
       '$saltHex:${crypto.sha256.convert(utf8.encode('$saltHex$code')).toString()}';
 
   static bool verifyAgainst(String code, String stored) {
+    if (stored.startsWith('$_kdfPrefix:')) {
+      final parts = stored.split(':');
+      if (parts.length != 4) return false;
+      final iter = int.tryParse(parts[1]);
+      if (iter == null || iter < 1 || iter > _maxKdfIterations) return false;
+      return hashSecret(code, parts[2], iterations: iter) == stored;
+    }
     final i = stored.indexOf(':');
     if (i <= 0) return false;
-    return hashSecret(code, stored.substring(0, i)) == stored;
+    return hashSecretLegacy(code, stored.substring(0, i)) == stored;
   }
 
   static String randomSalt() {
@@ -219,14 +252,83 @@ class AppLock {
     if (method == LockMethod.pattern) await prefs.remove(_keySecret);
   }
 
-  /// Checks user input against the stored secret for [method].
+  /// Checks user input against the stored secret for [method]. A successful
+  /// match against a legacy hash upgrades it to the KDF in place.
   static Future<bool> verifyCode(String code, LockMethod method) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(_secretKey(method)) ?? '';
-      return stored.isNotEmpty && verifyAgainst(code, stored);
+      if (stored.isEmpty) return false;
+      final ok = verifyAgainst(code, stored);
+      if (ok && !stored.startsWith('$_kdfPrefix:')) {
+        await saveSecret(code, method);
+      }
+      return ok;
     } catch (_) {}
     return false;
+  }
+
+  // ---- brute-force limiting ----
+
+  /// Failed code tries before delays kick in (biometrics has its own
+  /// system-level rate limiting).
+  static const lockoutFreeTries = 5;
+
+  static Future<int> failedAttempts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_keyFailed) ?? 0;
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Seconds left before another code may be tried; 0 = not locked out.
+  static Future<int> lockoutSecondsLeft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final until = prefs.getInt(_keyLockoutUntil) ?? 0;
+      final left = until - nowFn().millisecondsSinceEpoch;
+      return left > 0 ? (left + 999) ~/ 1000 : 0;
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Records a wrong code and returns the resulting pause in seconds
+  /// (0 = free tries remain). Delay doubles past the free tries:
+  /// 30s, 60s, … capped at 32 min. Persisted, so force-closing the app
+  /// is not a way around the wait.
+  static Future<int> registerFailedAttempt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final n = (prefs.getInt(_keyFailed) ?? 0) + 1;
+      await prefs.setInt(_keyFailed, n);
+      if (n < lockoutFreeTries) return 0;
+      final secs = 30 * (1 << min(n - lockoutFreeTries, 6));
+      await prefs.setInt(
+        _keyLockoutUntil,
+        nowFn().millisecondsSinceEpoch + secs * 1000,
+      );
+      return secs;
+    } catch (_) {}
+    return 0;
+  }
+
+  static Future<void> resetFailedAttempts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyFailed);
+      await prefs.remove(_keyLockoutUntil);
+    } catch (_) {}
+  }
+
+  /// Android: FLAG_SECURE while the unlock UI is on screen, so screen
+  /// recording and the recents thumbnail cannot capture PIN-pad taps.
+  static void setSecureScreen(bool on) {
+    if (!Platform.isAndroid) return;
+    _secureChannel.invokeMethod<void>(on ? 'on' : 'off').then(
+      (_) {},
+      onError: (_) {},
+    );
   }
 
   // ---- unlocking ----
@@ -437,7 +539,13 @@ class _LockGateState extends State<LockGate> with WidgetsBindingObserver {
   }
 
   Future<void> _recompute({bool scheduleTimer = true}) async {
-    if (_enabled != true || !mounted) return;
+    // Re-read every time: the switch can be flipped in Settings while the
+    // app is running, and a stale flag meant the lock only worked after a
+    // restart (or kept locking after it was turned off).
+    final enabled = await AppLock.isEnabled();
+    if (!mounted) return;
+    if (enabled != _enabled) setState(() => _enabled = enabled);
+    if (!enabled) return;
     final open = await AppLock.isWithinGrace();
     if (!mounted) return;
     setState(() => _open = open);
@@ -505,6 +613,8 @@ class _LockScreenState extends State<LockScreen> {
   LockMethod? _activeMethod;
   bool _busy = false;
   String? _error;
+  int _lockLeftSecs = 0;
+  Timer? _lockTimer;
   final List<int> _pattern = <int>[];
 
   bool get _hasBiometric => _methods.contains(LockMethod.biometric);
@@ -526,7 +636,9 @@ class _LockScreenState extends State<LockScreen> {
   @override
   void initState() {
     super.initState();
+    AppLock.setSecureScreen(true);
     _init();
+    _refreshLockout();
   }
 
   Future<void> _init() async {
@@ -548,8 +660,25 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   void dispose() {
+    _lockTimer?.cancel();
+    AppLock.setSecureScreen(false);
     AppLock.cancelAuth();
     super.dispose();
+  }
+
+  /// Reads the persisted lockout and ticks the countdown while it lasts.
+  Future<void> _refreshLockout() async {
+    final left = await AppLock.lockoutSecondsLeft();
+    if (!mounted) return;
+    setState(() => _lockLeftSecs = left);
+    _lockTimer?.cancel();
+    if (left <= 0) return;
+    _lockTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final l = await AppLock.lockoutSecondsLeft();
+      if (!mounted) return;
+      setState(() => _lockLeftSecs = l);
+      if (l <= 0) _lockTimer?.cancel();
+    });
   }
 
   Future<void> _success() async {
@@ -574,22 +703,28 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _submitCode(String code) async {
-    if (_busy || code.isEmpty) return;
+    if (_busy || code.isEmpty || _lockLeftSecs > 0) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     final ok = await AppLock.verifyCode(code, _currentMethod);
     if (!mounted) return;
-    setState(() => _busy = false);
     if (ok) {
+      AppLock.resetFailedAttempts();
+      setState(() => _busy = false);
       await _success();
-    } else {
-      setState(() {
-        _pattern.clear();
-        _error = widget.tr('lock_wrong');
-      });
+      return;
     }
+    final secs = await AppLock.registerFailedAttempt();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _pattern.clear();
+      // During a lockout the countdown chip replaces the "wrong code" text.
+      _error = secs == 0 ? widget.tr('lock_wrong') : null;
+    });
+    if (secs > 0) await _refreshLockout();
   }
 
   void _switchMethod(LockMethod m) {
@@ -605,9 +740,12 @@ class _LockScreenState extends State<LockScreen> {
     const accent = Color(0xFF4EA4F6);
     final tr = widget.tr;
     final method = _currentMethod;
-    final multiCode =
-        _methods.contains(LockMethod.pattern) &&
-        _methods.contains(LockMethod.pin);
+    final lockLeft = _lockLeftSecs;
+    final errorText = lockLeft > 0
+        ? tr(lockLeft >= 60 ? 'lock_lockout_min' : 'lock_lockout_sec', [
+            '${lockLeft >= 60 ? (lockLeft + 59) ~/ 60 : lockLeft}',
+          ])
+        : _error;
 
     Widget input;
     switch (method) {
@@ -654,29 +792,35 @@ class _LockScreenState extends State<LockScreen> {
         break;
     }
 
-    // Method switcher chips — shown when multiple code methods are enabled.
+    // Method switcher chips — one per enabled method, shown whenever there
+    // is a fallback to switch to. Without this, enabling biometrics + a
+    // single code method made the code pad unreachable (biometric is always
+    // the primary input) and a failing sensor left no app-owned fallback.
+    final switchable = <LockMethod>[
+      if (_methods.contains(LockMethod.biometric)) LockMethod.biometric,
+      if (_methods.contains(LockMethod.pattern)) LockMethod.pattern,
+      if (_methods.contains(LockMethod.pin)) LockMethod.pin,
+    ];
     Widget? switcher;
-    if (multiCode) {
-      final methods = <LockMethod>{
-        if (_methods.contains(LockMethod.pattern)) LockMethod.pattern,
-        if (_methods.contains(LockMethod.pin)) LockMethod.pin,
-      };
+    if (switchable.length > 1) {
       switcher = Padding(
         padding: const EdgeInsets.only(top: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            for (final m in methods) ...[
+            for (final m in switchable)
               _methodChip(
-                label: m == LockMethod.pattern
-                    ? tr('lock_method_pattern')
-                    : tr('lock_method_pin'),
-                active: _currentMethod == m,
+                label: switch (m) {
+                  LockMethod.biometric => tr('lock_method_biometric'),
+                  LockMethod.pattern => tr('lock_method_pattern'),
+                  LockMethod.pin => tr('lock_method_pin'),
+                },
+                active: method == m,
                 accent: accent,
                 onTap: () => _switchMethod(m),
               ),
-              if (m != methods.last) const SizedBox(width: 8),
-            ],
           ],
         ),
       );
@@ -734,7 +878,7 @@ class _LockScreenState extends State<LockScreen> {
                       color: Colors.white.withValues(alpha: .9),
                     ),
                   ),
-                  if (_error != null)
+                  if (errorText != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Container(
@@ -747,7 +891,7 @@ class _LockScreenState extends State<LockScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          _error!,
+                          errorText,
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFFF07575),
@@ -770,7 +914,9 @@ class _LockScreenState extends State<LockScreen> {
                     child: Center(child: input),
                   ),
                   // Biometric button when code is primary input.
-                  if (_hasBiometric && _hasCode)
+                  if (_hasBiometric &&
+                      _hasCode &&
+                      method != LockMethod.biometric)
                     Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: Material(

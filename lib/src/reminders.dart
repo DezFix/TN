@@ -10,6 +10,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'app_log.dart';
+import 'i18n.dart';
 import 'models.dart';
 
 /// Notification actions: postpone by a day vs mark done.
@@ -64,6 +65,11 @@ Future<void> notificationBackgroundHandler(NotificationResponse details) async {
 /// Marks a todo entry done straight from the notification ("Выполнено").
 /// Works headlessly on raw JSON like the widget does; returns true when the
 /// entry was found. Custom reminders are dropped instead (nothing to check).
+///
+/// A recurring entry completed LATE (yesterday's occurrence this morning)
+/// also opens the fresh today/next-selected occurrence right away and arms
+/// its alarm: waiting for the midnight rollover left the user with no next
+/// reminder (and no armed alarm) unless the app was opened that day.
 Future<bool> completeEntryFromJson(String id) async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -71,6 +77,9 @@ Future<bool> completeEntryFromJson(String id) async {
     if (raw == null || raw.isEmpty) return false;
     final data = jsonDecode(raw) as Map<String, dynamic>;
     var hit = false;
+    String? freshChatId;
+    int? freshWhen;
+    String? freshBody;
     final entries = data['entries'] as List?;
     if (entries != null) {
       for (var i = 0; i < entries.length; i++) {
@@ -83,6 +92,26 @@ Future<bool> completeEntryFromJson(String id) async {
           }
         }
         e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+        // Overdue occurrence of a recurring task: close it AND open the
+        // fresh one (same calendar-day semantics as the midnight rollover),
+        // then arm its alarm — "done" must never end the chain.
+        final parsed = Entry.fromJson(Map<String, dynamic>.from(e));
+        if (rolloverRecurringTasks([parsed], DateTime.now()).isNotEmpty) {
+          e['dueAt'] = parsed.dueAt;
+          e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+          final open = <String>[];
+          if (items != null) {
+            for (final it in items) {
+              final m = it as Map<String, dynamic>;
+              m['done'] = false;
+              final t = (m['text'] as String? ?? '').trim();
+              if (t.isNotEmpty) open.add(t);
+            }
+          }
+          freshChatId = parsed.chatId;
+          freshWhen = parsed.dueAt;
+          freshBody = open.isNotEmpty ? open.join('\n') : parsed.text;
+        }
         hit = true;
         break;
       }
@@ -111,6 +140,15 @@ Future<bool> completeEntryFromJson(String id) async {
         );
         await plugin.cancel(id: stableHash(id));
       } catch (_) {}
+    }
+    if (freshWhen != null) {
+      await _armFromJson(
+        data,
+        id: id,
+        when: freshWhen,
+        chatId: freshChatId,
+        body: freshBody,
+      );
     }
     return true;
   } catch (e, st) {
@@ -152,6 +190,8 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
     final target =
         DateTime.now().millisecondsSinceEpoch + minutes * 60 * 1000;
     var hit = false;
+    String? hitChatId;
+    String? hitText; // open todo items or the entry text, for the re-arm body
     final reminders = data['reminders'] as List?;
     if (reminders != null) {
       for (var i = 0; i < reminders.length; i++) {
@@ -159,6 +199,8 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
         if (r['id'] == id && (r['when'] as num?)?.toInt() == when) {
           r['when'] = target;
           hit = true;
+          final cid = r['chatId'];
+          if (cid is String) hitChatId = cid;
           break;
         }
       }
@@ -174,6 +216,20 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
             e['dueAt'] = target;
             e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
             hit = true;
+            final cid = e['chatId'];
+            if (cid is String) hitChatId = cid;
+            final open = <String>[];
+            final items = e['items'] as List?;
+            if (items != null) {
+              for (final it in items) {
+                if (it is! Map || it['done'] == true) continue;
+                final t = (it['text'] as String? ?? '').trim();
+                if (t.isNotEmpty) open.add(t);
+              }
+            }
+            hitText = open.isNotEmpty
+                ? open.join('\n')
+                : (e['text'] as String? ?? '');
             break;
           }
         }
@@ -182,46 +238,88 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
     if (!hit) return false;
     await prefs.setString(storageKey, jsonEncode(data));
     await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
-
-    // Re-arm the native alarm for the shifted time (fresh plugin instance —
-    // the background isolate shares nothing with the app's one).
-    if (Platform.isAndroid) {
-      try {
-        final plugin = FlutterLocalNotificationsPlugin();
-        await plugin.initialize(
-          settings: const InitializationSettings(
-            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          ),
-        );
-        tzdata.initializeTimeZones();
-        await plugin.zonedSchedule(
-          id: stableHash(id),
-          title: 'TN',
-          body: '',
-          scheduledDate: tz.TZDateTime.from(
-            DateTime.fromMillisecondsSinceEpoch(target, isUtc: true),
-            tz.UTC,
-          ),
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'tn_messages',
-              'TN messages',
-              channelDescription: 'Messages and reminders like Telegram',
-              importance: Importance.max,
-              priority: Priority.high,
-            ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          payload: '$id|$target',
-        );
-      } catch (e, st) {
-        AppLog.error('snooze.rearm', e, st);
-      }
-    }
+    await _armFromJson(
+      data,
+      id: id,
+      when: target,
+      chatId: hitChatId,
+      body: hitText,
+    );
     return true;
   } catch (e, st) {
     AppLog.error('snooze.bg', e, st);
     return false;
+  }
+}
+
+/// (Re)arms the native alarm for [id] at [when] with the content from the
+/// state JSON — shared by the postpone shift and the late-completion roll
+/// (both run headless in the background isolate, where the app's plugin
+/// instance does not exist). Past instants are skipped: the occurrence stays
+/// visible as overdue in the app instead.
+Future<void> _armFromJson(
+  Map<String, dynamic> data, {
+  required String id,
+  required int when,
+  String? chatId,
+  String? body,
+}) async {
+  if (!Platform.isAndroid) return;
+  if (when <= DateTime.now().millisecondsSinceEpoch) return;
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+    );
+    tzdata.initializeTimeZones();
+    // Rebuild the real notification content — an empty "TN" toast with
+    // no text and no buttons was the old behavior.
+    final tr = makeTranslator((data['lang'] as String?) ?? 'ru');
+    var title = 'TN';
+    final chats = data['chats'] as List?;
+    if (chats != null && chatId != null) {
+      for (final c in chats) {
+        if (c is Map && c['id'] == chatId) {
+          final n = c['name'];
+          if (n is String && n.isNotEmpty) title = n;
+          break;
+        }
+      }
+    }
+    final text = (body != null && body.trim().isNotEmpty)
+        ? body.trim()
+        : tr('remind_body');
+    final exact =
+        await plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.canScheduleExactNotifications() ??
+        false;
+    await plugin.zonedSchedule(
+      id: stableHash(id),
+      title: title,
+      body: text,
+      scheduledDate: tz.TZDateTime.from(
+        DateTime.fromMillisecondsSinceEpoch(when, isUtc: true),
+        tz.UTC,
+      ),
+      notificationDetails: NotificationDetails(
+        android: _androidDetails(
+          title,
+          text,
+          [tr('notif_postpone'), tr('notif_done')],
+        ),
+      ),
+      androidScheduleMode: exact
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: '$id|$when',
+    );
+  } catch (e, st) {
+    AppLog.error('notif.arm', e, st);
   }
 }
 

@@ -78,7 +78,11 @@ class SyncService {
   }
 
   /// Download the backup from Drive and merge it into local state.
-  Future<bool> pull() async {
+  /// [password] overrides the saved backup password (used when the user is
+  /// prompted for an encrypted archive on a fresh device).
+  /// Throws [BackupEncryptedException] when the archive is encrypted and no
+  /// usable password is available — callers prompt and retry.
+  Future<bool> pull({String? password}) async {
     final m = _model, gd = _gd;
     if (m == null || gd == null || !gd.isConnected) return false;
     try {
@@ -90,18 +94,20 @@ class SyncService {
       final bytes = await gd.download(fileId);
       if (bytes == null || bytes.isEmpty) return false;
 
-      final password = await BackupService.getPassword();
+      final stored = password ?? await BackupService.getPassword();
       await BackupService.importFromBytes(
         bytes,
         _syncFileName,
         m.state,
-        password: password.isEmpty ? null : password,
+        password: stored.isEmpty ? null : stored,
         merge: true,
       );
       await m.rescheduleAlarms();
       WidgetBridge.refresh().catchError((_) {});
       m.refresh();
       return true;
+    } on BackupEncryptedException {
+      rethrow;
     } catch (e, st) {
       AppLog.error('sync.pull', e, st);
       return false;

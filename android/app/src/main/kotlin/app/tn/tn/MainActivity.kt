@@ -1,8 +1,12 @@
 package app.tn.tn
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -274,6 +278,51 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        // Local backups: scoped storage forbids direct writes to
+        // /storage/emulated/0/Download on Android 10+, so files go through
+        // MediaStore instead (no permission needed).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tn/backup")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "saveToDownloads" -> {
+                        val name = call.argument<String>("name")
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val keepMax = call.argument<Int>("keepMax") ?: 3
+                        if (name == null || bytes == null) {
+                            result.error("BAD_ARGS", "name and bytes are required", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val saved = saveToDownloads(name, bytes)
+                            if (saved == null) {
+                                result.error("UNSUPPORTED", "MediaStore requires Android 10+", null)
+                            } else {
+                                pruneDownloads(keepMax)
+                                result.success(saved)
+                            }
+                        } catch (e: Exception) {
+                            result.error("SAVE_FAILED", e.message ?: "save failed", null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        // App lock: FLAG_SECURE while the unlock UI is on screen, so screen
+        // recording and the recents thumbnail cannot capture PIN-pad taps.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tn/secure")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "on" -> {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        result.success(null)
+                    }
+                    "off" -> {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         // Cold start via a share action.
         intent?.let { handleShareIntent(it) }?.let { PendingShare.data = it.toMutableMap() }
         // Cold start via widget text tap (прямо к сообщению, как в "Ближайшее будущее").
@@ -337,5 +386,59 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** Writes a backup zip into the public Downloads collection.
+     *  shortcut: Android 10+ only (MediaStore Downloads); add a
+     *  WRITE_EXTERNAL_STORAGE runtime request if Android 9 support is needed. */
+    private fun saveToDownloads(name: String, bytes: ByteArray): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val resolver = contentResolver
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(collection, values)
+            ?: throw java.io.IOException("MediaStore insert failed")
+        try {
+            resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                ?: throw java.io.IOException("no output stream for $uri")
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            throw e
+        }
+        values.clear()
+        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        return "Download/$name"
+    }
+
+    /** Keeps at most [keepMax] tn-backup zips in Downloads, newest first. */
+    private fun pruneDownloads(keepMax: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        try {
+            val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            val selection = MediaStore.MediaColumns.RELATIVE_PATH + " = ? AND " +
+                MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?"
+            val args = arrayOf(Environment.DIRECTORY_DOWNLOADS + "/", "tn-backup-%")
+            val ids = mutableListOf<Long>()
+            contentResolver.query(
+                collection,
+                arrayOf(MediaStore.MediaColumns._ID),
+                selection,
+                args,
+                MediaStore.MediaColumns.DATE_ADDED + " DESC, " + MediaStore.MediaColumns._ID + " DESC",
+            )?.use { c -> while (c.moveToNext()) ids.add(c.getLong(0)) }
+            for (i in keepMax until ids.size) {
+                try {
+                    contentResolver.delete(
+                        ContentUris.withAppendedId(collection, ids[i]), null, null,
+                    )
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
     }
 }

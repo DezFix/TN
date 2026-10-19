@@ -41,8 +41,21 @@ class CrashReports {
         o.attachStacktrace = true;
         o.sendDefaultPii = false;
         o.beforeSend = (event, hint) {
-          // Strip anything that could identify the user.
-          return event.copyWith(user: null);
+          // Strip anything that could identify the user. `copyWith(user:
+          // null)` was a no-op (the SDK keeps the old value when the
+          // argument is null), so clear the field directly.
+          event.user = null;
+          // FormatException / JSON-decode errors embed the source string
+          // (a snippet of the notes JSON) in extra lines of toString() —
+          // keep only the first line of every exception value.
+          for (final e in event.exceptions ?? <SentryException>[]) {
+            final v = e.value;
+            if (v == null) continue;
+            var first = v.split('\n').first;
+            if (first.length > 300) first = first.substring(0, 300);
+            e.value = first;
+          }
+          return event;
         };
       });
       _inited = true;

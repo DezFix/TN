@@ -87,6 +87,68 @@ void main() {
     expect(back.entries.single.dueAt!, greaterThan(now + 23 * 3600 * 1000));
   });
 
+  test('notif done on a late recurring task opens the fresh occurrence', () async {
+    final now = DateTime.now();
+    // Yesterday 20:00 — the occurrence the user missed and completes the
+    // next morning. Today's weekday is in the rule, so the fresh instance
+    // must be TODAY 20:00 and unchecked.
+    final due = DateTime(now.year, now.month, now.day, 20)
+        .subtract(const Duration(days: 1));
+    final state = AppState();
+    state.entries.add(Entry(
+      id: 'e1',
+      chatId: 'c1',
+      type: 'todo',
+      ts: 0,
+      items: [TodoItem(id: 'i', text: 'task')],
+      dueAt: due.millisecondsSinceEpoch,
+      recurrence: 'weekly',
+      recurrenceDays: [now.weekday],
+    ));
+    await seed(state);
+
+    expect(
+        await handleSnoozeResponse(
+            resp(notifDoneAction, 'e1|${due.millisecondsSinceEpoch}')),
+        isTrue);
+
+    final prefs = await SharedPreferences.getInstance();
+    final e = loadState(prefs.getString(storageKey)!).entries.single;
+    expect(e.items!.single.done, isFalse);
+    expect(
+      DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
+      DateTime(now.year, now.month, now.day, 20),
+    );
+  });
+
+  test('notif done on today\'s recurring task keeps it checked', () async {
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day, 20);
+    final state = AppState();
+    state.entries.add(Entry(
+      id: 'e1',
+      chatId: 'c1',
+      type: 'todo',
+      ts: 0,
+      items: [TodoItem(id: 'i', text: 'task')],
+      dueAt: due.millisecondsSinceEpoch,
+      recurrence: 'weekly',
+      recurrenceDays: [now.weekday],
+    ));
+    await seed(state);
+
+    expect(
+        await handleSnoozeResponse(
+            resp(notifDoneAction, 'e1|${due.millisecondsSinceEpoch}')),
+        isTrue);
+
+    final prefs = await SharedPreferences.getInstance();
+    final e = loadState(prefs.getString(storageKey)!).entries.single;
+    // Today's own period: marking done must NOT reopen it.
+    expect(e.items!.single.done, isTrue);
+    expect(e.dueAt, due.millisecondsSinceEpoch);
+  });
+
   test('unknown action and bad payload return false', () async {
     expect(await handleSnoozeResponse(resp('nope', 'e1|1')), isFalse);
     expect(await handleSnoozeResponse(resp(notifDoneAction, '')), isFalse);

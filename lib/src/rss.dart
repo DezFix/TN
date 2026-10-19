@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
@@ -13,7 +14,22 @@ import 'package:path_provider/path_provider.dart';
 class RssService {
   static const _cacheKey = 'tn-rss-cache';
 
+  /// One in-flight fetch per chat: two overlapping runs both see the same
+  /// `seen` set and post the same articles twice (refresh double-tap, chat
+  /// reopened while the previous fetch is still running).
+  static final Set<String> _inFlight = {};
+
   static Future<void> fetchForChat(Chat chat, AppState state) async {
+    if (chat.rssUrl == null || chat.rssUrl!.isEmpty) return;
+    if (!_inFlight.add(chat.id)) return;
+    try {
+      await _fetchForChat(chat, state);
+    } finally {
+      _inFlight.remove(chat.id);
+    }
+  }
+
+  static Future<void> _fetchForChat(Chat chat, AppState state) async {
     final url = chat.rssUrl;
     if (url == null || url.isEmpty) return;
     try {
@@ -218,8 +234,9 @@ class RssService {
                   .trim() ??
               '',
           guid: item.findElements('guid').firstOrNull?.innerText.trim() ?? '',
-          pubDate: _parseDate(
-            item.findElements('pubDate').firstOrNull?.innerText,
+          pubDate: parseDate(
+            item.findElements('pubDate').firstOrNull?.innerText ??
+                item.findElements('dc:date').firstOrNull?.innerText,
           ),
           imageUrl: img,
         ),
@@ -261,7 +278,7 @@ class RssService {
               entry.findElements('content').firstOrNull?.innerText.trim() ??
               '',
           guid: guid,
-          pubDate: _parseDate(
+          pubDate: parseDate(
             entry.findElements('updated').firstOrNull?.innerText ??
                 entry.findElements('published').firstOrNull?.innerText,
           ),
@@ -274,19 +291,50 @@ class RssService {
     return out;
   }
 
-  static int? _parseDate(String? raw) {
+  /// RFC 822 dates with a numeric zone (`Tue, 03 Jun 2008 15:00:00 +0300`)
+  /// are the most common RSS form and neither [DateTime.parse] (ISO only)
+  /// nor [HttpDate.parse] (literal ` GMT` required) accepts them.
+  static final _rfc822 = RegExp(
+    r'^(\w{3}),?\s+(\d{1,2})\s+(\w{3})\s+(\d{4})\s+'
+    r'(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(GMT|UT|UTC|Z|[+-]\d{2}:?\d{2})?',
+    caseSensitive: false,
+  );
+
+  static const _monthByName = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+  };
+
+  @visibleForTesting
+  static int? parseDate(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {
-      final dt = DateTime.parse(raw);
-      return dt.millisecondsSinceEpoch;
-    } catch (_) {
-      try {
-        // RSS pubDate like "Mon, 06 Jan 2025 12:00:00 GMT"
-        final dt = HttpDate.parse(raw);
-        return dt.millisecondsSinceEpoch;
-      } catch (_) {}
+      return DateTime.parse(raw).millisecondsSinceEpoch;
+    } catch (_) {}
+    try {
+      // RSS pubDate like "Mon, 06 Jan 2025 12:00:00 GMT"
+      return HttpDate.parse(raw).millisecondsSinceEpoch;
+    } catch (_) {}
+    final m = _rfc822.firstMatch(raw);
+    if (m == null) return null;
+    final month = _monthByName[m.group(3)!.toLowerCase()];
+    if (month == null) return null;
+    final tz = m.group(8)?.toUpperCase() ?? '';
+    var offsetMinutes = 0;
+    if (tz.isNotEmpty && tz != 'GMT' && tz != 'UT' && tz != 'UTC' && tz != 'Z') {
+      final digits = tz.substring(1).replaceAll(':', '');
+      offsetMinutes = int.parse(digits.substring(0, 2)) * 60 +
+          int.parse(digits.substring(2));
+      if (tz.startsWith('-')) offsetMinutes = -offsetMinutes;
     }
-    return null;
+    return DateTime.utc(
+      int.parse(m.group(4)!),
+      month,
+      int.parse(m.group(2)!),
+      int.parse(m.group(5)!),
+      int.parse(m.group(6)!),
+      int.tryParse(m.group(7) ?? '') ?? 0,
+    ).subtract(Duration(minutes: offsetMinutes)).millisecondsSinceEpoch;
   }
 }
 

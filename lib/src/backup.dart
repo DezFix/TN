@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,6 +39,10 @@ class BackupService {
   static const allowedDays = [0, 1, 3, 5, 7];
   static const allowedMax = [1, 3, 5];
   static const passKey = 'tn-backup-pass';
+
+  /// MainActivity side channel: writes backups through MediaStore on Android
+  /// (scoped storage blocks direct writes to /storage/emulated/0/Download).
+  static const _backupChannel = MethodChannel('tn/backup');
 
   /// The backup encryption password, if the user set one.
   static Future<String> getPassword() async {
@@ -160,7 +166,12 @@ class BackupService {
       final days = await getDays();
       if (days <= 0) return null;
       final dir = prefs.getString(dirKey);
-      if (dir == null || dir.isEmpty) return null;
+      // Desktop requires a chosen folder; on Android the destination is
+      // always Downloads, written through MediaStore.
+      if (defaultTargetPlatform != TargetPlatform.android &&
+          (dir == null || dir.isEmpty)) {
+        return null;
+      }
       final last = prefs.getInt(lastKey) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
       if (now - last < days * 24 * 3600 * 1000) return null;
@@ -186,6 +197,18 @@ class BackupService {
     if (password != null && password.isNotEmpty) {
       zip = await BackupCrypto.encrypt(zip, password);
     }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final max = await getMaxBackups();
+      final saved = await _backupChannel.invokeMethod<String>(
+        'saveToDownloads',
+        {
+          'name': name,
+          'bytes': Uint8List.fromList(zip),
+          'keepMax': max,
+        },
+      );
+      return saved ?? name;
+    }
     Directory target = await _downloadsDir();
     if (dir != null && dir.isNotEmpty) {
       final d = Directory(dir);
@@ -205,13 +228,11 @@ class BackupService {
   /// in prefs (the same password the user typed in the backup screen).
   static Future<List<int>> payloadForUpload(AppState state) async {
     final zip = await _buildZip(state);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final password = prefs.getString(passKey) ?? '';
-      if (password.isNotEmpty) return await BackupCrypto.encrypt(zip, password);
-    } catch (e, st) {
-      AppLog.error('backup.payload', e, st);
-    }
+    final prefs = await SharedPreferences.getInstance();
+    final password = prefs.getString(passKey) ?? '';
+    // Errors here must propagate: falling back to the plain ZIP would upload
+    // the whole database unencrypted despite the user's password.
+    if (password.isNotEmpty) return BackupCrypto.encrypt(zip, password);
     return zip;
   }
 
@@ -368,8 +389,19 @@ class BackupService {
         if (!f.isFile) continue;
         final parts = f.name.split('/');
         if (parts.length != 2 || parts.first != 'media') continue;
+        // Zip Slip guard: the entry name must be a plain filename. A name
+        // like `..\..\evil.exe` passes the split check on Windows and would
+        // escape the media dir.
+        final name = parts.last;
+        if (name.isEmpty ||
+            name == '.' ||
+            name == '..' ||
+            name.contains(r'\') ||
+            name.contains(':')) {
+          continue;
+        }
         final dest = File(
-          '${mediaDir.path}${Platform.pathSeparator}${parts.last}',
+          '${mediaDir.path}${Platform.pathSeparator}$name',
         );
         if (await dest.exists()) continue;
         await dest.writeAsBytes(f.content, flush: true);
@@ -386,12 +418,6 @@ class BackupService {
   static String lastExportName() => _fileName();
 
   static Future<Directory> _downloadsDir() async {
-    if (Platform.isAndroid) {
-      try {
-        final dl = Directory('/storage/emulated/0/Download');
-        if (await dl.exists()) return dl;
-      } catch (_) {}
-    }
     try {
       final dl = await getDownloadsDirectory();
       if (dl != null) return dl;

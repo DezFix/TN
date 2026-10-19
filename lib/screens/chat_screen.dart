@@ -1093,7 +1093,6 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
-  // ignore: unused_element
   Future<void> _setReminder() async {
     final when = await showReminderPicker(context, widget.model);
     if (when == null) return;
@@ -2436,10 +2435,24 @@ class _ChatScreenState extends State<ChatScreen> {
                   }
                   break;
                 case ChatTopAction.remind:
+                  await _setReminder();
                   break;
               }
             },
             itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: ChatTopAction.remind,
+                child: Row(
+                  children: [
+                    Icon(Icons.alarm, size: 18, color: p.accent),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.model.tr('remind'),
+                      style: TextStyle(color: p.text),
+                    ),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: ChatTopAction.search,
                 child: Row(

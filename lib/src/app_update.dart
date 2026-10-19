@@ -15,7 +15,7 @@ import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.29.7';
+const appBuildVersion = '1.29.8';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoReleases =
@@ -231,6 +231,9 @@ Future<void> manualCheckForUpdate(BuildContext context, AppModel model) async {
     toast('update_latest', [rel.tag.replaceFirst('v', '')]);
     return;
   }
+  // The About screen may have been popped while the request was in flight —
+  // a dead context would throw instead of showing the dialog.
+  if (!context.mounted) return;
   await showUpdateDialog(
     context,
     model,
@@ -317,11 +320,16 @@ Future<void> showUpdateDialog(
                         final result = await Updater.downloadAndInstall(
                           apkUrl,
                           (pr) {
-                            setDialogState(() => progress = pr);
+                            // The dialog can be dismissed mid-download; the
+                            // old unguarded call threw and killed the transfer.
+                            if (ctx.mounted) {
+                              setDialogState(() => progress = pr);
+                            }
                           },
                           expectedSha256: apkSha256,
                         );
-                        if (result == null && ctx.mounted) {
+                        if (!ctx.mounted) return;
+                        if (result == null) {
                           setDialogState(() => downloading = false);
                           final reinstall =
                               Updater.lastError == 'INSTALL_FAILED';
@@ -334,6 +342,10 @@ Future<void> showUpdateDialog(
                               ),
                             ),
                           );
+                        } else {
+                          // Installer is opening — don't leave the dialog
+                          // stuck at 100% behind it.
+                          Navigator.pop(ctx);
                         }
                       } else {
                         Navigator.pop(ctx);
@@ -444,11 +456,14 @@ Future<void> showReleaseDialog(
                           final result = await Updater.downloadAndInstall(
                             apkUrl,
                             (pr) {
-                              setDialogState(() => progress = pr);
+                              if (ctx.mounted) {
+                                setDialogState(() => progress = pr);
+                              }
                             },
                             expectedSha256: apkSha256,
                           );
-                          if (result == null && ctx.mounted) {
+                          if (!ctx.mounted) return;
+                          if (result == null) {
                             setDialogState(() => downloading = false);
                             final reinstall =
                                 Updater.lastError == 'INSTALL_FAILED';
@@ -461,6 +476,8 @@ Future<void> showReleaseDialog(
                                 ),
                               ),
                             );
+                          } else {
+                            Navigator.pop(ctx);
                           }
                         } else {
                           Navigator.pop(ctx);
