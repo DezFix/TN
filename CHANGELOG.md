@@ -4,9 +4,23 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
-## [1.29.7] - 2026-09-30
+## [1.29.8] - 2026-10-19
 
-- **Correct cloud label:** connecting Google Drive said “Nextcloud connected”; each provider now announces itself
+### New
+
+- **Brute-force protection for the app lock:** after 5 wrong PIN or pattern tries the unlock screen waits 30 seconds, doubling up to 32 minutes, with a live countdown; the wait survives an app restart
+- **Stronger code storage:** PINs and patterns are stored as a slow salted hash instead of a single fast one, and existing codes upgrade automatically on the next unlock
+- **Lock-screen privacy:** screen recording and screenshots can no longer capture the unlock UI or PIN-pad taps
+
+### Fixes
+
+- **Automatic Android backups actually save:** backups now go to Downloads through the system MediaStore (direct writes were blocked on Android 10+), the folder label shows Downloads (default), and only the newest 3 copies are kept
+- **Recurring reminders keep their chain:** marking a missed reminder Done from the notification now creates the next occurrence immediately and schedules its alarm instead of waiting for midnight with the app open
+- **Notification buttons work:** Postpone and Done were silently dropped in the background (missing Android receiver), and Postpone now restores the real title, text and buttons
+- **Safer backup and restore:** encrypted cloud restores ask for the password on a fresh device, a failed encryption no longer falls back to an unencrypted ZIP, and archive entries cannot escape the media folder
+- **Reminders and RSS:** the chat menu's Remind action is back, two different tasks due at the same minute both alert, RSS dates with numeric time zones parse, and duplicate articles no longer appear
+- **Updates and privacy:** the download dialog no longer sticks at 100% or after dismissal, crash reports no longer include note text snippets, and Google Drive is no longer labelled Nextcloud
+- **Lock settings take effect immediately** when toggled in Settings, and the unlock screen offers a method switcher when several methods are enabled
 
 ## [1.29.6] - 2026-09-26
 
