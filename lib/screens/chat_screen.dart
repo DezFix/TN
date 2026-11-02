@@ -2799,6 +2799,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessages(AppModel model) {
     var entries = sortedEntriesFor(model.state, widget.chatId);
+    final totalEntries = entries.length;
     if (_chat.kind == 'tasks' && _chat.tasksHideDone) {
       entries = entries.where((e) {
         if (e.type != 'todo') return true;
@@ -2836,6 +2837,40 @@ class _ChatScreenState extends State<ChatScreen> {
     _bubbleContexts.clear();
 
     if (entries.isEmpty) {
+      // "Hide done" can make a non-empty chat look completely empty; explain
+      // it and offer to show the completed tasks instead of "write something".
+      if (totalEntries > 0 && _chat.kind == 'tasks' && _chat.tasksHideDone) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle_outline, size: 34, color: p.accent),
+                const SizedBox(height: 10),
+                Text(
+                  tr('todo_all_done'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: p.textFaint,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () async {
+                    _chat.tasksHideDone = false;
+                    await model.save();
+                    if (mounted) setState(() {});
+                  },
+                  child: Text(tr('show_done')),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

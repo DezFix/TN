@@ -175,10 +175,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _clearCacheTrash() async {
-    final freed = _cacheTrash + _cacheTemp;
+    final before = _cacheTotal;
+    final junk = _cacheTrash + _cacheTemp;
     await MediaStore().clearTrashAndTemp();
+    await RssService.clearCache(widget.model.state);
     await _loadCacheSize();
     if (!mounted) return;
+    final freed = before > _cacheTotal ? before - _cacheTotal : junk;
     final tr = widget.model.tr;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -222,6 +225,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('tn-cache-max-gb', v);
       if (mounted) setState(() => _cacheMaxGb = v);
+      // Lowering the limit must trim the cache right away, not only after
+      // the next RSS refresh.
+      await RssService.enforceCacheLimit(widget.model.state);
+      await _loadCacheSize();
     } catch (_) {}
   }
 
@@ -669,46 +676,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tr('cache_clear'),
                       style: const TextStyle(color: Colors.white),
                     ),
-                    onPressed: (_cacheTrash + _cacheTemp) == 0 && !_cacheLoading
-                        ? null
-                        : _clearCacheTrash,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _loadCacheSize,
-                    child: Text(
-                      tr('rss_refresh'),
-                      style: TextStyle(color: p.accent),
-                    ),
+                    onPressed: _cacheLoading ? null : _clearCacheTrash,
                   ),
                 ),
                 Divider(height: 24, color: p.divider),
-                // RSS внутри той же карточки
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      tr('rss_cache_channels'),
-                      style: TextStyle(fontSize: 14.5, color: p.text),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        await RssService.clearCache(widget.model.state);
-                        await _loadCacheSize();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(tr('rss_cache_cleared'))),
-                        );
-                      },
-                      child: Text(
-                        tr('rss_clear'),
-                        style: TextStyle(color: p.accent),
-                      ),
-                    ),
-                  ],
-                ),
+                // Лимит кеша каналов: автоочистка срабатывает сама.
                 const SizedBox(height: 4),
                 Text(
                   tr('rss_cache_max_size'),

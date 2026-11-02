@@ -475,7 +475,22 @@ class _ListScreenState extends State<ListScreen> {
   /// sort comparator. Auto-collect chats are resolved separately (rare).
   Map<String, Entry> _lastEntryByChat(AppModel model) {
     final map = <String, Entry>{};
+    final byId = {for (final c in model.state.chats) c.id: c};
+
+    // A chat with "hide done" must not preview a completed task it hides:
+    // the row showed 1/1 while the chat itself looked empty.
+    bool visibleInList(Chat? chat, Entry e) {
+      if (chat == null || !(chat.kind == 'tasks' && chat.tasksHideDone)) {
+        return true;
+      }
+      if (e.type != 'todo') return true;
+      final items = e.items ?? const <TodoItem>[];
+      if (items.isEmpty) return true;
+      return items.any((i) => !i.done);
+    }
+
     for (final e in model.state.entries) {
+      if (!visibleInList(byId[e.chatId], e)) continue;
       final cur = map[e.chatId];
       if (cur == null || e.ts >= cur.ts) map[e.chatId] = e;
     }
@@ -483,8 +498,11 @@ class _ListScreenState extends State<ListScreen> {
       final rule = c.autoCollect;
       if (rule == null || !rule.enabled) continue;
       final merged = model.state.entriesFor(c.id);
-      if (merged.isEmpty) continue;
-      map[c.id] = merged.last;
+      for (var i = merged.length - 1; i >= 0; i--) {
+        if (!visibleInList(c, merged[i])) continue;
+        map[c.id] = merged[i];
+        break;
+      }
     }
     return map;
   }

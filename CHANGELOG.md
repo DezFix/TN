@@ -4,6 +4,15 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.1] - 2026-11-02
+
+### Fixes
+
+- **Chat rows no longer show a completed task while the chat looks empty:** with "Hide done" enabled the list previewed the hidden task (the old "1/1" bug); opening such a chat now explains that everything is done and offers a "Show completed" button
+- **The home-screen widget updates immediately after a notification action:** tapping Done or Postpone now refreshes the widget without opening TN; before, it kept the old checkbox until the app was opened
+- **One clear button in Settings → Cache:** it now clears file trash, temporary files and the channel cache together; the extra "Refresh" button and the duplicate channel-cache "Clear" row are gone
+- **The channel cache limit now applies right away:** lowering the slider trims the cache immediately, and the limit is still enforced automatically after every RSS refresh
+
 ## [1.30.0] - 2026-11-02
 
 ### New

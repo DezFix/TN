@@ -12,6 +12,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'app_log.dart';
 import 'i18n.dart';
 import 'models.dart';
+import 'widget_bridge.dart';
 
 /// Notification actions: postpone by a day vs mark done.
 /// Legacy `tn_snooze_*` ids are still matched below for alarms that were
@@ -128,6 +129,10 @@ Future<bool> completeEntryFromJson(String id) async {
     if (!hit) return false;
     await prefs.setString(storageKey, jsonEncode(data));
     await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
+    // The home-screen widget reads the same JSON; without this it keeps the
+    // old checkbox until TN is opened (background isolate may need the
+    // native file watcher, which fires on this write as a fallback).
+    await WidgetBridge.refresh();
     // Drop the armed alarm for this entry (fresh plugin instance — the
     // background isolate shares nothing with the app's one).
     if (Platform.isAndroid) {
@@ -238,6 +243,7 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
     if (!hit) return false;
     await prefs.setString(storageKey, jsonEncode(data));
     await prefs.setInt('tn-state-stamp', DateTime.now().millisecondsSinceEpoch);
+    await WidgetBridge.refresh();
     await _armFromJson(
       data,
       id: id,
