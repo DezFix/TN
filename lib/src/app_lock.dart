@@ -302,8 +302,8 @@ class AppLock {
       final prefs = await SharedPreferences.getInstance();
       final n = (prefs.getInt(_keyFailed) ?? 0) + 1;
       await prefs.setInt(_keyFailed, n);
-      if (n < lockoutFreeTries) return 0;
-      final secs = 30 * (1 << min(n - lockoutFreeTries, 6));
+      if (n <= lockoutFreeTries) return 0;
+      final secs = 30 * (1 << min(n - lockoutFreeTries - 1, 6));
       await prefs.setInt(
         _keyLockoutUntil,
         nowFn().millisecondsSinceEpoch + secs * 1000,
@@ -346,57 +346,6 @@ class AppLock {
     final at = _lastUnlock;
     if (at == null || grace == 0) return false;
     return nowFn().difference(at).inMinutes < grace;
-  }
-
-  /// System biometric sheet (method == biometric). Samsung OneUI needs
-  /// `biometricOnly: true` + `stickyAuth` + `useErrorDialogs:true` first,
-  /// fallback to `biometricOnly:false` and then weak `sensitiveTransaction:false`.
-  static Future<bool> unlockBiometrics(TrFn tr) async {
-    try {
-      if (!await _auth.isDeviceSupported()) return false;
-      // 1) Strict biometric (most reliable on Samsung with fingerprint)
-      try {
-        if (await _auth.authenticate(
-          localizedReason: tr('lock_title'),
-          options: const AuthenticationOptions(
-            biometricOnly: true,
-            stickyAuth: true,
-            useErrorDialogs: true,
-          ),
-        ))
-          return true;
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      // 2) Allow weak + device credential
-      try {
-        if (await _auth.authenticate(
-          localizedReason: tr('lock_title'),
-          options: const AuthenticationOptions(
-            biometricOnly: false,
-            stickyAuth: true,
-            useErrorDialogs: true,
-          ),
-        ))
-          return true;
-      } catch (_) {}
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      // 3) Samsung weak fallback
-      try {
-        if (await _auth.authenticate(
-          localizedReason: tr('lock_title'),
-          options: const AuthenticationOptions(
-            biometricOnly: true,
-            stickyAuth: true,
-            useErrorDialogs: false,
-            sensitiveTransaction: false,
-          ),
-        ))
-          return true;
-      } catch (_) {}
-      return false;
-    } catch (_) {
-      return false;
-    }
   }
 
   /// Cascaded verification — Samsung OneUI is the weird one:
@@ -1128,15 +1077,11 @@ class PinPadView extends StatefulWidget {
     super.key,
     required this.onSubmit,
     this.accent = const Color(0xFF4EA4F6),
-    this.hidden = false,
     this.title,
   });
 
   final ValueChanged<String> onSubmit;
   final Color accent;
-
-  /// Mask digits as they are typed (unlock screen); show them during setup.
-  final bool hidden;
   final String? title;
 
   @override

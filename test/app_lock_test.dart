@@ -78,20 +78,20 @@ void main() {
   group('AppLock brute-force limiting', () {
     test('delays start after free tries and double', () async {
       AppLock.nowFn = () => DateTime(2026, 1, 1, 12, 0);
-      for (var i = 1; i < AppLock.lockoutFreeTries; i++) {
+      for (var i = 0; i < AppLock.lockoutFreeTries; i++) {
         expect(await AppLock.registerFailedAttempt(), 0);
       }
       expect(await AppLock.registerFailedAttempt(), 30);
       expect(await AppLock.lockoutSecondsLeft(), 30);
       expect(await AppLock.registerFailedAttempt(), 60);
       expect(await AppLock.lockoutSecondsLeft(), 60);
-      expect(await AppLock.failedAttempts(), AppLock.lockoutFreeTries + 1);
+      expect(await AppLock.failedAttempts(), AppLock.lockoutFreeTries + 2);
     });
 
     test('lockout expires with time', () async {
       var now = DateTime(2026, 1, 1, 12, 0);
       AppLock.nowFn = () => now;
-      for (var i = 0; i < AppLock.lockoutFreeTries; i++) {
+      for (var i = 0; i <= AppLock.lockoutFreeTries; i++) {
         await AppLock.registerFailedAttempt();
       }
       expect(await AppLock.lockoutSecondsLeft(), 30);
@@ -110,7 +110,7 @@ void main() {
 
     test('reset clears count and lockout', () async {
       AppLock.nowFn = () => DateTime(2026, 1, 1, 12, 0);
-      for (var i = 0; i < AppLock.lockoutFreeTries; i++) {
+      for (var i = 0; i <= AppLock.lockoutFreeTries; i++) {
         await AppLock.registerFailedAttempt();
       }
       expect(await AppLock.lockoutSecondsLeft(), greaterThan(0));

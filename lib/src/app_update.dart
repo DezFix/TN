@@ -15,7 +15,7 @@ import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.29.8';
+const appBuildVersion = '1.30.0';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoReleases =
@@ -422,9 +422,9 @@ Future<void> showReleaseDialog(
                           mode: LaunchMode.externalApplication,
                         );
                       } catch (_) {}
+                      if (!context.mounted) return;
                       final messenger = ScaffoldMessenger.maybeOf(context);
-                      final mountedNow = context.mounted;
-                      if (mountedNow && messenger != null) {
+                      if (messenger != null) {
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text(
@@ -481,7 +481,7 @@ Future<void> showReleaseDialog(
                           }
                         } else {
                           Navigator.pop(ctx);
-                          _launch(updateUrl!);
+                          _launch(updateUrl);
                         }
                       },
                 label: Text(model.tr('update_now')),

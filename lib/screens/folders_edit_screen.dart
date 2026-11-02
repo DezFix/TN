@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../src/app_lock.dart';
 import '../src/app_model.dart';
+import '../src/chat_lock.dart';
 import '../src/dialogs.dart';
 import '../src/models.dart';
 import '../src/theme.dart';
@@ -19,6 +21,21 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
     if (result == null) return;
     HapticFeedback.lightImpact();
     widget.model.save();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleLock(Folder folder) async {
+    final tr = widget.model.tr;
+    if (!AppLock.supported || !await AppLock.isEnabled()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('lock_need_setup'))),
+        );
+      }
+      return;
+    }
+    final next = !ChatLock.isFolderLocked(folder.id);
+    await ChatLock.setFolder(folder.id, next);
     if (mounted) setState(() {});
   }
 
@@ -43,6 +60,7 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
     if (ok != true) return;
     HapticFeedback.mediumImpact();
     widget.model.state.folders.removeWhere((f) => f.id == folder.id);
+    await ChatLock.setFolder(folder.id, false);
     for (final c in widget.model.state.chats) {
       if (c.folderId == folder.id) c.folderId = null;
     }
@@ -117,6 +135,25 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: Icon(
+                                    ChatLock.isFolderLocked(f.id)
+                                        ? Icons.lock_rounded
+                                        : Icons.lock_open_rounded,
+                                    size: 20,
+                                    color: ChatLock.isFolderLocked(f.id)
+                                        ? p.accent
+                                        : p.textSoft,
+                                  ),
+                                  tooltip: tr(
+                                    ChatLock.isFolderLocked(f.id)
+                                        ? 'unlock_folder'
+                                        : 'lock_folder',
+                                  ),
+                                  onPressed: AppLock.supported
+                                      ? () => _toggleLock(f)
+                                      : null,
+                                ),
                                 IconButton(
                                   icon: Icon(Icons.delete_outline, size: 21, color: p.danger),
                                   tooltip: tr('delete'),

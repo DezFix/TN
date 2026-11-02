@@ -175,14 +175,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _clearCacheTrash() async {
-    final n = await MediaStore().clearTrashAndTemp();
+    final freed = _cacheTrash + _cacheTemp;
+    await MediaStore().clearTrashAndTemp();
     await _loadCacheSize();
     if (!mounted) return;
     final tr = widget.model.tr;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          tr('cache_cleared', [humanBytes(_cacheTrash + _cacheTemp)]),
+          tr('cache_cleared', [humanBytes(freed)]),
         ),
       ),
     );

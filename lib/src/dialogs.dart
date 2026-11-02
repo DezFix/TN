@@ -778,57 +778,6 @@ class _BoardManageSheetState extends State<_BoardManageSheet> {
   }
 }
 
-Future<EntryAction?> showEntryCtxSheet(
-  BuildContext context,
-  AppModel model,
-  Entry entry,
-) {
-  final p = model.p;
-  final tr = model.tr;
-  final canEdit = entry.type == 'text' || entry.type == 'todo';
-  return showModalBottomSheet<EntryAction>(
-    context: context,
-    backgroundColor: p.modalBg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(Icons.schedule_outlined, color: p.accent),
-            title: Text(tr('change_time'), style: TextStyle(color: p.text)),
-            onTap: () => Navigator.pop(ctx, EntryAction.schedTime),
-          ),
-          if (canEdit) ...[
-            ListTile(
-              leading: Icon(Icons.copy, color: p.textSoft),
-              title: Text(tr('copy'), style: TextStyle(color: p.text)),
-              onTap: () => Navigator.pop(ctx, EntryAction.copy),
-            ),
-            ListTile(
-              leading: Icon(Icons.edit, color: p.textSoft),
-              title: Text(tr('edit'), style: TextStyle(color: p.text)),
-              onTap: () => Navigator.pop(ctx, EntryAction.edit),
-            ),
-          ],
-          ListTile(
-            leading: Icon(Icons.forward, color: p.textSoft),
-            title: Text(tr('forward'), style: TextStyle(color: p.text)),
-            onTap: () => Navigator.pop(ctx, EntryAction.forward),
-          ),
-          ListTile(
-            leading: Icon(Icons.delete_outline, color: p.danger),
-            title: Text(tr('delete'), style: TextStyle(color: p.danger)),
-            onTap: () => Navigator.pop(ctx, EntryAction.delete),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 Future<Chat?> showForwardDialog(
   BuildContext context,
   AppModel model, {
@@ -1593,7 +1542,20 @@ Future<DateTime?> showReminderPicker(
     initialTime: TimeOfDay.now(),
   );
   if (time == null) return null;
-  return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  final nowAgain = DateTime.now();
+  var when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  // A today+past-time pick used to create a reminder that never fired
+  // (zonedSchedule refuses past instants) while the UI said "set".
+  if (!when.isAfter(nowAgain)) {
+    when = DateTime(
+      date.year,
+      date.month,
+      date.day + 1,
+      time.hour,
+      time.minute,
+    );
+  }
+  return when;
 }
 
 enum SendOption { later, daily, weekdays, weekly, monthly }
@@ -1644,6 +1606,7 @@ Future<AttachOption?> showAttachMenuPopup(
 
 enum ChatTopAction {
   remind,
+  lock,
   edit,
   delete,
   toggleHide,

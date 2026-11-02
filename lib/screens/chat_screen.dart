@@ -9,11 +9,14 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../src/app_lock.dart';
 import '../src/app_model.dart';
+import '../src/chat_lock.dart';
 import '../src/dialogs.dart';
 import '../src/link_preview.dart';
 import '../src/media.dart';
@@ -109,6 +112,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ── Мини-ИИ голос→текст (локально) ──
   bool _dictating = false;
+  bool _locked = false;
   String _dictationText = '';
   final Map<String, String> _transcribed = {};
   final Map<String, bool> _transcribing = {};
@@ -204,6 +208,10 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    final chat = _chatOrNull;
+    _locked = chat != null &&
+        ChatLock.isLocked(widget.chatId, chat.folderId) &&
+        !ChatLock.isSessionUnlocked(widget.chatId, chat.folderId);
     widget.model.addListener(_onModel);
     _highlightId = widget.highlightEntryId;
     _prepareBoardForTarget();
@@ -228,7 +236,6 @@ class _ChatScreenState extends State<ChatScreen> {
       if (widget.scrollToEntryId == null) _scrollToBottom(animate: false);
       _scrollToTarget();
     });
-    final chat = _chatOrNull;
     if (chat != null && chat.rssUrl != null && chat.rssUrl!.isNotEmpty) {
       RssService.fetchForChat(chat, widget.model.state).then((_) {
         if (mounted) setState(() {});
@@ -414,7 +421,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await RemindersService.instance.schedule(
       Reminder(id: entry.id, chatId: widget.chatId, when: entry.dueAt!),
       widget.model.tr('remind_title', [_chat.name]),
-      widget.model.tr('remind_body'),
+      entryNotifBody(entry, widget.model.tr),
       actionLabels: [
         widget.model.tr('notif_postpone'),
         widget.model.tr('notif_done'),
@@ -546,6 +553,23 @@ class _ChatScreenState extends State<ChatScreen> {
               onTap: () => Navigator.pop(ctx, 'photo'),
             ),
             ListTile(
+              leading: Icon(Icons.video_library_outlined, color: p.accent),
+              title: Text(
+                model.tr('video_gallery'),
+                style: TextStyle(color: p.text),
+              ),
+              onTap: () => Navigator.pop(ctx, 'video'),
+            ),
+            if (Platform.isAndroid || Platform.isIOS)
+              ListTile(
+                leading: Icon(Icons.videocam_outlined, color: p.accent),
+                title: Text(
+                  model.tr('video_record'),
+                  style: TextStyle(color: p.text),
+                ),
+                onTap: () => Navigator.pop(ctx, 'video_camera'),
+              ),
+            ListTile(
               leading: Icon(Icons.insert_drive_file_outlined, color: p.accent),
               title: Text(
                 model.tr('attach_doc'),
@@ -560,8 +584,39 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (result == 'photo') {
       await _pickImage();
+    } else if (result == 'video') {
+      await _pickVideo(camera: false);
+    } else if (result == 'video_camera') {
+      await _pickVideo(camera: true);
     } else if (result == 'doc') {
       await _pickDocument();
+    }
+  }
+
+  Future<void> _pickVideo({required bool camera}) async {
+    try {
+      final file = await _imagePicker.pickVideo(
+        source: camera ? ImageSource.camera : ImageSource.gallery,
+      );
+      if (file == null) return;
+      HapticFeedback.lightImpact();
+      final size = await File(file.path).length();
+      final stored = await MediaStore().saveFile(file.path, 'vid');
+      final entry = Entry(
+        id: uid('e'),
+        chatId: widget.chatId,
+        type: 'video',
+        ts: DateTime.now().millisecondsSinceEpoch,
+        media: stored,
+        mediaName: file.name,
+        mediaSize: _fmtDocSize(size),
+        boardId: _newBoardId(),
+      );
+      widget.model.state.entries.add(entry);
+      if (mounted) setState(() {});
+      await widget.model.save();
+    } catch (_) {
+      if (mounted) _toast(widget.model.tr('video_error'), error: true);
     }
   }
 
@@ -823,7 +878,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final locale = SpeechService.localeFor(widget.model.state.lang);
     final ok = await SpeechService.init();
     if (!ok) {
-      if (mounted) _toast('🎤 ${widget.model.tr('rec_too_short')}');
+      if (mounted) _toast(widget.model.tr('ai_unavailable'));
       return;
     }
     setState(() {
@@ -839,7 +894,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (!started && mounted) {
       setState(() => _dictating = false);
-      _toast('🎤 недоступно');
+      _toast(widget.model.tr('ai_unavailable'));
     }
   }
 
@@ -900,7 +955,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final ready = await VoiceAi.isModelReady();
       if (!ready) {
         if (mounted)
-          _toast('Загрузка AI модели ~150MB base — нужен интернет один раз');
+          _toast(widget.model.tr('ai_model_download'));
         final ok = await VoiceAi.ensureModelDownloaded();
         if (!ok) {
           if (!mounted) return;
@@ -909,11 +964,11 @@ class _ChatScreenState extends State<ChatScreen> {
             _transcribeProgress.remove(entry.id);
           });
           _toast(
-            'Модель не загружена — подключите интернет и попробуйте снова',
+            widget.model.tr('ai_model_missing'),
           );
           return;
         }
-        if (mounted) _toast('Модель загружена — расшифровываю локально');
+        if (mounted) _toast(widget.model.tr('ai_model_ready'));
       }
       final path = await _pathOf(entry.media!);
       final text = await VoiceAi.transcribeFile(
@@ -944,8 +999,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _transcribing[entry.id] = false;
           _transcribeProgress.remove(entry.id);
         });
-        if (mounted)
-          _toast('Не удалось распознать — попробуйте громче и чётче');
+        if (mounted) _toast(widget.model.tr('transcribe_failed'));
       }
     } catch (e) {
       if (!mounted) return;
@@ -953,7 +1007,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _transcribing[entry.id] = false;
         _transcribeProgress.remove(entry.id);
       });
-      _toast('Ошибка AI: $e');
+      _toast(widget.model.tr('ai_error', ['$e']));
     }
   }
 
@@ -1012,13 +1066,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) {
       setState(() {});
       _scrollToBottom();
-      _toast('Заметка создана');
+      _toast(widget.model.tr('note_created'));
     }
   }
 
   Future<void> _playAudio(Entry entry) async {
     if (entry.media == null) return;
     final path = await _pathOf(entry.media!);
+    if (!mounted) return;
     if (_playingId == entry.id) {
       await _audioPlayer.stop();
       setState(() {
@@ -1156,9 +1211,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _shareEntry(Entry e) async {
     try {
-      await ShareService.shareEntry(e);
+      await ShareService.shareEntry(e, fallbackText: widget.model.tr('photo'));
     } catch (_) {
-      _toast(widget.model.tr('backup_error'), error: true);
+      if (mounted) _toast(widget.model.tr('backup_error'), error: true);
     }
   }
 
@@ -1176,9 +1231,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final entries = _selectedEntries;
     if (entries.isEmpty) return;
     try {
-      await ShareService.shareEntries(entries);
+      await ShareService.shareEntries(
+        entries,
+        fallbackText: widget.model.tr('photo'),
+      );
     } catch (_) {
-      _toast(widget.model.tr('backup_error'), error: true);
+      if (mounted) _toast(widget.model.tr('backup_error'), error: true);
     }
   }
 
@@ -1198,6 +1256,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .join('\n\n');
     if (texts.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: texts));
+    if (!mounted) return;
     _toast(widget.model.tr('copied'));
     setState(() => _selectedIds.clear());
   }
@@ -1927,7 +1986,11 @@ class _ChatScreenState extends State<ChatScreen> {
             cursor.month,
           ).subtract(Duration(days: leading));
           for (var i = 0; i < 42; i++) {
-            final day = firstVisible.add(Duration(days: i));
+            final day = DateTime(
+              firstVisible.year,
+              firstVisible.month,
+              firstVisible.day + i,
+            );
             cells.add(dayCell(day, inMonth: day.month == cursor.month));
           }
           // Drop trailing empty weeks for compactness.
@@ -2028,8 +2091,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final model = widget.model;
     final chat = _chatOrNull;
+    if (_locked && chat != null) {
+      return LockScreen(
+        tr: widget.model.tr,
+        onUnlocked: () async {
+          ChatLock.markSessionUnlocked(widget.chatId, chat.folderId);
+          if (mounted) setState(() => _locked = false);
+        },
+      );
+    }
+    final model = widget.model;
 
     // The chat can disappear while this screen is open (trash purge, sync).
     if (chat == null) {
@@ -2437,6 +2509,21 @@ class _ChatScreenState extends State<ChatScreen> {
                 case ChatTopAction.remind:
                   await _setReminder();
                   break;
+                case ChatTopAction.lock:
+                  if (!await AppLock.isEnabled()) {
+                    if (mounted) _toast(widget.model.tr('lock_need_setup'));
+                    break;
+                  }
+                  final lockNow = !ChatLock.isChatLocked(widget.chatId);
+                  await ChatLock.setChat(widget.chatId, lockNow);
+                  if (lockNow) {
+                    ChatLock.markSessionUnlocked(
+                      widget.chatId,
+                      _chatOrNull?.folderId,
+                    );
+                  }
+                  if (mounted) setState(() {});
+                  break;
               }
             },
             itemBuilder: (ctx) => [
@@ -2453,6 +2540,30 @@ class _ChatScreenState extends State<ChatScreen> {
                   ],
                 ),
               ),
+              if (AppLock.supported)
+                PopupMenuItem(
+                  value: ChatTopAction.lock,
+                  child: Row(
+                    children: [
+                      Icon(
+                        ChatLock.isChatLocked(widget.chatId)
+                            ? Icons.lock_rounded
+                            : Icons.lock_open_rounded,
+                        size: 18,
+                        color: p.accent,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.model.tr(
+                          ChatLock.isChatLocked(widget.chatId)
+                              ? 'unlock_chat'
+                              : 'lock_chat',
+                        ),
+                        style: TextStyle(color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
               PopupMenuItem(
                 value: ChatTopAction.search,
                 child: Row(
@@ -3585,7 +3696,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'AI расшифровывает локально...',
+                  model.tr('ai_transcribing'),
                   style: TextStyle(
                     fontSize: 11,
                     color: p.textFaint,
@@ -3617,7 +3728,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Расшифровка:',
+                        '${widget.model.tr('transcript')}:',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -3630,10 +3741,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         onTap: () async {
                           final t = _transcribed[entry.id] ?? entry.text;
                           await Clipboard.setData(ClipboardData(text: t));
-                          if (context.mounted)
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(model.tr('copied'))),
-                            );
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(model.tr('copied'))),
+                          );
                         },
                         child: Icon(
                           Icons.copy_rounded,
@@ -3672,7 +3783,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: Colors.white,
                         ),
                         label: Text(
-                          _isTaskLike ? 'Как задачу' : 'Как заметку',
+                          _isTaskLike
+                              ? model.tr('save_as_task')
+                              : model.tr('save_as_note'),
                           style: const TextStyle(
                             fontSize: 11.5,
                             color: Colors.white,
@@ -3710,7 +3823,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        'Расшифровать',
+                        model.tr('transcribe'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -3732,6 +3845,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _playAudioFrom(Entry entry, Duration pos) async {
     if (entry.media == null) return;
     final path = await _pathOf(entry.media!);
+    if (!mounted) return;
     setState(() {
       _playingId = entry.id;
       _playPos = pos;
@@ -3741,44 +3855,48 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildVideoBubble(AppModel model, Entry entry) {
-    return Container(
-      width: 270,
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      decoration: _bubbleDeco(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.videocam, color: p.accent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  entry.mediaName ?? model.tr('video'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: p.text,
+    return InkWell(
+      borderRadius: BorderRadius.circular(TNRadii.bubble),
+      onTap: () => _showDocument(entry),
+      child: Container(
+        width: 270,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: _bubbleDeco(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.videocam, color: p.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    entry.mediaName ?? model.tr('video'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: p.text,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if ((entry.mediaSize ?? '').isNotEmpty)
-                Text(
-                  '${entry.mediaSize ?? ''} ·',
-                  style: TextStyle(fontSize: 11, color: p.textFaint),
-                ),
-              _timeLabel(entry),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if ((entry.mediaSize ?? '').isNotEmpty)
+                  Text(
+                    '${entry.mediaSize ?? ''} ·',
+                    style: TextStyle(fontSize: 11, color: p.textFaint),
+                  ),
+                _timeLabel(entry),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4331,8 +4449,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final path = await MediaStore().pathOf(entry.media!);
     if (!mounted) return;
 
-    // Text-readable files: show content in-app.
-    if (_isTextFile(entry.mediaName) && await File(path).exists()) {
+    // Text-readable files: show content in-app. Cap the size — reading a
+    // huge log/json into memory froze/crashed the app; fall through to the
+    // system handler for those.
+    final textFile =
+        _isTextFile(entry.mediaName) && await File(path).exists();
+    final textSize = textFile ? await File(path).length() : 0;
+    if (textFile && textSize <= 2 * 1024 * 1024) {
       try {
         final content = await File(path).readAsString();
         if (!mounted) return;
@@ -4374,9 +4497,14 @@ class _ChatScreenState extends State<ChatScreen> {
       } catch (_) {}
     }
 
-    // Everything else: open with system handler.
+    // Everything else: open with the system handler. `launchUrl(file://)`
+    // throws FileUriExposedException on Android 7+, so use the FileProvider
+    // plugin that is already a dependency.
     try {
-      await launchUrl(Uri.file(path), mode: LaunchMode.externalApplication);
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done) {
+        if (mounted) _toast(widget.model.tr('cant_open_file'));
+      }
     } catch (_) {
       if (mounted) _toast(widget.model.tr('cant_open_file'));
     }
@@ -4506,6 +4634,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         )
                       : GestureDetector(
+                          onTap: _startDictation,
                           onLongPressStart: (d) => _beginRecord(),
                           onLongPressMoveUpdate: _onRecDrag,
                           onLongPressEnd: _endRecPress,
@@ -4933,7 +5062,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _dictating ? 'Слушаю... говорите' : 'Готово',
+                      _dictating
+                          ? model.tr('ai_listening')
+                          : model.tr('todo_done'),
                       style: TextStyle(fontSize: 12.5, color: p.textSoft),
                     ),
                   ],
@@ -5019,7 +5150,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'локально • on-device • ${SpeechService.isAvailable ? 'готов' : 'проверка...'}',
+              model.tr('ai_local_hint'),
               style: TextStyle(fontSize: 10, color: p.textFaint),
             ),
           ),

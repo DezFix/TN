@@ -4,6 +4,41 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.0] - 2026-11-02
+
+### New
+
+- **Calendar for the whole notebook:** a month view in the chat list shows a dot on every day with notes or tasks; tap a day to see its entries and jump straight to any of them
+- **Chat sorting:** choose recent activity, name, creation date — or arrange chats by hand and drag them into the order you like
+- **Lock a chat or a folder:** the chat menu and the folder editor can lock individual chats or whole folders; unlocking uses your existing app lock and lasts until TN is closed
+- **Backup history for Google Drive:** restore not only the latest copy but any older `tn-backup-*` file from your Drive
+- **Video messages:** pick a video from the gallery or record one with the camera, then open it with the system player
+
+### Other
+
+- **Five free unlock tries:** the wait after wrong PIN/pattern attempts now starts after the fifth mistake, not the fourth, and the unlock screen keeps its countdown
+- **Voice notes are back on the mic button:** tap to dictate a note or task, hold to record a voice message
+- **More text follows your language:** voice transcription, agenda hints, sharing, and backup screens no longer fall back to hardcoded Russian or English
+- **Forwarded to-do lists are fully independent:** copied tasks get their own subtask ids, so edits in one copy never touch the other
+- **Documents show up in chat previews** with their real file name instead of a blank line
+- **Documents and videos open through the system file handler,** which fixes Android 7+ where the old file link was blocked; very large text files no longer freeze the app
+- **Archived chats respect the selected folder** instead of showing chats from every folder
+
+### Fixes
+
+- **Attachments with dots in folder names** were saved to a broken path and could disappear — the file name is now taken from the file itself
+- **New chats created inside Smart Tasks or Smart Notes** were written into a fake folder and vanished from the real folder list
+- **Task reminders showed generic text** ("Open Notes and keep going") instead of the task itself, and changed wording after a restart
+- **"Cache cleared" always said 0 B** because sizes were read after cleanup instead of before
+- **A reminder set for today at an already passed time** was created but never rang; it now moves to the same time tomorrow
+- **Restoring an old backup turned on the dark theme** even if you used the light one
+- **Daily and weekly recurring tasks could shift by an hour** after daylight-saving changes
+- **Documents and videos received through Share** appeared as dead cards and could not be opened
+- **The Nextcloud account line showed garbled characters** instead of a separator dot
+- **Tapping the mic did nothing** after the voice button was reworked; the dictation panel was unreachable
+- **Crash risk after closing a screen during copy, share or playback** — background actions now check that the screen is still open
+- **Switching off the app lock now also removes chat and folder locks,** so a locked chat can never trap you without a way in
+
 ## [1.29.8] - 2026-10-19
 
 ### New

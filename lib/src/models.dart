@@ -120,7 +120,9 @@ class Chat {
     this.p2pRoomId,
     this.p2pRole,
     this.board,
-  });
+    int? createdAt,
+    this.order = 0,
+  }) : createdAt = createdAt ?? createdAtFromId(id);
 
   final String id;
   String name;
@@ -136,6 +138,12 @@ class Chat {
   String? notificationSound;
   AutoCollect? autoCollect;
   int? deletedAt; // millis when moved to trash; null = active
+
+  /// Creation instant (old backups fall back to the timestamp inside [id]).
+  final int createdAt;
+
+  /// Manual sort position; only used when the user picks manual sorting.
+  int order;
 
   /// P2P shared chat (beta). roomId = hex of the invite's 8-byte id;
   /// role = host | guest. The invite SECRET never lives here — only in prefs.
@@ -184,6 +192,8 @@ class Chat {
             ?.whereType<Map<String, dynamic>>()
             .map(BoardColumn.fromJson)
             .toList(),
+        createdAt: (j['createdAt'] as num?)?.toInt(),
+        order: (j['order'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -205,7 +215,17 @@ class Chat {
         if (autoCollect != null) 'autoCollect': autoCollect!.toJson(),
         if (board != null && board!.isNotEmpty)
           'board': board!.map((b) => b.toJson()).toList(),
+        'createdAt': createdAt,
+        if (order != 0) 'order': order,
       };
+}
+
+/// `uid` embeds microseconds since epoch: `c-<micros>-<random>`.
+int createdAtFromId(String id) {
+  final parts = id.split('-');
+  if (parts.length < 3) return 0;
+  final micros = int.tryParse(parts[1]);
+  return micros == null ? 0 : micros ~/ 1000;
 }
 
 /// Kanban helpers (pure, testable). [tr] is the app translator.
@@ -335,6 +355,23 @@ extension _FirstOf<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
 }
 
+/// Forwarded copies get fresh todo ids: ids are looked up per entry today,
+/// but duplicates across entries break any future global lookup and backups.
+List<TodoItem>? _remapItemIds(List<TodoItem>? src) {
+  if (src == null) return null;
+  final ids = {for (final item in src) item.id: uid('t')};
+  return src
+      .map((item) => TodoItem(
+            id: ids[item.id]!,
+            text: item.text,
+            done: item.done,
+            parentId:
+                item.parentId == null ? null : ids[item.parentId],
+            priority: item.priority,
+          ))
+      .toList();
+}
+
 class Entry {
   Entry({
     required this.id,
@@ -409,14 +446,7 @@ class Entry {
         mediaSize: mediaSize,
         duration: duration,
         waveform: waveform == null ? null : List.of(waveform!),
-        items: items
-            ?.map((i) => TodoItem(
-                id: i.id,
-                text: i.text,
-                done: i.done,
-                parentId: i.parentId,
-                priority: i.priority))
-            .toList(),
+        items: _remapItemIds(items),
         dueAt: dueAt,
         recurrence: recurrence,
         recurrenceDays:
@@ -539,10 +569,15 @@ int nextOccurrence({
   final from = DateTime.fromMillisecondsSinceEpoch(fromMs);
   var cand = DateTime(from.year, from.month, from.day, from.hour, from.minute);
 
+  // Calendar-day step: `add(Duration(days: 1))` shifts the wall clock by an
+  // hour across DST boundaries, so a 09:00 daily task became 08:00/10:00.
+  DateTime nextDay(DateTime d) =>
+      DateTime(d.year, d.month, d.day + 1, from.hour, from.minute);
+
   switch (recurrence) {
     case 'daily':
       do {
-        cand = cand.add(const Duration(days: 1));
+        cand = nextDay(cand);
       } while (!cand.isAfter(after));
       break;
     case 'weekly':
@@ -550,7 +585,7 @@ int nextOccurrence({
           ? <int>{from.weekday}
           : Set<int>.of(days);
       do {
-        cand = cand.add(const Duration(days: 1));
+        cand = nextDay(cand);
       } while (!set.contains(cand.weekday) || !cand.isAfter(after));
       break;
     case 'monthly':
@@ -570,7 +605,7 @@ int nextOccurrence({
     default:
       // Unknown rule: behave like one-shot, push a day forward past [after].
       do {
-        cand = cand.add(const Duration(days: 1));
+        cand = nextDay(cand);
       } while (!cand.isAfter(after));
   }
   return cand.millisecondsSinceEpoch;

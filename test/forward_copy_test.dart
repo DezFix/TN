@@ -51,8 +51,24 @@ void main() {
       expect(copy.recurrenceDays, [1, 3, 5]);
     });
 
-    test('copies waveform and tags deep enough to be independent', () {
-      final src = Entry(
+    test('forwarded todo ids are fresh and parent links follow', () {
+      final src = entry(
+        type: 'todo',
+        items: [
+          TodoItem(id: 'a', text: 'parent'),
+          TodoItem(id: 'b', text: 'child', parentId: 'a'),
+        ],
+      );
+      final copy = src.copyForForward('c2');
+      expect(copy.items![0].id, isNot('a'));
+      expect(copy.items![1].id, isNot('b'));
+      expect(copy.items![0].id, isNot(copy.items![1].id));
+      expect(copy.items![1].parentId, copy.items![0].id);
+      expect(src.items![0].id, 'a');
+      expect(src.items![1].parentId, 'a');
+    });
+
+    test('copies waveform and tags deep enough to be independent', () {      final src = Entry(
         id: 'a',
         chatId: 'c1',
         type: 'audio',

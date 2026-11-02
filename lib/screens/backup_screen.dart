@@ -613,6 +613,15 @@ class _BackupScreenState extends State<BackupScreen> {
             onPressed: _gdBusy ? null : _restoreGd,
           ),
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.history_rounded, size: 18),
+            label: Text(tr('gd_history')),
+            onPressed: _gdBusy ? null : _restoreGdVersion,
+          ),
+        ),
       ],
     );
   }
@@ -702,6 +711,88 @@ class _BackupScreenState extends State<BackupScreen> {
     if (!mounted) return;
     setState(() => _gdBusy = false);
     _toast(tr('backup_imported'));
+  }
+
+  /// Pick any `tn-backup-*` file from Drive and merge it (newest first).
+  Future<void> _restoreGdVersion() async {
+    final gd = _gd;
+    if (gd == null) return;
+    setState(() => _gdBusy = true);
+    List<MapEntry<String, String>> backups;
+    try {
+      backups = await gd.listBackups();
+    } catch (_) {
+      backups = const [];
+    }
+    if (!mounted) return;
+    setState(() => _gdBusy = false);
+    if (backups.isEmpty) {
+      _toast(tr('gd_no_backups'), error: true);
+      return;
+    }
+    final picked = await showDialog<MapEntry<String, String>>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: p.modalBg,
+        title: Text(
+          tr('gd_history'),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: p.text,
+          ),
+        ),
+        children: [
+          for (final b in backups.reversed)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, b),
+              child: Text(
+                b.value,
+                style: TextStyle(color: p.text, fontSize: 13.5),
+              ),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(tr('cancel'), style: TextStyle(color: p.textSoft)),
+          ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _gdBusy = true);
+    try {
+      final bytes = await gd.download(picked.key);
+      if (bytes == null || bytes.isEmpty) throw Exception('download failed');
+      var password = _encCtrl.text.trim().isNotEmpty
+          ? _encCtrl.text.trim()
+          : null;
+      if (BackupCrypto.isEncrypted(bytes) && password == null) {
+        if (!mounted) return;
+        password = await _promptPassword();
+        if (password == null || password.isEmpty) {
+          if (mounted) setState(() => _gdBusy = false);
+          return;
+        }
+      }
+      await BackupService.importFromBytes(
+        bytes,
+        picked.value,
+        widget.model.state,
+        password: password,
+        merge: true,
+      );
+      await widget.model.rescheduleAlarms();
+      WidgetBridge.refresh().catchError((_) {});
+      _finishGdRestore();
+    } on BackupEncryptedException {
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(tr('bk_wrong_pass'), error: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _gdBusy = false);
+      _toast(tr('gd_failed'), error: true);
+    }
   }
 
   // ---------------- local ----------------
@@ -870,7 +961,7 @@ class _BackupScreenState extends State<BackupScreen> {
         _field(
           _passCtrl,
           tr('backup_nc_pass'),
-          'вЂўвЂўвЂўвЂўвЂўвЂўвЂўвЂў',
+          '••••••••',
           obscure: true,
         ),
         const SizedBox(height: 10),
@@ -947,7 +1038,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     ),
                   ),
                   Text(
-                    '${_nc!.user} В· ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
+                    '${_nc!.user} · ${_nc!.server.replaceFirst(RegExp('^https?://'), '')}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 11.5, color: p.textSoft),

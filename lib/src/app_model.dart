@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'widget_bridge.dart';
 
+import 'chat_lock.dart';
 import 'i18n.dart';
 import 'models.dart';
 import 'reminders.dart';
@@ -25,6 +26,7 @@ class AppModel extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    await ChatLock.init();
     final loaded = await AppState.load();
     state
       ..theme = loaded.theme
@@ -45,7 +47,10 @@ class AppModel extends ChangeNotifier {
     } catch (_) {}
     WidgetBridge.refresh().catchError((_) {});
     _stamp = DateTime.now().millisecondsSinceEpoch;
-    rolloverRecurring();
+    final rolled = rolloverRecurring();
+    if (rolled > 0) {
+      await save();
+    }
     await rescheduleAlarms();
     notifyListeners();
   }
@@ -217,7 +222,9 @@ String fmtDay(int ts, String Function(String, [List<String>?]) tr) {
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(dt.year, dt.month, dt.day);
   if (day == today) return tr('today');
-  if (day == today.subtract(const Duration(days: 1))) return tr('yesterday');
+  if (day == DateTime(now.year, now.month, now.day - 1)) {
+    return tr('yesterday');
+  }
   // Month names come from the i18n table — the old hardcoded Russian list
   // leaked into every interface language.
   final label = '${dt.day} ${tr('month_${dt.month}')}';
@@ -234,6 +241,9 @@ String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {
       return tr('voice_preview', ['${e.duration ?? 0}']);
     case 'video':
       return tr('video_preview');
+    case 'doc':
+      final name = (e.mediaName ?? '').trim();
+      return name.isEmpty ? tr('attach_doc') : name;
     case 'todo':
       final items = e.items ?? const <TodoItem>[];
       final done = items.where((i) => i.done).length;

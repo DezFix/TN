@@ -67,6 +67,7 @@ class ShareIn {
         );
       } else if (path != null && mime.startsWith('video/')) {
         final stored = await MediaStore().saveFile(path, 'vid');
+        final size = await File(path).length();
         entry = Entry(
           id: uid('e'),
           chatId: chat.id,
@@ -75,6 +76,7 @@ class ShareIn {
           text: text ?? '',
           media: stored,
           mediaName: name,
+          mediaSize: _fmtSize(size),
         );
       } else if (path != null) {
         final stored = await MediaStore().saveFile(path, 'file');

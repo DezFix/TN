@@ -69,7 +69,11 @@ class MediaStore {
 
   Future<String> saveFile(String sourcePath, String prefix) async {
     final d = await dir();
-    final ext = sourcePath.contains('.') ? sourcePath.split('.').last : '';
+    // Extension of the file name only: a dot in a parent folder
+    // (`/tmp/v1.2/file`) must not leak into the destination path.
+    final base = sourcePath.split(RegExp(r'[/\\]')).last;
+    final dot = base.lastIndexOf('.');
+    final ext = dot > 0 && dot < base.length - 1 ? base.substring(dot + 1) : '';
     final name = ext.isEmpty ? uid(prefix) : '${uid(prefix)}.$ext';
     await File(sourcePath).copy('${d.path}${Platform.pathSeparator}$name');
     return name;
@@ -226,7 +230,7 @@ class MediaStore {
   Future<int> tempBytes() async {
     try {
       final tmp = await getTemporaryDirectory();
-      return _dirBytes(tmp);
+      return await _dirBytes(tmp);
     } catch (_) {
       return 0;
     }

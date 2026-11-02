@@ -95,6 +95,12 @@ void main() {
     expect(weekly.recurrenceDays, [1, 3, 5]);
   });
 
+  test('loading a backup without theme keeps the current theme', () {
+    final s = AppState()..theme = 'light';
+    s.loadFromJson('{"chats":[],"entries":[]}');
+    expect(s.theme, 'light');
+  });
+
   test('entriesFor sorts by ts ascending', () {
     final s = AppState();
     s.entries.add(Entry(id: 'a', chatId: 'c1', type: 'text', ts: 30));

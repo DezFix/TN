@@ -52,7 +52,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(dt.year, dt.month, dt.day);
     if (day == today) return tr('today');
-    if (day == today.add(const Duration(days: 1))) {
+    if (day == DateTime(now.year, now.month, now.day + 1)) {
       return tr('tomorrow');
     }
     return '${dt.day} ${tr('month_${dt.month}')}';
@@ -70,7 +70,10 @@ class _AgendaScreenState extends State<AgendaScreen> {
       final list = entry.value.where((e) {
         final overdue = e.dueAt! < nowMs;
         final isToday = entry.key == DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day).millisecondsSinceEpoch;
-        final isWeek = entry.key <= DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch;
+        final isWeek = entry.key <=
+            DateTime(DateTime.now().year, DateTime.now().month,
+                DateTime.now().day + 7)
+                .millisecondsSinceEpoch;
         final isHigh = (e.items ?? const <TodoItem>[]).any((i) => i.priority == 2 && !i.done);
         switch (_filter) {
           case 'overdue':
@@ -132,7 +135,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
           Expanded(
             child: filtered.isEmpty
                 ? Center(
-                    child: tnEmptyState(p: p, icon: Icons.event_available_outlined, title: tr('nothing_found'), subtitle: 'Try another filter'),
+                    child: tnEmptyState(p: p, icon: Icons.event_available_outlined, title: tr('nothing_found'), subtitle: tr('filter_hint_other')),
                   )
                 : ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

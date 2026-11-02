@@ -142,7 +142,10 @@ class AppState {
     reminders
       ..clear()
       ..addAll(loadedReminders);
-    theme = data['theme'] == 'light' ? 'light' : 'dark';
+    // Keep the current theme when the backup predates the 'theme' key.
+    if (data['theme'] is String) {
+      theme = data['theme'] == 'dark' ? 'dark' : 'light';
+    }
     stateUpdatedAt = (data['stateUpdatedAt'] as num?)?.toInt() ?? 0;
     if (data['lang'] is String) lang = data['lang'] as String;
   }

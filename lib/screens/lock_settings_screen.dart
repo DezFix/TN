@@ -2,6 +2,7 @@
 
 import '../src/app_lock.dart';
 import '../src/app_model.dart';
+import '../src/chat_lock.dart';
 import '../src/theme.dart';
 
 /// Lock sub-screen: method (biometrics / pattern / PIN) and the re-lock
@@ -58,6 +59,7 @@ class _LockSettingsScreenState extends State<LockSettingsScreen> {
     final ok = await _verifyCurrent();
     if (!ok) return;
     await AppLock.setEnabled(false);
+    await ChatLock.clearAll();
     if (!mounted) return;
     setState(() {
       _enabled = false;

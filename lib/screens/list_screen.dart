@@ -12,8 +12,10 @@ import '../src/support_banner.dart';
 import '../src/theme.dart';
 import '../src/widgets.dart';
 import 'agenda_screen.dart';
+import 'calendar_screen.dart';
 import 'chat_edit_screen.dart';
 import 'chat_screen.dart';
+import 'chats_order_screen.dart';
 import 'settings_screen.dart';
 import 'tags_screen.dart';
 
@@ -40,6 +42,7 @@ class _ListScreenState extends State<ListScreen> {
   double _botOver = 0;
   bool _smartTasksOn = true;
   bool _smartNotesOn = true;
+  String _sortMode = 'recent'; // recent | name | created | manual
   Map<String, String> _drafts = {};
   bool _showSupportBanner = false;
 
@@ -71,6 +74,7 @@ class _ListScreenState extends State<ListScreen> {
       setState(() {
         _smartTasksOn = prefs.getBool('tn-smartfolder-tasks') ?? true;
         _smartNotesOn = prefs.getBool('tn-smartfolder-notes') ?? true;
+        _sortMode = prefs.getString('tn-chat-sort') ?? 'recent';
       });
     } catch (_) {}
   }
@@ -119,7 +123,20 @@ class _ListScreenState extends State<ListScreen> {
       MaterialPageRoute(builder: (_) => ChatEditScreen(model: widget.model)),
     );
     if (chat == null) return;
-    chat.folderId = _folderFilter;
+    // Only a real folder id may be stored on the chat; smart filters are
+    // pseudo-folders ('smart_tasks' / 'smart_notes').
+    final folder = _folderFilter;
+    if (folder != null &&
+        widget.model.state.folders.any((f) => f.id == folder)) {
+      chat.folderId = folder;
+    }
+    if (_sortMode == 'manual') {
+      final maxOrder = widget.model.state.chats.fold(
+        0,
+        (m, c) => c.order > m ? c.order : m,
+      );
+      chat.order = maxOrder + 1;
+    }
     widget.model.state.chats.add(chat);
     await widget.model.save();
     if (!mounted) return;
@@ -318,6 +335,21 @@ class _ListScreenState extends State<ListScreen> {
                       border: Border.all(color: p.divider.withValues(alpha: 0.5)),
                     ),
                     child: IconButton(
+                      icon: Icon(Icons.sort_rounded, color: p.textSoft, size: 20),
+                      tooltip: tr('sort_title'),
+                      onPressed: () => _showSortSheet(model),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: p.bgChat,
+                      borderRadius: BorderRadius.circular(TNRadii.lg),
+                      border: Border.all(color: p.divider.withValues(alpha: 0.5)),
+                    ),
+                    child: IconButton(
                       icon: Icon(Icons.tune_rounded, color: p.textSoft, size: 20),
                       tooltip: tr('settings'),
                       onPressed: _openSettings,
@@ -366,13 +398,6 @@ class _ListScreenState extends State<ListScreen> {
     }
 
     final active = model.state.chats.where((c) => !c.archived && !c.isTrashed).toList();
-    final archived = model.state.chats.where((c) => c.archived && !c.isTrashed).toList()
-      ..sort((a, b) {
-        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
-
-    final lastByChat = _lastEntryByChat(model);
 
     bool isSmartMatch(Chat c) {
       if (_folderFilter == 'smart_tasks') return c.kind == 'tasks' || c.kind == 'kanban';
@@ -380,15 +405,21 @@ class _ListScreenState extends State<ListScreen> {
       return c.folderId == _folderFilter;
     }
 
-    final visible = active
+    final archived = model.state.chats
+        .where((c) => c.archived && !c.isTrashed)
         .where((c) => _folderFilter == null || isSmartMatch(c))
         .toList()
       ..sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        final ta = lastByChat[a.id]?.ts ?? 0;
-        final tb = lastByChat[b.id]?.ts ?? 0;
-        return tb.compareTo(ta);
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
+
+    final lastByChat = _lastEntryByChat(model);
+
+    final visible = active
+        .where((c) => _folderFilter == null || isSmartMatch(c))
+        .toList()
+      ..sort((a, b) => _compareChats(a, b, lastByChat));
 
     final rows = <Widget>[];
     if (archived.isNotEmpty) {
@@ -703,6 +734,113 @@ class _ListScreenState extends State<ListScreen> {
     );
   }
 
+  int _compareChats(Chat a, Chat b, Map<String, Entry> lastByChat) {
+    if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+    switch (_sortMode) {
+      case 'name':
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      case 'created':
+        return b.createdAt.compareTo(a.createdAt);
+      case 'manual':
+        final byOrder = a.order.compareTo(b.order);
+        if (byOrder != 0) return byOrder;
+        break;
+    }
+    final ta = lastByChat[a.id]?.ts ?? 0;
+    final tb = lastByChat[b.id]?.ts ?? 0;
+    return tb.compareTo(ta);
+  }
+
+  Future<void> _saveSortMode(String mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tn-chat-sort', mode);
+    } catch (_) {}
+  }
+
+  /// First switch to manual: freeze today's visual order as explicit positions.
+  Future<void> _normalizeOrder(AppModel model) async {
+    if (model.state.chats.any((c) => c.order != 0)) return;
+    final last = _lastEntryByChat(model);
+    final list = model.state.chats
+        .where((c) => !c.isTrashed && !c.archived)
+        .toList()
+      ..sort((a, b) => _compareChats(a, b, last));
+    for (var i = 0; i < list.length; i++) {
+      list[i].order = i;
+    }
+    await model.save();
+  }
+
+  Future<void> _showSortSheet(AppModel model) async {
+    final p = model.p;
+    final tr = model.tr;
+    final options = <(String, String, IconData)>[
+      ('recent', tr('sort_recent'), Icons.history_rounded),
+      ('name', tr('sort_name'), Icons.sort_by_alpha_rounded),
+      ('created', tr('sort_created'), Icons.event_available_outlined),
+      ('manual', tr('sort_manual'), Icons.drag_indicator_rounded),
+    ];
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: p.modalBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Text(
+                tr('sort_title'),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: p.text,
+                ),
+              ),
+            ),
+            for (final (mode, label, icon) in options)
+              ListTile(
+                leading: Icon(icon, size: 20, color: p.accent),
+                title: Text(label, style: TextStyle(color: p.text)),
+                trailing: _sortMode == mode
+                    ? Icon(Icons.check, size: 20, color: p.accent)
+                    : null,
+                onTap: () => Navigator.pop(ctx, mode),
+              ),
+            Divider(height: 1, color: p.divider),
+            ListTile(
+              leading: Icon(Icons.reorder_rounded, size: 20, color: p.textSoft),
+              title: Text(
+                tr('chats_order'),
+                style: TextStyle(color: p.text),
+              ),
+              onTap: () => Navigator.pop(ctx, 'order'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    if (picked == 'order') {
+      setState(() => _sortMode = 'manual');
+      await _saveSortMode('manual');
+      await _normalizeOrder(model);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ChatsOrderScreen(model: model)),
+      );
+      if (mounted) setState(() {});
+      return;
+    }
+    setState(() => _sortMode = picked);
+    await _saveSortMode(picked);
+    if (picked == 'manual') await _normalizeOrder(model);
+  }
+
   Widget _buildFolderTabs(AppModel model, Palette p, String Function(String, [List<String>?]) tr) {
     Widget chip({
       required String label,
@@ -828,6 +966,18 @@ class _ListScreenState extends State<ListScreen> {
                 HapticFeedback.selectionClick();
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => AgendaScreen(model: model)),
+                );
+              },
+            ),
+            const SizedBox(width: 6),
+            chip(
+              label: tr('calendar_title'),
+              icon: Icons.calendar_month_outlined,
+              selected: false,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => CalendarScreen(model: model)),
                 );
               },
             ),

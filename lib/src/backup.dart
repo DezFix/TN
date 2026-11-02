@@ -269,27 +269,6 @@ class BackupService {
     return ZipEncoder().encode(archive);
   }
 
-  static Future<List<File>> listBackups() async {
-    final dirs = <Directory>[
-      Directory('/storage/emulated/0/Download'),
-      await getApplicationDocumentsDirectory(),
-    ];
-    final files = <File>[];
-    for (final dir in dirs) {
-      if (!await dir.exists()) continue;
-      await for (final e in dir.list()) {
-        if (e is! File) continue;
-        final p = e.path;
-        if ((p.endsWith('.zip') || p.endsWith('.json')) &&
-            p.contains('tn-backup')) {
-          files.add(e);
-        }
-      }
-    }
-    files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-    return files;
-  }
-
   static Future<void> importFrom(
     File file,
     AppState state, {

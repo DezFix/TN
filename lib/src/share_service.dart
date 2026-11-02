@@ -7,12 +7,14 @@ import 'media.dart';
 import 'models.dart';
 class ShareService {
   /// Share single entry: if image -> share file, else share text
-  static Future<void> shareEntry(Entry e) async {
+  static Future<void> shareEntry(Entry e, {String? fallbackText}) async {
     if (e.type == 'image' && e.media != null) {
       final path = await MediaStore().pathOf(e.media!);
       final file = File(path);
       if (!await file.exists()) {
-        await Share.share(e.text.isNotEmpty ? e.text : 'Фото');
+        await Share.share(
+          e.text.isNotEmpty ? e.text : (fallbackText ?? 'Photo'),
+        );
         return;
       }
       final xfile = XFile(path, mimeType: 'image/jpeg', name: e.mediaName ?? 'photo.jpg');
@@ -46,11 +48,11 @@ class ShareService {
   }
 
   /// Share multiple entries combined
-  static Future<void> shareEntries(List<Entry> entries) async {
+  static Future<void> shareEntries(List<Entry> entries, {String? fallbackText}) async {
     if (entries.isEmpty) return;
     // if single image -> share file directly
     if (entries.length == 1) {
-      await shareEntry(entries.first);
+      await shareEntry(entries.first, fallbackText: fallbackText);
       return;
     }
     // Collect files + texts
