@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.4] - 2026-11-03
+
+### Fixes
+
+- **One tab-order screen instead of two:** the old folder reorder screen is gone; "Tab order" in Settings now lists the built-in tabs and your folders together
+- **Folders are managed from the same screen:** tap a folder to rename or recolor it; user folders keep their delete and lock buttons, while built-in tabs only have an on/off switch
+
 ## [1.30.3] - 2026-11-03
 
 ### New

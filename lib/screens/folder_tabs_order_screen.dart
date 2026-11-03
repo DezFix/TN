@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../src/app_lock.dart';
 import '../src/app_model.dart';
+import '../src/chat_lock.dart';
+import '../src/dialogs.dart';
 import '../src/folder_tabs.dart';
 import '../src/models.dart';
 
@@ -57,6 +60,80 @@ class _FolderTabsOrderScreenState extends State<FolderTabsOrderScreen> {
       if (f.id == id) return f;
     }
     return null;
+  }
+
+  Future<void> _edit(Folder folder) async {
+    final result = await showFolderEditDialog(
+      context,
+      widget.model,
+      folder: folder,
+    );
+    if (result == null) return;
+    await widget.model.save();
+    if (mounted) await _load();
+  }
+
+  Future<void> _delete(Folder folder) async {
+    final tr = widget.model.tr;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.model.p.modalBg,
+        title: Text(
+          tr('delete_folder_title'),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: widget.model.p.text,
+          ),
+        ),
+        content: Text(
+          tr('delete_folder_body'),
+          style: TextStyle(fontSize: 14, color: widget.model.p.textSoft),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              tr('delete'),
+              style: TextStyle(color: widget.model.p.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    widget.model.state.folders.removeWhere((f) => f.id == folder.id);
+    for (final c in widget.model.state.chats) {
+      if (c.folderId == folder.id) c.folderId = null;
+    }
+    await ChatLock.setFolder(folder.id, false);
+    await widget.model.save();
+    await FolderTabs.syncFolderOrder(
+      widget.model.state.folders.map((f) => f.id).toList(),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _toggleLock(Folder folder) async {
+    final tr = widget.model.tr;
+    if (!AppLock.supported || !await AppLock.isEnabled()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('lock_need_setup'))),
+        );
+      }
+      return;
+    }
+    await ChatLock.setFolder(
+      folder.id,
+      !ChatLock.isFolderLocked(folder.id),
+    );
+    if (mounted) setState(() {});
   }
 
   String _label(String id, String Function(String, [List<String>?]) tr) {
@@ -132,7 +209,8 @@ class _FolderTabsOrderScreenState extends State<FolderTabsOrderScreen> {
                       onReorder: _reorder,
                       itemBuilder: (ctx, i) {
                         final id = _order[i];
-                        if (!FolderTabs.isBuiltin(id) && _folder(id) == null) {
+                        final folder = _folder(id);
+                        if (!FolderTabs.isBuiltin(id) && folder == null) {
                           return SizedBox.shrink(key: ValueKey(id));
                         }
                         final on = _enabled[id] ?? true;
@@ -146,6 +224,7 @@ class _FolderTabsOrderScreenState extends State<FolderTabsOrderScreen> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
+                              onTap: folder == null ? null : () => _edit(folder),
                               leading: Icon(
                                 _icon(id),
                                 size: 20,
@@ -178,7 +257,39 @@ class _FolderTabsOrderScreenState extends State<FolderTabsOrderScreen> {
                                         setState(() => _enabled[id] = v);
                                         FolderTabs.setEnabled(id, v);
                                       },
+                                    )
+                                  else if (folder != null) ...[
+                                    if (AppLock.supported)
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: Icon(
+                                          ChatLock.isFolderLocked(folder.id)
+                                              ? Icons.lock_rounded
+                                              : Icons.lock_open_rounded,
+                                          size: 19,
+                                          color: ChatLock.isFolderLocked(
+                                                  folder.id)
+                                              ? p.accent
+                                              : p.textSoft,
+                                        ),
+                                        tooltip: tr(
+                                          ChatLock.isFolderLocked(folder.id)
+                                              ? 'unlock_folder'
+                                              : 'lock_folder',
+                                        ),
+                                        onPressed: () => _toggleLock(folder),
+                                      ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                        color: p.danger,
+                                      ),
+                                      tooltip: tr('delete'),
+                                      onPressed: () => _delete(folder),
                                     ),
+                                  ],
                                   ReorderableDragStartListener(
                                     index: i,
                                     child: Icon(

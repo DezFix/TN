@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tn/screens/about_screen.dart';
 import 'package:tn/screens/chat_edit_screen.dart';
-import 'package:tn/screens/folders_edit_screen.dart';
+import 'package:tn/screens/folder_tabs_order_screen.dart';
 import 'package:tn/screens/lock_settings_screen.dart';
 import 'package:tn/screens/tags_screen.dart';
 import 'package:tn/src/app_model.dart';
@@ -75,8 +75,8 @@ void main() {
     final model = modelWithTag();
     model.state.folders.add(Folder(id: 'f1', name: 'Work'));
     await tester
-        .pumpWidget(MaterialApp(home: FoldersEditScreen(model: model)));
-    await tester.pump();
+        .pumpWidget(MaterialApp(home: FolderTabsOrderScreen(model: model)));
+    await tester.pumpAndSettle();
     expect(find.text('Work'), findsOneWidget);
     expectTilesOnMaterial(tester);
   });

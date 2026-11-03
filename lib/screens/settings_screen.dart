@@ -18,7 +18,6 @@ import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
 import 'folder_tabs_order_screen.dart';
-import 'folders_edit_screen.dart';
 import 'tags_screen.dart';
 import 'trash_screen.dart';
 import 'widget_settings_screen.dart';
@@ -157,35 +156,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Icons.calendar_month_outlined,
                     tr('calendar_title'),
                     tr('folder_calendar_hint'),
-                  ),
-                  const SizedBox(height: 12),
-                  Divider(height: 1, color: p.divider),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.reorder_rounded,
-                      size: 20,
-                      color: p.accent,
-                    ),
-                    title: Text(
-                      tr('tabs_order'),
-                      style: TextStyle(fontSize: 13.5, color: p.text),
-                    ),
-                    subtitle: Text(
-                      tr('tabs_order_hint'),
-                      style: TextStyle(fontSize: 11, color: p.textFaint),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: p.textFaint),
-                    onTap: () async {
-                      Navigator.pop(ctx);
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              FolderTabsOrderScreen(model: widget.model),
-                        ),
-                      );
-                      if (mounted) setState(() {});
-                    },
                   ),
                 ],
               ),
@@ -550,7 +520,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FoldersEditScreen(model: model),
+                      builder: (_) => FolderTabsOrderScreen(model: model),
                     ),
                   ),
                   borderRadius: BorderRadius.circular(12),
@@ -560,7 +530,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          tr('folders_reorder'),
+                          tr('tabs_order'),
                           style: TextStyle(fontSize: 14.5, color: p.text),
                         ),
                       ),
