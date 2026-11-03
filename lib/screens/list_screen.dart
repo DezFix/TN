@@ -520,9 +520,11 @@ class _ListScreenState extends State<ListScreen> {
           time: last == null ? '' : fmtTime(last.ts),
           isDraft: true);
     }
+    final prio = last == null ? 0 : entryPriority(last);
     return _buildChatRow(chat, p, tr,
         preview: last == null ? tr('no_entries') : entryPreview(last, tr),
-        time: last == null ? '' : fmtTime(last.ts));
+        time: last == null ? '' : fmtTime(last.ts),
+        previewColor: prio > 0 ? p.priority(prio) : null);
   }
 
   Widget _buildArchiveHeader(AppModel model, Palette p,
@@ -584,7 +586,10 @@ class _ListScreenState extends State<ListScreen> {
 
   Widget _buildChatRow(Chat chat, Palette p,
       String Function(String, [List<String>?]) tr,
-      {required String preview, required String time, bool isDraft = false}) {
+      {required String preview,
+      required String time,
+      bool isDraft = false,
+      Color? previewColor}) {
     final selected = _sel.contains(chat.id);
     // Swipe actions: right → pin, left → archive (haptics + undo).
     Widget rowContent = GestureDetector(
@@ -601,6 +606,7 @@ class _ListScreenState extends State<ListScreen> {
               preview: preview,
               time: time,
               isDraft: isDraft,
+              previewColor: previewColor,
               onTap: () => _onRowTap(chat),
             ),
             Positioned.fill(

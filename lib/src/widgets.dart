@@ -72,6 +72,7 @@ class ChatRow extends StatelessWidget {
     this.onLongPress,
     this.highlight = false,
     this.isDraft = false,
+    this.previewColor,
   });
 
   final Chat chat;
@@ -82,6 +83,7 @@ class ChatRow extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool highlight;
   final bool isDraft;
+  final Color? previewColor;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +149,8 @@ class ChatRow extends StatelessWidget {
                         : Text(preview,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TNTypography.chatPreview.copyWith(color: p.textSoft)),
+                            style: TNTypography.chatPreview.copyWith(
+                                color: previewColor ?? p.textSoft)),
                   ],
                 ),
               ),

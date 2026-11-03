@@ -164,8 +164,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         final e = selectedEntries[i];
                         final chat = widget.model.state.chatById(e.chatId);
                         if (chat == null) return const SizedBox.shrink();
+                        final prio = entryPriority(e);
                         return ListTile(
-                          leading: Icon(_icon(e), size: 20, color: p.accent),
+                          leading: Icon(
+                            _icon(e),
+                            size: 20,
+                            color: prio > 0 ? p.priority(prio) : p.accent,
+                          ),
                           title: Text(
                             entryPreview(e, tr),
                             maxLines: 1,

@@ -246,10 +246,48 @@ String entryPreview(Entry e, String Function(String, [List<String>?]) tr) {
       return name.isEmpty ? tr('attach_doc') : name;
     case 'todo':
       final items = e.items ?? const <TodoItem>[];
+      if (items.isEmpty) {
+        final t = e.text.trim();
+        return t.isEmpty ? tr('todo') : t;
+      }
+      final open = items.where((i) => !i.done).toList();
+      final pool = open.isNotEmpty ? open : items;
+      final roots = pool.where((i) => i.parentId == null).toList();
+      final pick = roots.isNotEmpty ? roots.first : pool.first;
+
+      // Priority of the task itself, not a "0/1" counter: the list/calendar
+      // used to replace every task title with a progress badge.
+      var prio = 0;
+      for (final i in pool) {
+        if (i.priority > prio) prio = i.priority;
+      }
+      final label = prio > 0 ? '${tr('priority_$prio')}: ' : '';
+
+      var text = pick.text.trim();
+      if (text.isEmpty) text = e.text.trim();
+      if (text.isEmpty) {
+        final done = items.where((i) => i.done).length;
+        return tr('todo_progress', ['$done', '${items.length}']);
+      }
+      if (text.length > 60) text = text.substring(0, 60);
       final done = items.where((i) => i.done).length;
-      return tr('todo_progress', ['$done', '${items.length}']);
+      final progress = items.length > 1 ? ' · $done/${items.length}' : '';
+      return '$label$text$progress';
   }
   return '';
+}
+
+/// Highest priority among the open tasks of [e] (falls back to all items).
+int entryPriority(Entry e) {
+  if (e.type != 'todo') return 0;
+  final items = e.items ?? const <TodoItem>[];
+  final open = items.where((i) => !i.done).toList();
+  final pool = open.isNotEmpty ? open : items;
+  var prio = 0;
+  for (final i in pool) {
+    if (i.priority > prio) prio = i.priority;
+  }
+  return prio;
 }
 
 /// Notification body: the actual note/task content, not a generic phrase.

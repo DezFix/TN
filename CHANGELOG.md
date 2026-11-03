@@ -4,6 +4,13 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.2] - 2026-11-03
+
+### Fixes
+
+- **Calendar and chat list show the task itself, not "0/1":** rows now show the task text (first open item), its priority ("Urgent" / "Important") and, for lists with several items, progress as a small suffix
+- **Priority is visible at a glance:** calendar icons and chat previews use the task priority color, matching the dots inside the chat
+
 ## [1.30.1] - 2026-11-02
 
 ### Fixes
