@@ -4,6 +4,18 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.3] - 2026-11-03
+
+### New
+
+- **All folder tabs in one place:** Settings → Smart folders now also switches Tags, Upcoming tasks and Calendar on or off, next to the existing Tasks and Notes folders
+- **Custom tab order:** the same screen has "Tab order" where you drag every built-in tab and your own folders into the order you want; it stays after restarts
+
+### Fixes
+
+- **Smart-folder switches update immediately:** the toggle sheet was refreshing the Settings page instead of itself, so a switch looked stuck until reopened
+- **Folder order stays in sync:** reordering or deleting folders in the folder editor no longer breaks the tab positions
+
 ## [1.30.2] - 2026-11-03
 
 ### Fixes

@@ -12,10 +12,12 @@ import '../src/media.dart';
 import 'about_screen.dart';
 import 'lock_settings_screen.dart';
 import '../src/dialogs.dart';
+import '../src/folder_tabs.dart';
 import '../src/i18n.dart';
 import '../src/rss.dart';
 import '../src/theme.dart';
 import 'backup_screen.dart';
+import 'folder_tabs_order_screen.dart';
 import 'folders_edit_screen.dart';
 import 'tags_screen.dart';
 import 'trash_screen.dart';
@@ -36,8 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _methodKey = 'biometric';
   bool _cacheLoading = true;
   int _cacheMedia = 0, _cacheTrash = 0, _cacheTemp = 0, _cacheTotal = 0;
-  bool _smartTasks = true;
-  bool _smartNotes = true;
   bool _crashReports = true;
 
   @override
@@ -47,7 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadCachePref();
     _loadLockPref();
     _loadCacheSize();
-    _loadSmartFolders();
     _loadCrashPref();
   }
 
@@ -62,99 +61,140 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await CrashReports.setEnabled(v, appVersion: appBuildVersion);
   }
 
-  Future<void> _loadSmartFolders() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return;
-      setState(() {
-        _smartTasks = prefs.getBool('tn-smartfolder-tasks') ?? true;
-        _smartNotes = prefs.getBool('tn-smartfolder-notes') ?? true;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _setSmartFolder(String kind, bool v) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(
-        kind == 'tasks' ? 'tn-smartfolder-tasks' : 'tn-smartfolder-notes',
-        v,
-      );
-      if (mounted)
-        setState(() => kind == 'tasks' ? _smartTasks = v : _smartNotes = v);
-    } catch (_) {}
-  }
-
   Future<void> _showSmartFolderSheet() async {
+    final p = widget.model.p;
+    final tr = widget.model.tr;
+    final enabled = await FolderTabs.loadEnabled();
+    if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: widget.model.p.modalBg,
+      backgroundColor: p.modalBg,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: widget.model.p.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.model.tr('smart_folders'),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: widget.model.p.text,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.model.tr('smart_folders_hint'),
-                style: TextStyle(fontSize: 12, color: widget.model.p.textFaint),
-              ),
-              const SizedBox(height: 16),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Future<void> setTab(String id, bool v) async {
+            setSheet(() => enabled[id] = v);
+            await FolderTabs.setEnabled(id, v);
+          }
+
+          Widget row(
+            String id,
+            IconData icon,
+            String title,
+            String subtitle,
+          ) =>
               _smartFolderToggle(
-                p: widget.model.p,
-                icon: Icons.check_circle_outline,
-                title: widget.model.tr('smart_tasks'),
-                subtitle: widget.model.tr('smart_tasks_hint'),
-                value: _smartTasks,
-                onChanged: (v) => _setSmartFolder('tasks', v),
+                p: p,
+                icon: icon,
+                title: title,
+                subtitle: subtitle,
+                value: enabled[id] ?? true,
+                onChanged: (v) => setTab(id, v),
+              );
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: p.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tr('smart_folders'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: p.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tr('smart_folders_hint'),
+                    style: TextStyle(fontSize: 12, color: p.textFaint),
+                  ),
+                  const SizedBox(height: 16),
+                  row(
+                    'smart_tasks',
+                    Icons.check_circle_outline,
+                    tr('smart_tasks'),
+                    tr('smart_tasks_hint'),
+                  ),
+                  const SizedBox(height: 8),
+                  row(
+                    'smart_notes',
+                    Icons.note_alt_outlined,
+                    tr('smart_notes'),
+                    tr('smart_notes_hint'),
+                  ),
+                  const SizedBox(height: 8),
+                  row(
+                    'tags',
+                    Icons.tag,
+                    tr('tags_title'),
+                    tr('folder_tags_hint'),
+                  ),
+                  const SizedBox(height: 8),
+                  row(
+                    'agenda',
+                    Icons.event_outlined,
+                    tr('agenda_title'),
+                    tr('folder_agenda_hint'),
+                  ),
+                  const SizedBox(height: 8),
+                  row(
+                    'calendar',
+                    Icons.calendar_month_outlined,
+                    tr('calendar_title'),
+                    tr('folder_calendar_hint'),
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(height: 1, color: p.divider),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.reorder_rounded,
+                      size: 20,
+                      color: p.accent,
+                    ),
+                    title: Text(
+                      tr('tabs_order'),
+                      style: TextStyle(fontSize: 13.5, color: p.text),
+                    ),
+                    subtitle: Text(
+                      tr('tabs_order_hint'),
+                      style: TextStyle(fontSize: 11, color: p.textFaint),
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: p.textFaint),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              FolderTabsOrderScreen(model: widget.model),
+                        ),
+                      );
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              _smartFolderToggle(
-                p: widget.model.p,
-                icon: Icons.note_alt_outlined,
-                title: widget.model.tr('smart_notes'),
-                subtitle: widget.model.tr('smart_notes_hint'),
-                value: _smartNotes,
-                onChanged: (v) {
-                  _setSmartFolder('notes', v);
-                  setState(() {});
-                },
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.model.tr('smart_folders_future'),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: widget.model.p.textFaint,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadCacheSize() async {

@@ -5,6 +5,7 @@ import '../src/app_lock.dart';
 import '../src/app_model.dart';
 import '../src/chat_lock.dart';
 import '../src/dialogs.dart';
+import '../src/folder_tabs.dart';
 import '../src/models.dart';
 import '../src/theme.dart';
 
@@ -65,6 +66,9 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
       if (c.folderId == folder.id) c.folderId = null;
     }
     await widget.model.save();
+    await FolderTabs.syncFolderOrder(
+      widget.model.state.folders.map((f) => f.id).toList(),
+    );
     if (mounted) setState(() {});
   }
 
@@ -107,6 +111,9 @@ class _FoldersEditScreenState extends State<FoldersEditScreen> {
                         });
                         HapticFeedback.selectionClick();
                         widget.model.save();
+                        FolderTabs.syncFolderOrder(
+                          folders.map((f) => f.id).toList(),
+                        );
                       },
                       proxyDecorator: (child, index, anim) => AnimatedBuilder(
                         animation: anim,

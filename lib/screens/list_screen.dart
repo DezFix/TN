@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../src/app_model.dart';
 import '../src/dialogs.dart';
+import '../src/folder_tabs.dart';
 import '../src/models.dart';
 import '../src/reminders.dart';
 import '../src/support_banner.dart';
@@ -40,8 +41,10 @@ class _ListScreenState extends State<ListScreen> {
   bool _showArchive = false;
   double _topOver = 0;
   double _botOver = 0;
-  bool _smartTasksOn = true;
-  bool _smartNotesOn = true;
+  Map<String, bool> _tabsOn = {
+    for (final id in FolderTabs.builtin) id: true,
+  };
+  List<String> _tabOrder = const [];
   String _sortMode = 'recent'; // recent | name | created | manual
   Map<String, String> _drafts = {};
   bool _showSupportBanner = false;
@@ -56,7 +59,7 @@ class _ListScreenState extends State<ListScreen> {
       _q = widget.initialQuery!.trim().toLowerCase();
       _search.text = widget.initialQuery!;
     }
-    _loadSmartFolders();
+    _loadFolderTabs();
     _loadDrafts();
     _loadSupportBanner();
   }
@@ -67,16 +70,22 @@ class _ListScreenState extends State<ListScreen> {
     setState(() => _showSupportBanner = show);
   }
 
-  Future<void> _loadSmartFolders() async {
+  Future<void> _loadFolderTabs() async {
+    final enabled = await FolderTabs.loadEnabled();
+    final order = await FolderTabs.loadOrder(
+      widget.model.state.folders.map((f) => f.id).toList(),
+    );
+    var sortMode = _sortMode;
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return;
-      setState(() {
-        _smartTasksOn = prefs.getBool('tn-smartfolder-tasks') ?? true;
-        _smartNotesOn = prefs.getBool('tn-smartfolder-notes') ?? true;
-        _sortMode = prefs.getString('tn-chat-sort') ?? 'recent';
-      });
+      sortMode = prefs.getString('tn-chat-sort') ?? sortMode;
     } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _tabsOn = enabled;
+      _tabOrder = order;
+      _sortMode = sortMode;
+    });
   }
 
   Future<void> _loadDrafts() async {
@@ -259,10 +268,20 @@ class _ListScreenState extends State<ListScreen> {
   Future<void> _openSettings() async {
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => SettingsScreen(model: widget.model)));
-    await _loadSmartFolders();
-    // If smart folder was disabled while active, reset filter
-    if (_folderFilter == 'smart_tasks' && !_smartTasksOn) _folderFilter = null;
-    if (_folderFilter == 'smart_notes' && !_smartNotesOn) _folderFilter = null;
+    await _loadFolderTabs();
+    // If the active smart folder was disabled while active, reset the filter.
+    if (_folderFilter == 'smart_tasks' && !(_tabsOn['smart_tasks'] ?? true)) {
+      _folderFilter = null;
+    }
+    if (_folderFilter == 'smart_notes' && !(_tabsOn['smart_notes'] ?? true)) {
+      _folderFilter = null;
+    }
+    if (_folderFilter != null &&
+        _folderFilter != 'smart_tasks' &&
+        _folderFilter != 'smart_notes' &&
+        !widget.model.state.folders.any((f) => f.id == _folderFilter)) {
+      _folderFilter = null;
+    }
     if (mounted) setState(() {});
   }
 
@@ -910,6 +929,23 @@ class _ListScreenState extends State<ListScreen> {
 
     // Folder chips: tap = filter, long-press = context menu, reorder via edit screen
     final folders = model.state.folders;
+    final order = _tabOrder.isNotEmpty
+        ? _tabOrder
+        : [
+            'smart_tasks',
+            'smart_notes',
+            ...folders.map((f) => f.id),
+            'tags',
+            'agenda',
+            'calendar',
+          ];
+    Folder? folderOf(String id) {
+      for (final f in folders) {
+        if (f.id == id) return f;
+      }
+      return null;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -930,81 +966,100 @@ class _ListScreenState extends State<ListScreen> {
                 setState(() => _folderFilter = null);
               },
             ),
-            if (_smartTasksOn) ...[
-              const SizedBox(width: 6),
-              chip(
-                label: tr('smart_tasks'),
-                icon: Icons.check_circle_outline,
-                selected: _folderFilter == 'smart_tasks',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _folderFilter = 'smart_tasks');
-                },
-              ),
+            for (final id in order) ...[
+              if (id == 'smart_tasks')
+                if (_tabsOn['smart_tasks'] ?? true) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: tr('smart_tasks'),
+                    icon: Icons.check_circle_outline,
+                    selected: _folderFilter == 'smart_tasks',
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _folderFilter = 'smart_tasks');
+                    },
+                  ),
+                ],
+              if (id == 'smart_notes')
+                if (_tabsOn['smart_notes'] ?? true) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: tr('smart_notes'),
+                    icon: Icons.note_alt_outlined,
+                    selected: _folderFilter == 'smart_notes',
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _folderFilter = 'smart_notes');
+                    },
+                  ),
+                ],
+              if (id == 'tags')
+                if (_tabsOn['tags'] ?? true) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: tr('tags_title'),
+                    icon: Icons.tag,
+                    selected: false,
+                    onTap: () async {
+                      HapticFeedback.selectionClick();
+                      final q = await Navigator.of(context).push<String>(
+                        MaterialPageRoute(
+                          builder: (_) => TagsScreen(model: model),
+                        ),
+                      );
+                      if (q != null && mounted) setState(() => _q = q);
+                    },
+                  ),
+                ],
+              if (id == 'agenda')
+                if (_tabsOn['agenda'] ?? true) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: tr('agenda_title'),
+                    icon: Icons.event_outlined,
+                    selected: false,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AgendaScreen(model: model),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              if (id == 'calendar')
+                if (_tabsOn['calendar'] ?? true) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: tr('calendar_title'),
+                    icon: Icons.calendar_month_outlined,
+                    selected: false,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CalendarScreen(model: model),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              if (!FolderTabs.isBuiltin(id))
+                if (folderOf(id) case final f?) ...[
+                  const SizedBox(width: 6),
+                  chip(
+                    label: f.name,
+                    icon: Icons.folder_outlined,
+                    iconColor: f.color != null ? colorFromHex(f.color!) : null,
+                    selected: _folderFilter == f.id,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _folderFilter = f.id);
+                    },
+                  ),
+                ],
             ],
-            if (_smartNotesOn) ...[
-              const SizedBox(width: 6),
-              chip(
-                label: tr('smart_notes'),
-                icon: Icons.note_alt_outlined,
-                selected: _folderFilter == 'smart_notes',
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _folderFilter = 'smart_notes');
-                },
-              ),
-            ],
-            for (final f in folders) ...[
-              const SizedBox(width: 6),
-              chip(
-                label: f.name,
-                icon: Icons.folder_outlined,
-                iconColor: f.color != null ? colorFromHex(f.color!) : null,
-                selected: _folderFilter == f.id,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _folderFilter = f.id);
-                },
-              ),
-            ],
-            const SizedBox(width: 6),
-            // Tag manager + agenda shortcuts.
-            chip(
-              label: tr('tags_title'),
-              icon: Icons.tag,
-              selected: false,
-              onTap: () async {
-                HapticFeedback.selectionClick();
-                final q = await Navigator.of(context).push<String>(
-                  MaterialPageRoute(builder: (_) => TagsScreen(model: model)),
-                );
-                if (q != null && mounted) setState(() => _q = q);
-              },
-            ),
-            const SizedBox(width: 6),
-            chip(
-              label: tr('agenda_title'),
-              icon: Icons.event_outlined,
-              selected: false,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => AgendaScreen(model: model)),
-                );
-              },
-            ),
-            const SizedBox(width: 6),
-            chip(
-              label: tr('calendar_title'),
-              icon: Icons.calendar_month_outlined,
-              selected: false,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => CalendarScreen(model: model)),
-                );
-              },
-            ),
           ],
         ),
       ),
