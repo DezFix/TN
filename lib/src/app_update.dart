@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,7 +16,7 @@ import 'theme.dart';
 import 'updater.dart';
 
 /// Installed version, kept in sync with pubspec.yaml.
-const appBuildVersion = '1.30.4';
+const appBuildVersion = '1.30.5';
 
 const _kofiUrl = 'https://ko-fi.com/k_k';
 const _repoReleases =
@@ -111,6 +112,16 @@ Future<ReleaseInfo?> fetchLatestRelease() async {
       apkUrl: picked?.url,
       apkSha256: picked?.sha,
     );
+  } on TimeoutException catch (e) {
+    // Offline / slow network on cold start is expected, not a crash.
+    AppLog.info('update.fetch', 'timeout: $e');
+    return null;
+  } on SocketException catch (e) {
+    AppLog.info('update.fetch', 'offline: $e');
+    return null;
+  } on http.ClientException catch (e) {
+    AppLog.info('update.fetch', 'network: $e');
+    return null;
   } catch (e, st) {
     AppLog.error('update.fetch', e, st);
     return null;

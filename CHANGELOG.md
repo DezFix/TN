@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.5] - 2026-11-09
+
+### Fixes
+
+- **No false "crash" on a slow or missing connection:** the startup update check used to send an error report when the network timed out; now it just skips quietly and tries again next time
+
 ## [1.30.4] - 2026-11-03
 
 ### Fixes
