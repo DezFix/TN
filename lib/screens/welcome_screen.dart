@@ -58,7 +58,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _welRecorder.dispose();
+    // Permission may have been checked without ever starting the recorder;
+    // Android's dispose then throws "Recorder has not yet been created".
+    _welRecorder.dispose().catchError((_) {});
     super.dispose();
   }
 

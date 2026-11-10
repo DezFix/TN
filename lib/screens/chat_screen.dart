@@ -267,7 +267,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _searchCtrl.dispose();
     _listCtrl.dispose();
     _audioPlayer.dispose();
-    _recorder.dispose();
+    // Disposing a recorder that was never started throws on Android; the
+    // screen can be closed without recording, so ignore that plugin error.
+    _recorder.dispose().catchError((_) {});
     _recordTimer?.cancel();
     _ampSub?.cancel();
     if (_dictating) SpeechService.cancel();

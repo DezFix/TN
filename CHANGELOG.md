@@ -4,6 +4,12 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.30.6] - 2026-11-10
+
+### Fixes
+
+- **No false crash report when leaving a chat:** closing a chat or the welcome screen without recording a voice note no longer sends a "recorder already disposed" error; it only affected the error reports, not the app
+
 ## [1.30.5] - 2026-11-09
 
 ### Fixes
