@@ -14,6 +14,27 @@ class AppState {
   final List<Entry> entries = [];
   final List<Reminder> reminders = [];
 
+  /// Tombstones: id of a permanently deleted entry or chat -> deletion time.
+  /// Travels with backups so a cloud merge can no longer resurrect notes
+  /// deleted on another device (merge used to only ever add records).
+  final Map<String, int> deleted = {};
+
+  static const _tombstoneTtlMs = 180 * 24 * 60 * 60 * 1000;
+
+  void markDeleted(Iterable<String> ids) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final id in ids) {
+      deleted[id] = now;
+    }
+    deleted.removeWhere((_, t) => now - t > _tombstoneTtlMs);
+  }
+
+  void unmarkDeleted(Iterable<String> ids) {
+    for (final id in ids) {
+      deleted.remove(id);
+    }
+  }
+
   /// Last error thrown by [save], if any — the UI can surface it instead of
   /// silently losing data (e.g. disk full).
   Object? lastSaveError;
@@ -129,6 +150,7 @@ class AppState {
         .whereType<Map<String, dynamic>>()
         .map(Reminder.fromJson)
         .toList();
+    final loadedDeleted = _parseDeleted(data['deleted']);
 
     folders
       ..clear()
@@ -142,6 +164,9 @@ class AppState {
     reminders
       ..clear()
       ..addAll(loadedReminders);
+    deleted
+      ..clear()
+      ..addAll(loadedDeleted);
     // Keep the current theme when the backup predates the 'theme' key.
     if (data['theme'] is String) {
       theme = data['theme'] == 'dark' ? 'dark' : 'light';
@@ -158,7 +183,18 @@ class AppState {
     'chats': chats.map((c) => c.toJson()).toList(),
     'entries': entries.map((e) => e.toJson()).toList(),
     'reminders': reminders.map((r) => r.toJson()).toList(),
+    if (deleted.isNotEmpty) 'deleted': deleted,
   });
+
+  static Map<String, int> _parseDeleted(Object? raw) {
+    final out = <String, int>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (k is String && v is num) out[k] = v.toInt();
+      });
+    }
+    return out;
+  }
 
   static Future<AppState> load() async {
     final state = AppState();
@@ -202,6 +238,18 @@ class AppState {
         (data['stateUpdatedAt'] as num?)?.toInt() ?? 0;
     final remoteMetadataIsStale = remoteStateUpdatedAt > 0 &&
         stateUpdatedAt > remoteStateUpdatedAt;
+    // Union of tombstones first: deletions on either side win over older
+    // copies of the same record.
+    _parseDeleted(data['deleted']).forEach((id, t) {
+      if (t > (deleted[id] ?? 0)) deleted[id] = t;
+    });
+    if (deleted.isNotEmpty) {
+      entries.removeWhere((e) {
+        final t = deleted[e.id];
+        return t != null && t >= e.updatedAt;
+      });
+      chats.removeWhere((c) => deleted.containsKey(c.id));
+    }
     final remoteFolders = (data['folders'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Folder.fromJson);
@@ -222,6 +270,7 @@ class AppState {
         .whereType<Map<String, dynamic>>()
         .map(Chat.fromJson);
     for (final c in remoteChats) {
+      if (deleted.containsKey(c.id)) continue;
       final i = chats.indexWhere((x) => x.id == c.id);
       if (i < 0) {
         chats.add(c);
@@ -243,6 +292,8 @@ class AppState {
         .whereType<Map<String, dynamic>>()
         .map(Entry.fromJson);
     for (final e in remoteEntries) {
+      final t = deleted[e.id];
+      if (t != null && t >= e.updatedAt) continue;
       final i = entries.indexWhere((x) => x.id == e.id);
       if (i < 0) {
         entries.add(e);

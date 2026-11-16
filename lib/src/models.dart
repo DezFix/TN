@@ -611,180 +611,133 @@ int nextOccurrence({
   return cand.millisecondsSinceEpoch;
 }
 
+/// True when a recurring todo [e] has an occurrence on calendar [day]
+/// (any time of day) — used to project future occurrences in the calendar.
+/// Days before the current deadline's day never match (that history is
+/// not stored). The current deadline's own day is not projected either:
+/// the entry itself already sits there.
+bool recursOnDay(Entry e, DateTime day) {
+  final rec = e.recurrence;
+  if (e.type != 'todo' || rec == null || e.dueAt == null) return false;
+  final d = DateTime(day.year, day.month, day.day);
+  if (!d.isAfter(_dayOf(e.dueAt!))) return false;
+  final due = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
+  switch (rec) {
+    case 'daily':
+      return true;
+    case 'weekly':
+      final set = (e.recurrenceDays == null || e.recurrenceDays!.isEmpty)
+          ? <int>{due.weekday}
+          : Set<int>.of(e.recurrenceDays!);
+      return set.contains(d.weekday);
+    case 'monthly':
+      final dom = (e.monthDay == null || e.monthDay! < 1) ? due.day : e.monthDay!;
+      final last = DateTime(d.year, d.month + 1, 0).day;
+      return d.day == (dom > last ? last : dom);
+    default:
+      return false;
+  }
+}
+
+/// Start of the calendar day of [ms] (local time).
+DateTime _dayOf(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return DateTime(d.year, d.month, d.day);
+}
+
+/// The occurrence of a recurring [e] that belongs to TODAY or, when today
+/// is not a task day (weekly / monthly), the first one after today. Keeps
+/// the clock time of the current deadline. Catches up over any number of
+/// missed periods. Returns epoch millis (unchanged dueAt when the current
+/// deadline is already today or later).
+int currentOccurrence(Entry e, DateTime now) {
+  final rec = e.recurrence!;
+  final due = e.dueAt!;
+  final todayStart = DateTime(now.year, now.month, now.day);
+  if (!_dayOf(due).isBefore(todayStart)) return due;
+  final dueDt = DateTime.fromMillisecondsSinceEpoch(due);
+  if (rec == 'daily') {
+    // Every calendar day is an occurrence — today's is always the current.
+    return DateTime(now.year, now.month, now.day, dueDt.hour, dueDt.minute)
+        .millisecondsSinceEpoch;
+  }
+  // Pin the month day for the whole catch-up: without it a clamped
+  // Feb 28 would drift every later month to the 28th.
+  final monthDay = e.monthDay ?? dueDt.day;
+  var next = due;
+  var guard = 0;
+  while (_dayOf(next).isBefore(todayStart) && guard++ < 5000) {
+    next = nextOccurrence(
+      recurrence: rec,
+      days: e.recurrenceDays,
+      monthDay: monthDay,
+      fromMs: next,
+      after: DateTime.fromMillisecondsSinceEpoch(next),
+    );
+  }
+  return next;
+}
+
+void _reopen(Entry e, int dueAt) {
+  e.dueAt = dueAt;
+  e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  for (final i in e.items!) {
+    i.done = false;
+  }
+}
+
+bool _allDone(Entry e) {
+  final items = e.items;
+  return items != null && items.isNotEmpty && items.every((i) => i.done);
+}
+
 /// Pure recurrence reset pass over [entries] (no side effects beyond the
-/// entries themselves). A recurring task whose items are all done stays
-/// checked until its *next* occurrence arrives; then items go back to
-/// undone and dueAt jumps forward, catching up over missed periods.
-/// Returns the entries that were reset.
+/// entries themselves). Every recurring period is a CALENDAR DAY: a task
+/// checked for its day stays checked until 00:00, then the next occurrence
+/// opens unchecked. Returns the entries that were reset.
 ///
-/// Daily AND weekly use CALENDAR-DAY semantics (reset at 00:00):
-/// each selected weekday is its own period. Monthly keeps instant semantics.
+/// * daily   — today's occurrence opens (same clock time, even if that
+///             moment already passed: it is still today's task, never
+///             skipped to tomorrow).
+/// * weekly  — opens on the next selected weekday; on non-task days the
+///             checkmark of the last occurrence holds.
+/// * monthly — the next month's occurrence opens right after the due day.
 List<Entry> rolloverRecurringTasks(List<Entry> entries, DateTime now) {
   final rolled = <Entry>[];
   final todayStart = DateTime(now.year, now.month, now.day);
   for (final e in entries) {
-    final rec = e.recurrence;
-    if (rec == null || e.dueAt == null) continue;
-    final items = e.items;
-    if (items == null || items.isEmpty || !items.every((i) => i.done)) {
-      continue;
-    }
-    final dueDt = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
-    final dueDayStart = DateTime(dueDt.year, dueDt.month, dueDt.day);
-
-    if (rec == 'daily') {
-      // Daily: reset at the start of a new calendar day.
-      if (!dueDayStart.isBefore(todayStart)) continue;
-    } else if (rec == 'weekly') {
-      // Weekly (incl. будни Пн-Пт): each selected weekday is a period,
-      // reset at 00:00 like daily. Non-selected days never show a task.
-      // Same-day (today or future) always stays checked — otherwise marking
-      // today's future task would instantly uncheck itself.
-      if (!dueDayStart.isBefore(todayStart)) continue;
-      final set = (e.recurrenceDays == null || e.recurrenceDays!.isEmpty)
-          ? <int>{dueDt.weekday}
-          : Set<int>.of(e.recurrenceDays!);
-      // dueDay < today (past): reset to today if today is selected,
-      // otherwise stay checked until the next selected day.
-      if (!set.contains(now.weekday)) {
-        // Today is not a task day (e.g. weekend for Пн-Пт) -> hold checkmark.
-        // But if we already missed the next occurrence, catch up below.
-        var next = nextOccurrence(
-          recurrence: rec,
-          days: e.recurrenceDays,
-          monthDay: e.monthDay,
-          fromMs: e.dueAt!,
-          after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
-        );
-        if (now.isBefore(DateTime.fromMillisecondsSinceEpoch(next))) continue;
-        // Missed periods over weekend -> jump to next future selected day.
-        while (!DateTime.fromMillisecondsSinceEpoch(next).isAfter(now)) {
-          next = nextOccurrence(
-            recurrence: rec,
-            days: e.recurrenceDays,
-            monthDay: e.monthDay,
-            fromMs: next,
-            after: DateTime.fromMillisecondsSinceEpoch(next),
-          );
-        }
-        e.dueAt = next;
-        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-        for (final i in items) {
-          i.done = false;
-        }
-        rolled.add(e);
-        continue;
-      }
-      // Today is selected -> fresh instance is TODAY same clock time.
-      e.dueAt = DateTime(now.year, now.month, now.day, dueDt.hour, dueDt.minute)
-          .millisecondsSinceEpoch;
-      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-      for (final i in items) {
-        i.done = false;
-      }
-      rolled.add(e);
-      continue;
-    } else {
-      // Monthly: calendar-day semantics like daily/weekly — reset at 00:00
-      // of the due day, not at the due instant. Finds the first monthly
-      // occurrence on/after today (catches up over missed months).
-      if (!dueDayStart.isBefore(todayStart)) continue; // today/future -> hold
-      var next = nextOccurrence(
-        recurrence: rec,
+    if (e.recurrence == null || e.dueAt == null || !_allDone(e)) continue;
+    if (!_dayOf(e.dueAt!).isBefore(todayStart)) continue; // today/future: hold
+    if (e.recurrence == 'weekly') {
+      // Not a task day yet: hold the checkmark until the next selected
+      // weekday arrives (unless one was already missed — then reopen).
+      final first = nextOccurrence(
+        recurrence: 'weekly',
         days: e.recurrenceDays,
-        monthDay: e.monthDay,
         fromMs: e.dueAt!,
         after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
       );
-      while (DateTime.fromMillisecondsSinceEpoch(next).isBefore(todayStart)) {
-        next = nextOccurrence(
-          recurrence: rec,
-          days: e.recurrenceDays,
-          monthDay: e.monthDay,
-          fromMs: next,
-          after: DateTime.fromMillisecondsSinceEpoch(next),
-        );
-      }
-      e.dueAt = next;
-      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-      for (final i in items) {
-        i.done = false;
-      }
-      rolled.add(e);
-      continue;
+      if (_dayOf(first).isAfter(todayStart)) continue;
     }
-
-    // Catch up: find the next occurrence strictly after now (daily/monthly).
-    var next = nextOccurrence(
-      recurrence: rec,
-      days: e.recurrenceDays,
-      monthDay: e.monthDay,
-      fromMs: e.dueAt!,
-      after: DateTime.fromMillisecondsSinceEpoch(e.dueAt!),
-    );
-    while (!DateTime.fromMillisecondsSinceEpoch(next).isAfter(now)) {
-      next = nextOccurrence(
-        recurrence: rec,
-        days: e.recurrenceDays,
-        monthDay: e.monthDay,
-        fromMs: next,
-        after: DateTime.fromMillisecondsSinceEpoch(next),
-      );
-    }
-    e.dueAt = next;
-    e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    for (final i in items) {
-      i.done = false;
-    }
+    _reopen(e, currentOccurrence(e, now));
     rolled.add(e);
   }
   return rolled;
 }
 
-/// Called right after a recurring task was completed while OVERDUE (its
-/// period already ended). For DAILY and WEEKLY tasks the period is the
-/// CALENDAR DAY: completing yesterday's leftover today snaps the deadline
-/// to *today*, same clock time (even if that moment already passed) — the
-/// checkmark then holds until tonight's 00:00 rollover, and the fresh
-/// instance is always today's, never "the overdue one". Monthly keeps
-/// snapping to the next occurrence after [now].
-/// Returns true when the entry changed.
+/// Called right after a recurring task was completed. When the completed
+/// occurrence belongs to a PAST day (overdue leftover), only that past
+/// occurrence is closed: the task immediately reopens, unchecked, for
+/// today (or the next task day). Completing yesterday's task must never
+/// consume today's — a daily task exists every day.
+///
+/// Completing today's (or a future) occurrence changes nothing here: the
+/// checkmark holds until the 00:00 rollover.
+/// Returns true when the entry was reopened.
 bool snapCompletedRecurring(Entry e, DateTime now) {
-    final rec = e.recurrence;
-    if (rec == null || e.dueAt == null) return false;
-    final items = e.items;
-    if (items == null || items.isEmpty || !items.every((i) => i.done)) {
-      return false;
-    }
-    if (DateTime.fromMillisecondsSinceEpoch(e.dueAt!).isAfter(now)) {
-      return false; // not overdue — normal flow, nothing to snap
-    }
-    final due = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
-    if (rec == 'daily') {
-      e.dueAt =
-          DateTime(now.year, now.month, now.day, due.hour, due.minute)
-              .millisecondsSinceEpoch;
-      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-      return true;
-    }
-    if (rec == 'weekly') {
-      // Always snap to TODAY (like daily), even on weekends: the overdue
-      // instance becomes today's, stays checked today, and the next 00:00
-      // rollover hands over. Never jumps to a future day (that would skip
-      // today and break the "mark -> today's appears" flow).
-      e.dueAt =
-          DateTime(now.year, now.month, now.day, due.hour, due.minute)
-              .millisecondsSinceEpoch;
-      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-      return true;
-    }
-    e.dueAt = nextOccurrence(
-      recurrence: rec,
-      days: e.recurrenceDays,
-      monthDay: e.monthDay,
-      fromMs: e.dueAt!,
-      after: now,
-    );
-    e.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    return true;
-  }
+  if (e.recurrence == null || e.dueAt == null || !_allDone(e)) return false;
+  final todayStart = DateTime(now.year, now.month, now.day);
+  if (!_dayOf(e.dueAt!).isBefore(todayStart)) return false;
+  _reopen(e, currentOccurrence(e, now));
+  return true;
+}

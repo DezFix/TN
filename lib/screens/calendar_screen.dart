@@ -37,10 +37,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
         .toList();
   }
 
+  /// Entries of [day]: their own date plus projected future occurrences
+  /// of recurring tasks (a daily task shows up on every coming day).
   List<Entry> _onDay(List<Entry> all, DateTime day) {
     final key = day.millisecondsSinceEpoch;
-    final list = all.where((e) => _dateOf(e) == key).toList()
-      ..sort((a, b) => (a.dueAt ?? a.ts).compareTo(b.dueAt ?? b.ts));
+    int clock(Entry e) {
+      final d = DateTime.fromMillisecondsSinceEpoch(e.dueAt ?? e.ts);
+      return d.hour * 60 + d.minute;
+    }
+    final list = all
+        .where((e) => _dateOf(e) == key || recursOnDay(e, day))
+        .toList()
+      ..sort((a, b) => clock(a).compareTo(clock(b)));
     return list;
   }
 
@@ -67,6 +75,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final today = _day(DateTime.now());
     final first = DateTime(_month.year, _month.month);
     final leading = first.weekday - 1;
+    // Projected recurring occurrences for the 42 visible cells.
+    final recurring = all.where((e) => e.recurrence != null).toList();
+    if (recurring.isNotEmpty) {
+      for (var i = 0; i < 42; i++) {
+        final day = DateTime(first.year, first.month, first.day - leading + i);
+        final n = recurring.where((e) => recursOnDay(e, day)).length;
+        if (n == 0) continue;
+        final k = day.millisecondsSinceEpoch;
+        counts[k] = (counts[k] ?? 0) + n;
+      }
+    }
     final weekDays = tr('weekdays_short').split(' ');
 
     return Scaffold(

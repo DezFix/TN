@@ -1807,7 +1807,8 @@ DateTime alignFirstOccurrence(
   var cand = DateTime(cur.year, cur.month, cur.day, cur.hour, cur.minute);
   if (rec == 'weekly' && days != null && days.isNotEmpty) {
     while (!days.contains(cand.weekday)) {
-      cand = cand.add(const Duration(days: 1));
+      // Calendar-day step: Duration(days: 1) shifts the clock across DST.
+      cand = DateTime(cand.year, cand.month, cand.day + 1, cand.hour, cand.minute);
     }
   } else if (rec == 'monthly' && monthDay != null && cand.day != monthDay) {
     int clampDom(int y, int m) {
@@ -1822,7 +1823,8 @@ DateTime alignFirstOccurrence(
       cand.hour,
       cand.minute,
     );
-    if (!c.isAfter(cand)) {
+    // Same day (e.g. Feb 28 for "every 31st") is a valid occurrence.
+    if (c.isBefore(cand)) {
       var y = cand.year;
       var m = cand.month + 1;
       if (m > 12) {

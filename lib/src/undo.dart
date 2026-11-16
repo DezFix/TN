@@ -34,6 +34,7 @@ class UndoService {
       } catch (_) {}
     }
     model.state.entries.removeWhere((e) => ids.contains(e.id));
+    model.state.markDeleted(ids);
     await model.save();
     return true;
   }
@@ -48,6 +49,8 @@ class UndoService {
       // Skip if an identical entry reappeared meanwhile (widget/sync).
       if (model.state.entries.any((x) => x.id == e.id)) continue;
       await MediaStore().restore(e.media);
+      model.state.unmarkDeleted([e.id]);
+      e.updatedAt = DateTime.now().millisecondsSinceEpoch;
       model.state.entries.add(e);
     }
     await model.save();

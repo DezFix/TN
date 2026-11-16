@@ -40,6 +40,9 @@ class AppModel extends ChangeNotifier {
       ..entries.addAll(loaded.entries)
       ..reminders.clear()
       ..reminders.addAll(loaded.reminders);
+    state.deleted
+      ..clear()
+      ..addAll(loaded.deleted);
     _reloadLanguage();
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -65,16 +68,22 @@ class AppModel extends ChangeNotifier {
       await RemindersService.instance.cancelAll();
     } catch (_) {}
     final now = DateTime.now().millisecondsSinceEpoch;
+    final byId = {for (final e in state.entries) e.id: e};
     for (final r in state.reminders) {
       if (r.when <= now) continue;
       final chat = state.chatById(r.chatId);
       if (chat == null || chat.isTrashed || !chat.notificationsEnabled) {
         continue;
       }
+      // A snoozed recurring task is carried by a reminder with the entry's
+      // id (its dueAt keeps the recurrence clock time) — show the task text
+      // and never ring once the task is done.
+      final owner = byId[r.id];
+      if (owner != null && owner.isDone) continue;
       await RemindersService.instance.schedule(
         r,
         tr('remind_title', [chat.name]),
-        tr('remind_body'),
+        owner != null ? entryNotifBody(owner, tr) : tr('remind_body'),
         actionLabels: [tr('notif_postpone'), tr('notif_done')],
       );
     }
@@ -117,7 +126,17 @@ class AppModel extends ChangeNotifier {
     if (!hit) {
       for (final e in state.entries) {
         if (e.id == id && e.dueAt == when) {
-          e.dueAt = target;
+          if (e.recurrence != null) {
+            // Moving dueAt of a recurring task shifted its clock time for
+            // EVERY future occurrence (09:00 daily became 09:17 forever) and
+            // could even push today's task into tomorrow. Carry the snooze
+            // in a one-off reminder with the same id instead.
+            state.reminders.removeWhere((r) => r.id == e.id);
+            state.reminders
+                .add(Reminder(id: e.id, chatId: e.chatId, when: target));
+          } else {
+            e.dueAt = target;
+          }
           e.updatedAt = DateTime.now().millisecondsSinceEpoch;
           hit = true;
           break;
@@ -129,6 +148,12 @@ class AppModel extends ChangeNotifier {
     await rescheduleAlarms();
     notifyListeners();
     return true;
+  }
+
+  /// Drops a pending snooze (reminder carrying the entry id) of a task that
+  /// was completed or reopened for a new occurrence.
+  void dropEntrySnooze(Entry e) {
+    state.reminders.removeWhere((r) => r.id == e.id);
   }
 
   /// Recurring tasks reset themselves (see rolloverRecurringTasks); after

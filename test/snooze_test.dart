@@ -38,6 +38,30 @@ void main() {
     expect(e.updatedAt, greaterThanOrEqualTo(e.ts));
   });
 
+  test('snoozing a recurring task keeps its clock time', () async {
+    final model = AppModel();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final e = Entry(
+        id: 't2',
+        chatId: 'c1',
+        type: 'todo',
+        ts: 1,
+        items: [TodoItem(id: 'i', text: 'task')],
+        dueAt: now,
+        recurrence: 'daily');
+    model.state.entries.add(e);
+
+    final ok = await model.snoozeByKey('t2|$now', 15);
+    expect(ok, isTrue);
+    expect(e.dueAt, now, reason: 'dueAt drives every future occurrence');
+    final r = model.state.reminders.single;
+    expect(r.id, 't2');
+    expect(r.when, greaterThan(now + 14 * 60 * 1000));
+    // A second postpone from the reminder's own notification moves it again.
+    expect(await model.snoozeByKey('t2|${r.when}', 10), isTrue);
+    expect(model.state.reminders.length, 1);
+  });
+
   test('snoozeByKey with unknown key returns false', () async {
     final model = AppModel();
     expect(await model.snoozeByKey('ghost|123', 10), isFalse);

@@ -97,7 +97,7 @@ Future<bool> completeEntryFromJson(String id) async {
         // fresh one (same calendar-day semantics as the midnight rollover),
         // then arm its alarm — "done" must never end the chain.
         final parsed = Entry.fromJson(Map<String, dynamic>.from(e));
-        if (rolloverRecurringTasks([parsed], DateTime.now()).isNotEmpty) {
+        if (snapCompletedRecurring(parsed, DateTime.now())) {
           e['dueAt'] = parsed.dueAt;
           e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
           final open = <String>[];
@@ -114,6 +114,9 @@ Future<bool> completeEntryFromJson(String id) async {
           freshBody = open.isNotEmpty ? open.join('\n') : parsed.text;
         }
         hit = true;
+        // A pending snooze of this task must not ring after "done".
+        (data['reminders'] as List?)
+            ?.removeWhere((r) => r is Map && r['id'] == id);
         break;
       }
     }
@@ -218,7 +221,16 @@ Future<bool> handleSnoozeResponse(NotificationResponse details) async {
           if (e['id'] == id &&
               e['dueAt'] != null &&
               (e['dueAt'] as num).toInt() == when) {
-            e['dueAt'] = target;
+            if (e['recurrence'] != null) {
+              // Recurring: keep dueAt (its clock time drives every future
+              // occurrence); the snooze rides on a same-id reminder.
+              final list = (data['reminders'] as List?) ?? <dynamic>[];
+              data['reminders'] = list;
+              list.removeWhere((r) => r is Map && r['id'] == id);
+              list.add({'id': id, 'chatId': e['chatId'], 'when': target});
+            } else {
+              e['dueAt'] = target;
+            }
             e['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
             hit = true;
             final cid = e['chatId'];

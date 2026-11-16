@@ -9,7 +9,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import org.json.JSONObject
-import java.util.Calendar
 
 /**
  * Fired from the "Today's tasks" widget checkbox: toggles all items of the
@@ -196,51 +195,9 @@ class ToggleReceiver : BroadcastReceiver() {
             return false
         }
 
-        /**
-         * Completing an OVERDUE recurring task snaps its deadline forward so
-         * the checkmark sticks until the new period ends. DAILY and WEEKLY use
-         * calendar-day semantics (mirrors models.dart snapCompletedRecurring):
-         * completing yesterday's leftover today snaps the deadline to TODAY,
-         * same clock time — it stays checked until tonight's midnight
-         * rollover, and the fresh instance is today's. Monthly snaps to
-         * the next occurrence after now.
-         */
+        /** See Recurrence.snapCompleted (mirrors models.dart). */
         private fun snapCompletedRecurring(e: JSONObject) {
-            try {
-                val rec = e.optString("recurrence", "")
-                if (rec.isEmpty() || !e.has("dueAt")) return
-                val items = e.optJSONArray("items") ?: return
-                if (items.length() == 0) return
-                for (j in 0 until items.length()) {
-                    if (!items.getJSONObject(j).optBoolean("done")) return
-                }
-                val now = System.currentTimeMillis()
-                if (e.getLong("dueAt") > now) return
-                val daysArr: IntArray? = e.optJSONArray("recurrenceDays")?.let { arr ->
-                    IntArray(arr.length()) { arr.getInt(it) }
-                }
-                val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
-                fun snapToToday(): Long {
-                    val dueCal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
-                    val hour = dueCal.get(Calendar.HOUR_OF_DAY)
-                    val minute = dueCal.get(Calendar.MINUTE)
-                    return Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, hour)
-                        set(Calendar.MINUTE, minute)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-                }
-                // Weekly snaps to TODAY like daily (never jumps forward and skips
-                // today) — tonight's 00:00 rollover then hands over correctly.
-                val next: Long = if (rec == "daily" || rec == "weekly") {
-                    snapToToday()
-                } else {
-                    Recurrence.nextAfter(rec, daysArr, mDay, now)
-                }
-                e.put("dueAt", next)
-            } catch (_: Exception) {
-            }
+            Recurrence.snapCompleted(e)
         }
 
         private fun playDing(context: Context) {

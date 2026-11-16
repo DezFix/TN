@@ -7,6 +7,7 @@ import '../src/models.dart';
 import '../src/sound.dart';
 import '../src/state.dart';
 import '../src/theme.dart';
+import '../src/undo_toast.dart';
 import 'chat_screen.dart';
 
 /// Agenda: every undone todo with a deadline, grouped by day — today first,
@@ -279,13 +280,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
   }
 
   Future<void> _toggle(Entry e, TodoItem it) async {
-    toggleTodoCascade(e.items ??= <TodoItem>[], it.id);
+    final all = e.items ??= <TodoItem>[];
+    final prevDone = {for (final i in all) i.id: i.done};
+    final prevDue = e.dueAt;
+    toggleTodoCascade(all, it.id);
     e.updatedAt = DateTime.now().millisecondsSinceEpoch;
     if (it.done) unawaited(Sounds.taskDone());
     await widget.model.save();
     // Same post-toggle pipeline as the chat: snap overdue recurring,
     // rollover, then fix the alarm — done tasks must not ring.
     final snapped = e.recurrence != null && snapCompletedRecurring(e, DateTime.now());
+    if (snapped || e.isDone) widget.model.dropEntrySnooze(e);
     final rolled = widget.model.rolloverRecurring();
     if (snapped || rolled > 0) {
       await widget.model.save();
@@ -293,6 +298,30 @@ class _AgendaScreenState extends State<AgendaScreen> {
     await widget.model.rescheduleAlarms();
     widget.model.refresh();
     if (mounted) setState(() {});
+    if (!snapped || !mounted) return;
+    final tr = widget.model.tr;
+    UndoToast.show(
+      context,
+      message: tr('recurring_past_closed',
+          ['${fmtDay(e.dueAt!, tr)} ${fmtTime(e.dueAt!)}']),
+      actionLabel: tr('undo'),
+      p: widget.model.p,
+      icon: Icons.event_repeat,
+      iconColor: widget.model.p.accent,
+      onUndo: () {
+        for (final i in all) {
+          i.done = prevDone[i.id] ?? i.done;
+        }
+        e.dueAt = prevDue;
+        e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        unawaited(() async {
+          await widget.model.save();
+          await widget.model.rescheduleAlarms();
+          widget.model.refresh();
+          if (mounted) setState(() {});
+        }());
+      },
+    );
   }
 }
 

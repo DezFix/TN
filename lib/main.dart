@@ -618,6 +618,7 @@ class _TNState extends State<TN> with WidgetsBindingObserver {
         }
         model.state.entries.removeWhere((e) => e.chatId == chat.id);
       }
+      model.state.markDeleted([...deletingIds, ...expired.map((c) => c.id)]);
       model.state.chats.removeWhere((c) => expired.any((e) => e.id == c.id));
       await model.save();
       await model.rescheduleAlarms();

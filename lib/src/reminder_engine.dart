@@ -62,9 +62,12 @@ List<DueItem> collectDue({
     out.add(d);
   }
 
+  final byId = {for (final e in entries) e.id: e};
   for (final r in reminders) {
     if (r.when > now || r.when < floor) continue;
     if (chatTrashed(r.chatId)) continue;
+    final owner = byId[r.id]; // snoozed recurring task
+    if (owner != null && owner.isDone) continue;
     if (chatNotificationsEnabled != null &&
         !chatNotificationsEnabled(r.chatId)) {
       continue;
@@ -75,7 +78,7 @@ List<DueItem> collectDue({
         chatId: r.chatId,
         when: r.when,
         title: tr('remind_title', [chatNameOf(r.chatId)]),
-        body: tr('remind_body'),
+        body: owner != null ? entryNotifBody(owner, tr) : tr('remind_body'),
       ),
     );
   }
@@ -231,8 +234,9 @@ class ReminderEngine {
         // right away (same calendar-day semantics as the midnight pass) —
         // otherwise the next reminder waited for a rollover with the app
         // open and the chain silently stalled.
-        rolloverRecurringTasks([e], DateTime.now());
+        snapCompletedRecurring(e, DateTime.now());
         e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        model.dropEntrySnooze(e);
         hit = true;
         break;
       }

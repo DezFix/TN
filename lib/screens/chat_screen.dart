@@ -1166,6 +1166,12 @@ class _ChatScreenState extends State<ChatScreen> {
       r,
       widget.model.tr('remind_title', [_chat.name]),
       widget.model.tr('remind_body'),
+      // Same buttons as alarms rebuilt by rescheduleAlarms — a freshly set
+      // reminder used to come without "postpone" / "done".
+      actionLabels: [
+        widget.model.tr('notif_postpone'),
+        widget.model.tr('notif_done'),
+      ],
     );
     _toast(widget.model.tr('remind_set'));
   }
@@ -1328,6 +1334,7 @@ class _ChatScreenState extends State<ChatScreen> {
             : List.of(res.recurrenceDays!);
         entry.monthDay = res.monthDay;
         entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        widget.model.dropEntrySnooze(entry); // new time replaces a postpone
         await widget.model.save();
         await widget.model.rescheduleAlarms();
         if (mounted) {
@@ -1454,22 +1461,29 @@ class _ChatScreenState extends State<ChatScreen> {
     return snapshot;
   }
 
-  Future<void> _runTaskPipeline(
+  /// Returns the recurring entries whose overdue (past-day) occurrence was
+  /// just closed and that reopened for today / the next task day.
+  Future<List<Entry>> _runTaskPipeline(
     List<Entry> entries, {
     bool rollRecurring = true,
   }) async {
-    if (entries.isEmpty) return;
+    final reopened = <Entry>[];
+    if (entries.isEmpty) return reopened;
     if (rollRecurring) {
       final now = DateTime.now();
       for (final entry in entries) {
-        if (entry.recurrence != null) {
-          snapCompletedRecurring(entry, now);
+        if (entry.recurrence != null && snapCompletedRecurring(entry, now)) {
+          reopened.add(entry);
+        }
+        if (entry.isDone || reopened.contains(entry)) {
+          widget.model.dropEntrySnooze(entry);
         }
       }
       widget.model.rolloverRecurring();
     }
     await widget.model.save();
     await widget.model.rescheduleAlarms();
+    return reopened;
   }
 
   Future<void> _restoreKanbanMoves(
@@ -4178,11 +4192,42 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _toggleTodoItem(Entry entry, TodoItem item) async {
-    toggleTodoCascade(entry.items ??= <TodoItem>[], item.id);
+    final items = entry.items ??= <TodoItem>[];
+    final prevDone = {for (final i in items) i.id: i.done};
+    final prevDue = entry.dueAt;
+    toggleTodoCascade(items, item.id);
     entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
-    await _runTaskPipeline([entry]);
-    if (item.done) unawaited(Sounds.taskDone());
+    final becameDone = item.done;
+    final reopened = await _runTaskPipeline([entry]);
+    if (becameDone) unawaited(Sounds.taskDone());
     if (mounted) setState(() {});
+    if (!mounted || reopened.isEmpty) return;
+    // Overdue occurrence closed: the task stays in the list for its new
+    // day, unchecked — say so (otherwise the tap looks like it did nothing)
+    // and allow taking it back.
+    final tr = widget.model.tr;
+    UndoToast.show(
+      context,
+      message: tr('recurring_past_closed', [
+        '${fmtDay(entry.dueAt!, tr)} ${fmtTime(entry.dueAt!)}',
+      ]),
+      actionLabel: tr('undo'),
+      p: p,
+      icon: Icons.event_repeat,
+      iconColor: p.accent,
+      onUndo: () {
+        for (final i in items) {
+          i.done = prevDone[i.id] ?? i.done;
+        }
+        entry.dueAt = prevDue;
+        entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+        unawaited(() async {
+          await widget.model.save();
+          await widget.model.rescheduleAlarms();
+          if (mounted) setState(() {});
+        }());
+      },
+    );
   }
 
   /// Bottom sheet for creating / renaming / deleting a single task item.

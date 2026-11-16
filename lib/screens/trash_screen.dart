@@ -63,6 +63,7 @@ class _TrashScreenState extends State<TrashScreen> {
     for (final r in model.state.reminders.toList()) {
       if (r.chatId == chat.id) model.state.reminders.remove(r);
     }
+    model.state.markDeleted([...deletingIds, chat.id]);
     model.state.entries.removeWhere((e) => e.chatId == chat.id);
     model.state.chats.removeWhere((c) => c.id == chat.id);
     await model.save();
@@ -92,6 +93,7 @@ class _TrashScreenState extends State<TrashScreen> {
       }
       model.state.entries.removeWhere((e) => e.chatId == chat.id);
     }
+    model.state.markDeleted([...deletingIds, ...trashed.map((c) => c.id)]);
     model.state.chats.removeWhere((c) => c.isTrashed);
     await model.save();
     await model.rescheduleAlarms();

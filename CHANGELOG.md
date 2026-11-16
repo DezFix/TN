@@ -4,6 +4,21 @@ All notable TN releases. The newest section is shown to users inside the
 app ("What's new" dialog) — keep entries user-facing and concise.
 Everything published here goes to GitHub in English only.
 
+## [1.31.0] - 2026-11-16
+
+### Fixes
+
+- **Daily tasks no longer vanish for today:** checking off yesterday's overdue occurrence used to also mark today's as done, so the task disappeared from today. Now only the overdue one is closed and today's task stays open (a short note with "Undo" confirms it). Same for weekly and monthly tasks, in the app, from notifications and from the home-screen widget
+- **Today's occurrence is never skipped:** opening the app after a daily task's time no longer moves it straight to tomorrow
+- **Postponing a recurring task keeps its time:** "Postpone" on a daily 09:00 task used to shift it to 09:15 forever (or push it into tomorrow near midnight); now only this reminder moves
+- **Deleted notes stay deleted after cloud sync:** restoring/merging a backup from another device brought back notes and chats that were already deleted
+- **New reminders get the Postpone / Done buttons** right away, not only after the app restarts
+- Weekly tasks keep their exact time across daylight-saving changes; "every 31st" no longer skips February 28
+
+### New
+
+- **Recurring tasks in the calendar:** daily, weekly and monthly tasks now show on every coming day they repeat, not only on the next deadline
+
 ## [1.30.6] - 2026-11-10
 
 ### Fixes

@@ -69,22 +69,23 @@ void main() {
           monthDay: monthDay,
         );
 
-    test('done daily task stays checked until next occurrence passes', () {
+    test('done daily task stays checked all day, next day opens TODAY', () {
       final e = task(rec: 'daily', dueAt: ms(2026, 8, 24), done: true);
-      // Same morning: period not over yet.
+      // Same day: period not over yet.
       expect(rolloverRecurringTasks([e], dt(2026, 8, 24, 12)), isEmpty);
       expect(e.items!.every((i) => i.done), isTrue);
-      // Next day 09:00 has arrived: reset + jump.
+      // Next day, app first opened after 09:00: today's occurrence must
+      // open (overdue), never be skipped to tomorrow.
       final rolled = rolloverRecurringTasks([e], dt(2026, 8, 25, 9, 1));
       expect(rolled, [e]);
       expect(e.items!.every((i) => i.done), isFalse);
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 26));
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 25));
     });
 
-    test('catches up over several missed periods', () {
+    test('catches up over several missed periods to TODAY', () {
       final e = task(rec: 'daily', dueAt: ms(2026, 8, 24), done: true);
       rolloverRecurringTasks([e], dt(2026, 8, 30, 12)); // a week later
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 31));
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 30));
     });
 
     test('undone tasks are never touched', () {
@@ -149,22 +150,28 @@ void main() {
           monthDay: monthDay,
         );
 
-    test('overdue daily completed today snaps to TODAY (midnight handover)', () {
+    test('overdue daily completed today closes the old day, TODAY stays open', () {
       final e = task(rec: 'daily', dueAt: ms(2026, 8, 20), done: true);
       final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12));
       expect(snapped, isTrue);
-      // Calendar-day semantics: deadline becomes today's date with the
-      // original clock time — tonight's 00:00 rollover then hands the
-      // fresh instance to tomorrow; no day is skipped.
+      // Bug: marking yesterday's leftover used to consume today's task.
       expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 24));
-      expect(e.items!.every((i) => i.done), isTrue);
+      expect(e.items!.every((i) => i.done), isFalse);
     });
 
-    test('weekly overdue snaps to TODAY (midnight semantics, like daily)', () {
+    test('weekly overdue reopens on the next selected weekday', () {
       final e = task(rec: 'weekly', days: const [3], dueAt: ms(2026, 8, 19), done: true); // Wed
       final snapped = snapCompletedRecurring(e, dt(2026, 8, 24, 12)); // Mon
       expect(snapped, isTrue);
-      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 24)); // Mon today
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 26)); // next Wed
+      expect(e.items!.every((i) => i.done), isFalse);
+    });
+
+    test('completing today\'s occurrence is untouched (holds until 00:00)', () {
+      final e = task(rec: 'daily', dueAt: ms(2026, 8, 24), done: true);
+      expect(snapCompletedRecurring(e, dt(2026, 8, 24, 12)), isFalse);
+      expect(e.items!.every((i) => i.done), isTrue);
+      expect(e.dueAt, ms(2026, 8, 24));
     });
 
     test('not-overdue completed task is untouched', () {
@@ -203,6 +210,42 @@ void main() {
       final d = DateTime.fromMillisecondsSinceEpoch(e.dueAt!);
       expect(d.month, 2);
       expect(d.day, 28); // clamped: no Feb 31
+      expect(e.items!.every((i) => i.done), isFalse);
+    });
+  });
+
+  group('recursOnDay (calendar projection)', () {
+    Entry rec(String r, {List<int>? days, int? monthDay}) => Entry(
+          id: 'e', chatId: 'c', type: 'todo', ts: 0,
+          items: [TodoItem(id: 't', text: 'x')],
+          dueAt: ms(2026, 8, 24), // Mon
+          recurrence: r, recurrenceDays: days, monthDay: monthDay);
+
+    test('daily: every day after the deadline, not before / not same day', () {
+      final e = rec('daily');
+      expect(recursOnDay(e, DateTime(2026, 8, 23)), isFalse);
+      expect(recursOnDay(e, DateTime(2026, 8, 24)), isFalse);
+      expect(recursOnDay(e, DateTime(2026, 8, 25)), isTrue);
+      expect(recursOnDay(e, DateTime(2026, 12, 1)), isTrue);
+    });
+
+    test('weekly: only selected weekdays', () {
+      final e = rec('weekly', days: const [1, 3]);
+      expect(recursOnDay(e, DateTime(2026, 8, 25)), isFalse); // Tue
+      expect(recursOnDay(e, DateTime(2026, 8, 26)), isTrue); // Wed
+      expect(recursOnDay(e, DateTime(2026, 8, 31)), isTrue); // Mon
+    });
+
+    test('monthly: clamped month day', () {
+      final e = rec('monthly', monthDay: 31);
+      expect(recursOnDay(e, DateTime(2026, 8, 31)), isTrue);
+      expect(recursOnDay(e, DateTime(2026, 9, 30)), isTrue);
+      expect(recursOnDay(e, DateTime(2026, 9, 29)), isFalse);
+    });
+
+    test('non-recurring never projects', () {
+      final e = Entry(id: 'e', chatId: 'c', type: 'todo', ts: 0, dueAt: ms(2026, 8, 24));
+      expect(recursOnDay(e, DateTime(2026, 8, 25)), isFalse);
     });
   });
 }

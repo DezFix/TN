@@ -46,8 +46,7 @@ void main() {
   });
 
   group('snapCompletedRecurring — completing an overdue daily task', () {
-    test('completed TODAY (leftover from yesterday) snaps to TODAY, not '
-        'tomorrow', () {
+    test('completing yesterday\'s leftover reopens TODAY unchecked', () {
       final now = at(2026, 8, 26, 20, 0); // user ticks it in the evening
       final e = dailyEntry(
         dueAt: ms(at(2026, 8, 25, 18, 0)), // overdue since yesterday
@@ -58,16 +57,13 @@ void main() {
 
       expect(changed, isTrue);
       expect(e.dueAt, ms(at(2026, 8, 26, 18, 0)),
-          reason:
-              "deadline becomes TODAY's clock time so tonight's 00:00 "
-              'rollover hands over to tomorrow — never skipping a day');
+          reason: "today's occurrence, same clock time");
+      expect(e.items!.single.done, isFalse,
+          reason: "yesterday's leftover must not consume today's task");
     });
 
-    test('weekly overdue completion snaps to TODAY like daily', () {
-      // Wed Aug 26 2026 is a Wednesday; weekly on Mondays.
-      // Snapping to today (even a non-task day) keeps the instance visible
-      // as checked, and the next 00:00 rollover hands over to Monday —
-      // jumping straight to next Monday would lose the Mon instance.
+    test('weekly overdue completion reopens on the next selected day', () {
+      // Wed Aug 26 2026; weekly on Mondays, Monday's occurrence overdue.
       final now = at(2026, 8, 26, 12, 0);
       final e = Entry(
         id: 'e2',
@@ -80,14 +76,12 @@ void main() {
         items: [TodoItem(id: 't', text: 'x', done: true)],
       );
 
-      snapCompletedRecurring(e, now);
+      expect(snapCompletedRecurring(e, now), isTrue);
 
-      expect(e.dueAt, ms(at(2026, 8, 26, 9, 0)), reason: 'today Wed 09:00');
-      // Mon 00:01 -> fresh Monday instance
-      final rolled = rolloverRecurringTasks([e], at(2026, 8, 31, 0, 1));
-      expect(rolled, [e]);
-      expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)));
+      expect(e.dueAt, ms(at(2026, 8, 31, 9, 0)), reason: 'next Monday 09:00');
       expect(e.items!.single.done, isFalse);
+      // Nothing left for the midnight pass to do.
+      expect(rolloverRecurringTasks([e], at(2026, 8, 31, 0, 1)), isEmpty);
     });
   });
 
@@ -107,8 +101,9 @@ void main() {
     test('Mon done -> Tue 00:01 resets to Tue undone (главный баг)', () {
       // Пн 09:00 отмечена в Пн 12:00 (snap -> Пн 09:00 checked, today selected)
       final e = weekdayEntry(due: at(2026, 8, 24, 9, 0), done: true);
-      expect(snapCompletedRecurring(e, at(2026, 8, 24, 12, 0)), isTrue);
+      expect(snapCompletedRecurring(e, at(2026, 8, 24, 12, 0)), isFalse);
       expect(e.dueAt, ms(at(2026, 8, 24, 9, 0)));
+      expect(e.items!.single.done, isTrue);
       // Вт 00:01 — должна появиться сегодняшняя (undone)
       final rolled = rolloverRecurringTasks([e], at(2026, 8, 25, 0, 1));
       expect(rolled, [e], reason: 'обнуление в 00:00');
@@ -116,12 +111,14 @@ void main() {
       expect(e.dueAt, ms(at(2026, 8, 25, 9, 0)));
     });
 
-    test('Mon overdue checked Tue -> snaps to Tue (не пропускает день)', () {
+    test('Mon overdue checked Tue -> Tue opens undone (не пропускает день)', () {
       final e = weekdayEntry(due: at(2026, 8, 24, 9, 0), done: true);
       final changed = snapCompletedRecurring(e, at(2026, 8, 25, 10, 0));
       expect(changed, isTrue);
       expect(e.dueAt, ms(at(2026, 8, 25, 9, 0)),
           reason: 'вчера просрочено + отметил -> сегодняшняя, а не Ср');
+      expect(e.items!.single.done, isFalse,
+          reason: 'сегодняшняя задача остаётся невыполненной');
     });
 
     test('Fri done -> Sat holds checkmark, Mon resets', () {

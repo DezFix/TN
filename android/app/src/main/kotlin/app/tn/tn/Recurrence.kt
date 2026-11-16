@@ -59,19 +59,89 @@ object Recurrence {
         return cur.timeInMillis
     }
 
+    private fun dayStartOf(ms: Long): Long =
+        Calendar.getInstance().apply {
+            timeInMillis = ms
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+    private fun todayStart(): Long = dayStartOf(System.currentTimeMillis())
+
+    private fun daysOf(e: JSONObject): IntArray? =
+        e.optJSONArray("recurrenceDays")?.let { arr -> IntArray(arr.length()) { arr.getInt(it) } }
+
+    private fun monthDayOf(e: JSONObject): Int = if (e.has("monthDay")) e.optInt("monthDay", -1) else -1
+
+    private fun allDone(e: JSONObject): Boolean {
+        val items = e.optJSONArray("items") ?: return false
+        if (items.length() == 0) return false
+        for (j in 0 until items.length()) {
+            if (!items.getJSONObject(j).optBoolean("done")) return false
+        }
+        return true
+    }
+
+    private fun reopen(e: JSONObject, dueAt: Long) {
+        e.put("dueAt", dueAt)
+        e.put("updatedAt", System.currentTimeMillis())
+        val items = e.optJSONArray("items") ?: return
+        for (j in 0 until items.length()) items.getJSONObject(j).put("done", false)
+    }
+
     /**
-     * Resets finished recurring tasks whose period has ended.
-     *
-     * DAILY and WEEKLY use CALENDAR-DAY semantics: once every item is done and
-     * the due date's day is strictly in the past, items reset exactly at
-     * midnight (this runs from the TnMidnightReceiver alarm) and the
-     * deadline jumps to today, same clock time. Each selected weekday is its
-     * own period (будни Пн-Пт обнуляются в 00:00). Non-selected days
-     * (weekend) hold the checkmark until the next selected day.
-     *
-     * Monthly keeps instant semantics: reset when the next occurrence
-     * time has passed.
-     *
+     * Mirror of models.dart currentOccurrence: today's occurrence (daily),
+     * or the first one on/after today (weekly/monthly), same clock time.
+     */
+    fun currentOccurrence(e: JSONObject): Long {
+        val rec = e.optString("recurrence", "")
+        val due = e.getLong("dueAt")
+        val today = todayStart()
+        if (dayStartOf(due) >= today) return due
+        if (rec == "daily") {
+            val dueCal = Calendar.getInstance().apply { timeInMillis = due }
+            return Calendar.getInstance().apply {
+                timeInMillis = today
+                set(Calendar.HOUR_OF_DAY, dueCal.get(Calendar.HOUR_OF_DAY))
+                set(Calendar.MINUTE, dueCal.get(Calendar.MINUTE))
+            }.timeInMillis
+        }
+        val days = daysOf(e)
+        // Pin the month day for the whole catch-up (no drift to the 28th).
+        val mDay = monthDayOf(e).let {
+            if (it < 1) Calendar.getInstance().apply { timeInMillis = due }.get(Calendar.DAY_OF_MONTH) else it
+        }
+        var next = due
+        var guard = 0
+        while (dayStartOf(next) < today && guard++ < 5000) {
+            next = nextAfter(rec, days, mDay, next)
+        }
+        return next
+    }
+
+    /**
+     * Mirror of models.dart snapCompletedRecurring: completing an occurrence
+     * of a PAST day closes only that occurrence and immediately reopens the
+     * task (unchecked) for today / the next task day. Completing yesterday's
+     * task must never consume today's. Returns true when reopened.
+     */
+    fun snapCompleted(e: JSONObject): Boolean {
+        return try {
+            val rec = e.optString("recurrence", "")
+            if (rec.isEmpty() || !e.has("dueAt") || !allDone(e)) return false
+            if (dayStartOf(e.getLong("dueAt")) >= todayStart()) return false
+            reopen(e, currentOccurrence(e))
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Mirror of models.dart rolloverRecurringTasks. Every period is a
+     * calendar day: a checked occurrence holds until 00:00, then the next
+     * one opens unchecked (daily: today, even if its clock time passed;
+     * weekly: on the next selected weekday; monthly: right after the due day).
      * Returns true when the state JSON was modified.
      */
     fun rollover(context: Context): Boolean {
@@ -89,109 +159,21 @@ object Recurrence {
                 }
             }
             val entries = data.optJSONArray("entries") ?: return false
-            val now = System.currentTimeMillis()
+            val today = todayStart()
             var changed = false
             for (i in 0 until entries.length()) {
                 val e = entries.optJSONObject(i) ?: continue
-                fun markChanged() {
-                    changed = true
-                    e.put("updatedAt", now)
-                }
                 if (trashedChats.contains(e.optString("chatId"))) continue
                 val rec = e.optString("recurrence", "")
-                if (rec.isEmpty() || !e.has("dueAt")) continue
-                val items = e.optJSONArray("items") ?: continue
-                if (items.length() == 0) continue
-                var allDone = true
-                for (j in 0 until items.length()) {
-                    if (!items.getJSONObject(j).optBoolean("done")) {
-                        allDone = false
-                        break
-                    }
-                }
-                if (!allDone) continue
-
-                val daysArr: IntArray? = e.optJSONArray("recurrenceDays")?.let { arr ->
-                    IntArray(arr.length()) { arr.getInt(it) }
-                }
-                val mDay = if (e.has("monthDay")) e.getInt("monthDay") else -1
-
-                val cal = Calendar.getInstance().apply { timeInMillis = e.getLong("dueAt") }
-                val dueDayStart = (cal.clone() as Calendar).apply {
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                val todayStart = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                fun resetToTodaySameTime(): Long {
-                    return (cal.clone() as Calendar).apply {
-                        set(Calendar.YEAR, calendarYearOf(todayStart))
-                        set(Calendar.MONTH, calendarMonthOf(todayStart))
-                        set(Calendar.DAY_OF_MONTH, calendarDayOf(todayStart))
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-                }
-
-                fun uncheckAll() {
-                    for (j in 0 until items.length()) {
-                        items.getJSONObject(j).put("done", false)
-                    }
-                }
-
-                if (rec == "daily") {
-                    if (dueDayStart >= todayStart) continue // still today's period
-                    e.put("dueAt", resetToTodaySameTime())
-                    uncheckAll()
-                    markChanged()
-                    continue
-                }
+                if (rec.isEmpty() || !e.has("dueAt") || !allDone(e)) continue
+                val due = e.getLong("dueAt")
+                if (dayStartOf(due) >= today) continue // today/future: hold
                 if (rec == "weekly") {
-                    val set: IntArray = if (daysArr == null || daysArr.isEmpty()) {
-                        intArrayOf(isoWeekday(cal))
-                    } else daysArr
-                    // Same-day (today or future) always stays checked — otherwise
-                    // marking today's future task would instantly uncheck itself.
-                    if (dueDayStart >= todayStart) continue
-                    // dueDay < today (past): reset to today if today is selected,
-                    // otherwise hold until next selected day (catch up if missed).
-                    if (set.contains(isoWeekday(Calendar.getInstance()))) {
-                        e.put("dueAt", resetToTodaySameTime())
-                        uncheckAll()
-                        markChanged()
-                        continue
-                    }
-                    var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
-                    if (now < candidate) continue
-                    while (candidate <= now) {
-                        candidate = nextAfter(rec, daysArr, mDay, candidate)
-                    }
-                    e.put("dueAt", candidate)
-                    uncheckAll()
-                    markChanged()
-                    continue
+                    val first = nextAfter(rec, daysOf(e), -1, due)
+                    if (dayStartOf(first) > today) continue // not a task day yet
                 }
-                // Monthly: calendar-day semantics — reset at 00:00 of the due
-                // day, not at the due instant. First occurrence on/after today.
-                if (dueDayStart >= todayStart) continue // today/future -> hold
-                fun dayStartOf(ms: Long): Long =
-                    Calendar.getInstance().apply {
-                        timeInMillis = ms
-                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-                var candidate = nextAfter(rec, daysArr, mDay, e.getLong("dueAt"))
-                while (dayStartOf(candidate) < todayStart) {
-                    candidate = nextAfter(rec, daysArr, mDay, candidate)
-                }
-                e.put("dueAt", candidate)
-                for (j in 0 until items.length()) {
-                    items.getJSONObject(j).put("done", false)
-                }
-                markChanged()
+                reopen(e, currentOccurrence(e))
+                changed = true
             }
             if (!changed) return false
             prefs.edit()
@@ -203,13 +185,4 @@ object Recurrence {
             false
         }
     }
-
-    private fun calendarYearOf(dayStartMs: Long): Int =
-        Calendar.getInstance().apply { timeInMillis = dayStartMs }.get(Calendar.YEAR)
-
-    private fun calendarMonthOf(dayStartMs: Long): Int =
-        Calendar.getInstance().apply { timeInMillis = dayStartMs }.get(Calendar.MONTH)
-
-    private fun calendarDayOf(dayStartMs: Long): Int =
-        Calendar.getInstance().apply { timeInMillis = dayStartMs }.get(Calendar.DAY_OF_MONTH)
 }

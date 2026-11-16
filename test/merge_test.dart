@@ -125,4 +125,32 @@ void main() {
     }));
     expect(local.reminders.single.when, 300);
   });
+
+  test('merge does not resurrect an entry deleted locally', () {
+    final local = AppState();
+    local.markDeleted(['e1']);
+    local.mergeFromJson(jsonEncode({
+      'entries': [
+        {'id': 'e1', 'chatId': 'c1', 'type': 'text', 'ts': 1, 'updatedAt': 5},
+      ],
+    }));
+    expect(local.entries, isEmpty);
+  });
+
+  test('remote tombstone removes the older local copy', () {
+    final local = AppState();
+    local.entries.add(Entry(
+        id: 'e1', chatId: 'c1', type: 'text', ts: 1, updatedAt: 100));
+    local.mergeFromJson(jsonEncode({
+      'deleted': {'e1': 200},
+    }));
+    expect(local.entries, isEmpty);
+    expect(local.deleted['e1'], 200);
+  });
+
+  test('tombstones survive a save/load round trip', () {
+    final a = AppState()..markDeleted(['e9']);
+    final b = AppState()..loadFromJson(a.toJson());
+    expect(b.deleted.containsKey('e9'), isTrue);
+  });
 }
