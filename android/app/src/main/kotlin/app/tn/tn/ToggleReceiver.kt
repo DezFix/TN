@@ -126,7 +126,13 @@ class ToggleReceiver : BroadcastReceiver() {
                     changed = true
                 }
                 if (!changed) return false
-                if (nextValue) snapCompletedRecurring(e)
+                if (nextValue) {
+                    // Done from the widget: the deadline alarm (and any
+                    // postpone) must not ring for a checked task.
+                    TnAlarms.cancelForEntry(context, entryId)
+                    TnAlarms.dropSnooze(data, entryId)
+                    snapCompletedRecurring(e)
+                }
                 e.put("updatedAt", System.currentTimeMillis())
                 prefs.edit()
                     .putString("flutter.tn-notes-data-v1", data.toString())
@@ -182,7 +188,17 @@ class ToggleReceiver : BroadcastReceiver() {
                     val nowDone = !currentlyDone
                     if (nowDone && hasUnfinishedDescendant(itemId, mutableSetOf())) return false
                     setSubtree(item, nowDone, mutableSetOf())
-                    if (nowDone) snapCompletedRecurring(e)
+                    if (nowDone) {
+                        var all = true
+                        for (k in 0 until items.length()) {
+                            if (!items.getJSONObject(k).optBoolean("done")) { all = false; break }
+                        }
+                        if (all) {
+                            TnAlarms.cancelForEntry(context, entryId)
+                            TnAlarms.dropSnooze(data, entryId)
+                        }
+                        snapCompletedRecurring(e)
+                    }
                     e.put("updatedAt", System.currentTimeMillis())
                     prefs.edit()
                         .putString("flutter.tn-notes-data-v1", data.toString())

@@ -85,6 +85,9 @@ object Recurrence {
     private fun reopen(e: JSONObject, dueAt: Long) {
         e.put("dueAt", dueAt)
         e.put("updatedAt", System.currentTimeMillis())
+        // Kanban: the new occurrence starts in the first column again,
+        // not stuck in "Done" (mirrors models.dart _reopen).
+        e.remove("boardId")
         val items = e.optJSONArray("items") ?: return
         for (j in 0 until items.length()) items.getJSONObject(j).put("done", false)
     }

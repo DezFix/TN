@@ -248,4 +248,47 @@ void main() {
       expect(recursOnDay(e, DateTime(2026, 8, 25)), isFalse);
     });
   });
+
+  group('skipRecurringOccurrence', () {
+    Entry daily(int dueAt) => Entry(
+        id: 'e', chatId: 'c', type: 'todo', ts: 0,
+        items: [TodoItem(id: 't', text: 'x')],
+        dueAt: dueAt, recurrence: 'daily');
+
+    test('skipping today moves to tomorrow', () {
+      final e = daily(ms(2026, 8, 24));
+      final next = skipRecurringOccurrence(e, dt(2026, 8, 24, 8));
+      expect(DateTime.fromMillisecondsSinceEpoch(next!), dt(2026, 8, 25));
+    });
+
+    test('skipping an overdue daily task lands on today', () {
+      final e = daily(ms(2026, 8, 20));
+      skipRecurringOccurrence(e, dt(2026, 8, 24, 12));
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 24));
+    });
+
+    test('weekly skips to the next selected weekday', () {
+      final e = Entry(
+          id: 'e', chatId: 'c', type: 'todo', ts: 0,
+          items: [TodoItem(id: 't', text: 'x', done: true)],
+          dueAt: ms(2026, 8, 24), recurrence: 'weekly', recurrenceDays: const [1, 3]);
+      skipRecurringOccurrence(e, dt(2026, 8, 24, 8));
+      expect(DateTime.fromMillisecondsSinceEpoch(e.dueAt!), dt(2026, 8, 26));
+      expect(e.items!.single.done, isFalse);
+    });
+
+    test('non-recurring returns null', () {
+      final e = Entry(id: 'e', chatId: 'c', type: 'todo', ts: 0, dueAt: ms(2026, 8, 24));
+      expect(skipRecurringOccurrence(e, dt(2026, 8, 24)), isNull);
+    });
+  });
+
+  test('reopened kanban task returns to the first column', () {
+    final e = Entry(
+        id: 'e', chatId: 'c', type: 'todo', ts: 0,
+        items: [TodoItem(id: 't', text: 'x', done: true)],
+        dueAt: ms(2026, 8, 20), recurrence: 'daily', boardId: 'done');
+    expect(snapCompletedRecurring(e, dt(2026, 8, 24, 12)), isTrue);
+    expect(e.boardId, isNull);
+  });
 }

@@ -1312,6 +1312,7 @@ class _ChatScreenState extends State<ChatScreen> {
             action == EntryAction.edit ||
             action == EntryAction.pin ||
             action == EntryAction.boardMove ||
+            action == EntryAction.skipOccurrence ||
             action == EntryAction.delete)) {
       return;
     }
@@ -1415,6 +1416,40 @@ class _ChatScreenState extends State<ChatScreen> {
         break;
       case EntryAction.boardMove:
         await _pickAndMoveBoard(entry);
+        break;
+      case EntryAction.skipOccurrence:
+        final prevDue = entry.dueAt;
+        final prevDone = {
+          for (final i in entry.items ?? const <TodoItem>[]) i.id: i.done,
+        };
+        final next = skipRecurringOccurrence(entry, DateTime.now());
+        if (next == null) return;
+        widget.model.dropEntrySnooze(entry);
+        await widget.model.save();
+        await widget.model.rescheduleAlarms();
+        if (!mounted) return;
+        setState(() {});
+        final tr = widget.model.tr;
+        UndoToast.show(
+          context,
+          message: tr('skipped_to', ['${fmtDay(next, tr)} ${fmtTime(next)}']),
+          actionLabel: tr('undo'),
+          p: p,
+          icon: Icons.skip_next_rounded,
+          iconColor: p.accent,
+          onUndo: () {
+            entry.dueAt = prevDue;
+            for (final i in entry.items ?? const <TodoItem>[]) {
+              i.done = prevDone[i.id] ?? i.done;
+            }
+            entry.updatedAt = DateTime.now().millisecondsSinceEpoch;
+            unawaited(() async {
+              await widget.model.save();
+              await widget.model.rescheduleAlarms();
+              if (mounted) setState(() {});
+            }());
+          },
+        );
         break;
       case EntryAction.delete:
         final deleted = List<Entry>.of([entry]);

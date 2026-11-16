@@ -678,9 +678,36 @@ int currentOccurrence(Entry e, DateTime now) {
   return next;
 }
 
+/// "Skip this time": the shown occurrence is dropped without being done
+/// and the task moves on, unchecked. An overdue one (past day) is skipped
+/// to the current occurrence (today / next task day); today's or a future
+/// one to the occurrence after it. Returns the new deadline, or null when
+/// [e] is not a recurring task with a deadline.
+int? skipRecurringOccurrence(Entry e, DateTime now) {
+  if (e.recurrence == null || e.dueAt == null) return null;
+  final cur = currentOccurrence(e, now);
+  final curDt = DateTime.fromMillisecondsSinceEpoch(cur);
+  final next = cur != e.dueAt ? cur : nextOccurrence(
+    recurrence: e.recurrence!,
+    days: e.recurrenceDays,
+    monthDay: e.monthDay ?? curDt.day,
+    fromMs: cur,
+    after: curDt,
+  );
+  e.dueAt = next;
+  e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  for (final i in e.items ?? const <TodoItem>[]) {
+    i.done = false;
+  }
+  return next;
+}
+
 void _reopen(Entry e, int dueAt) {
   e.dueAt = dueAt;
   e.updatedAt = DateTime.now().millisecondsSinceEpoch;
+  // Kanban: a fresh occurrence starts in the first column — it used to stay
+  // in "Done" with unchecked items.
+  e.boardId = null;
   for (final i in e.items!) {
     i.done = false;
   }

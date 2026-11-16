@@ -15,8 +15,12 @@ Everything published here goes to GitHub in English only.
 - **New reminders get the Postpone / Done buttons** right away, not only after the app restarts
 - Weekly tasks keep their exact time across daylight-saving changes; "every 31st" no longer skips February 28
 
+- **Checking a task in the home-screen widget silences its reminder:** the deadline alarm (and a postponed one) no longer rings for a task you already ticked off in the widget
+- **Kanban:** a recurring task that starts a new round goes back to the first column instead of sitting in "Done" unchecked
+
 ### New
 
+- **"Skip this time" for recurring tasks:** in the task menu — the current occurrence is dropped without marking it done, the task moves to the next one (with Undo)
 - **Recurring tasks in the calendar:** daily, weekly and monthly tasks now show on every coming day they repeat, not only on the next deadline
 
 ## [1.30.6] - 2026-11-10

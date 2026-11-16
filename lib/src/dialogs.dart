@@ -17,6 +17,7 @@ enum EntryAction {
   download,
   pin,
   boardMove,
+  skipOccurrence,
 }
 
 Future<Chat?> showChatEditDialog(
@@ -355,6 +356,17 @@ Future<EntryAction?> showEntryCtxPopup(
               Icon(Icons.schedule_outlined, size: 18, color: p.accent),
               const SizedBox(width: 10),
               Text(tr('change_time'), style: TextStyle(color: p.text)),
+            ],
+          ),
+        ),
+      if (!readOnly && entry.recurrence != null && entry.dueAt != null)
+        PopupMenuItem(
+          value: EntryAction.skipOccurrence,
+          child: Row(
+            children: [
+              Icon(Icons.skip_next_rounded, size: 18, color: p.accent),
+              const SizedBox(width: 10),
+              Text(tr('skip_occurrence'), style: TextStyle(color: p.text)),
             ],
           ),
         ),
